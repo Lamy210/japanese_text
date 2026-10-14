@@ -24,6 +24,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function shouldScrubLegacyDocument(db: IDBDatabase, workspaceId: string): boolean {
+  return workspaceId === MIGRATED_WORKSPACE_ID && db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
+}
+
 async function abortAndRethrow(tx: IDBTransaction, done: Promise<void>, error: unknown): Promise<never> {
   try {
     tx.abort()
@@ -92,12 +96,11 @@ export function createIndexedDbAtomicOperations(
     },
 
     async deletePersistedDocuments(workspaceId) {
-      const shouldDeleteLegacyDocument =
-        workspaceId === MIGRATED_WORKSPACE_ID && db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
+      const scrubLegacy = shouldScrubLegacyDocument(db, workspaceId)
       const stores = [
         STORE_WORKSPACE_DOCUMENTS,
         STORE_DOCUMENT_SNAPSHOTS,
-        ...(shouldDeleteLegacyDocument ? [LEGACY_DOCUMENTS_STORE] : [])
+        ...(scrubLegacy ? [LEGACY_DOCUMENTS_STORE] : [])
       ]
       const tx = db.transaction(stores, 'readwrite')
       const done = transactionDone(tx)
@@ -105,9 +108,7 @@ export function createIndexedDbAtomicOperations(
       const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
 
       try {
-        if (shouldDeleteLegacyDocument) {
-          tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
-        }
+        if (scrubLegacy) tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
 
         const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
         documentKeysRequest.onsuccess = () => {
@@ -136,16 +137,23 @@ export function createIndexedDbAtomicOperations(
     },
 
     async deleteWorkspaceCascade(workspaceId) {
-      const tx = db.transaction(
-        [STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_DOCUMENT_SNAPSHOTS, STORE_SUPPRESSIONS],
-        'readwrite'
-      )
+      const scrubLegacy = shouldScrubLegacyDocument(db, workspaceId)
+      const stores = [
+        STORE_WORKSPACES,
+        STORE_WORKSPACE_DOCUMENTS,
+        STORE_DOCUMENT_SNAPSHOTS,
+        STORE_SUPPRESSIONS,
+        ...(scrubLegacy ? [LEGACY_DOCUMENTS_STORE] : [])
+      ]
+      const tx = db.transaction(stores, 'readwrite')
       const done = transactionDone(tx)
       const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
       const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
       const suppressionStore = tx.objectStore(STORE_SUPPRESSIONS)
 
       try {
+        if (scrubLegacy) tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
+
         const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
         documentKeysRequest.onsuccess = () => {
           const documentIds = new Set(
@@ -190,10 +198,16 @@ export function createIndexedDbAtomicOperations(
     async deleteWorkspaceAndSelectNext(workspaceId, nextWorkspaceId) {
       if (workspaceId === nextWorkspaceId) throw new Error('next workspace must differ from deleted workspace')
 
-      const tx = db.transaction(
-        [STORE_META, STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_DOCUMENT_SNAPSHOTS, STORE_SUPPRESSIONS],
-        'readwrite'
-      )
+      const scrubLegacy = shouldScrubLegacyDocument(db, workspaceId)
+      const stores = [
+        STORE_META,
+        STORE_WORKSPACES,
+        STORE_WORKSPACE_DOCUMENTS,
+        STORE_DOCUMENT_SNAPSHOTS,
+        STORE_SUPPRESSIONS,
+        ...(scrubLegacy ? [LEGACY_DOCUMENTS_STORE] : [])
+      ]
+      const tx = db.transaction(stores, 'readwrite')
       const done = transactionDone(tx)
       const workspaceStore = tx.objectStore(STORE_WORKSPACES)
       const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
@@ -209,6 +223,8 @@ export function createIndexedDbAtomicOperations(
             tx.abort()
             return
           }
+
+          if (scrubLegacy) tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
 
           const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
           documentKeysRequest.onsuccess = () => {
@@ -293,13 +309,12 @@ export function createIndexedDbAtomicOperations(
     },
 
     async makeWorkspacePrivate(workspaceId) {
-      const shouldDeleteLegacyDocument =
-        workspaceId === MIGRATED_WORKSPACE_ID && db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
+      const scrubLegacy = shouldScrubLegacyDocument(db, workspaceId)
       const stores = [
         STORE_WORKSPACES,
         STORE_WORKSPACE_DOCUMENTS,
         STORE_DOCUMENT_SNAPSHOTS,
-        ...(shouldDeleteLegacyDocument ? [LEGACY_DOCUMENTS_STORE] : [])
+        ...(scrubLegacy ? [LEGACY_DOCUMENTS_STORE] : [])
       ]
       const tx = db.transaction(stores, 'readwrite')
       const done = transactionDone(tx)
@@ -327,7 +342,7 @@ export function createIndexedDbAtomicOperations(
           }
 
           workspaceStore.put({ ...workspace, storageMode: 'private-session', updatedAt: now() })
-          if (shouldDeleteLegacyDocument) tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
+          if (scrubLegacy) tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
 
           const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
           documentKeysRequest.onsuccess = () => {
