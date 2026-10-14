@@ -1,4 +1,5 @@
 import {
+  validateDocumentRecord,
   validatePreferencesRecord,
   validateRuleProfileRecord,
   validateWorkspaceRecord
@@ -239,6 +240,107 @@ export function createIndexedDbAtomicOperations(
                 const documentScoped =
                   raw.scope === 'document' && typeof raw.scopeId === 'string' && documentIds.has(raw.scopeId)
                 if (workspaceScoped || documentScoped) cursor.delete()
+              }
+              cursor.continue()
+            }
+          }
+        }
+
+        await done
+      } catch (error) {
+        if (validationError !== undefined) throw validationError
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
+    async enableLocalLibrary(workspaceId, documentValue) {
+      const document = validateDocumentRecord(documentValue)
+      if (document.workspaceId !== workspaceId) {
+        throw new Error('document.workspaceId must match the target workspace')
+      }
+
+      const tx = db.transaction([STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS], 'readwrite')
+      const done = transactionDone(tx)
+      const workspaceStore = tx.objectStore(STORE_WORKSPACES)
+      const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
+      let validationError: Error | undefined
+
+      try {
+        const workspaceRequest = workspaceStore.get(workspaceId)
+        workspaceRequest.onsuccess = () => {
+          if (workspaceRequest.result === undefined) {
+            validationError = new Error(`Workspace not found: ${workspaceId}`)
+            tx.abort()
+            return
+          }
+
+          try {
+            const workspace = validateWorkspaceRecord(workspaceRequest.result)
+            workspaceStore.put({ ...workspace, storageMode: 'local-library', updatedAt: now() })
+            documentStore.put(document)
+          } catch (error) {
+            validationError = error instanceof Error ? error : new Error(String(error))
+            tx.abort()
+          }
+        }
+
+        await done
+      } catch (error) {
+        if (validationError !== undefined) throw validationError
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
+    async makeWorkspacePrivate(workspaceId) {
+      const hasLegacyDocuments = db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
+      const stores = [
+        STORE_WORKSPACES,
+        STORE_WORKSPACE_DOCUMENTS,
+        STORE_DOCUMENT_SNAPSHOTS,
+        ...(hasLegacyDocuments ? [LEGACY_DOCUMENTS_STORE] : [])
+      ]
+      const tx = db.transaction(stores, 'readwrite')
+      const done = transactionDone(tx)
+      const workspaceStore = tx.objectStore(STORE_WORKSPACES)
+      const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
+      const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
+      let validationError: Error | undefined
+
+      try {
+        const workspaceRequest = workspaceStore.get(workspaceId)
+        workspaceRequest.onsuccess = () => {
+          if (workspaceRequest.result === undefined) {
+            validationError = new Error(`Workspace not found: ${workspaceId}`)
+            tx.abort()
+            return
+          }
+
+          let workspace
+          try {
+            workspace = validateWorkspaceRecord(workspaceRequest.result)
+          } catch (error) {
+            validationError = error instanceof Error ? error : new Error(String(error))
+            tx.abort()
+            return
+          }
+
+          workspaceStore.put({ ...workspace, storageMode: 'private-session', updatedAt: now() })
+          if (hasLegacyDocuments) tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
+
+          const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
+          documentKeysRequest.onsuccess = () => {
+            const documentIds = new Set(
+              documentKeysRequest.result.filter((key): key is string => typeof key === 'string')
+            )
+            for (const documentId of documentIds) documentStore.delete(documentId)
+
+            const snapshotCursorRequest = snapshotStore.openCursor()
+            snapshotCursorRequest.onsuccess = () => {
+              const cursor = snapshotCursorRequest.result
+              if (cursor === null) return
+              const raw = cursor.value
+              if (isRecord(raw) && typeof raw.documentId === 'string' && documentIds.has(raw.documentId)) {
+                cursor.delete()
               }
               cursor.continue()
             }
