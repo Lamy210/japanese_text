@@ -29,8 +29,8 @@ export function createDefaultWorkspaceState(now: number): {
       id: DEFAULT_WORKSPACE_ID,
       name: 'Default Workspace',
       activeRuleProfileId: profile.id,
-      storageMode: 'local-library',
-      snapshotPolicy: { enabled: true, maxSnapshots: 20 },
+      storageMode: 'private-session',
+      snapshotPolicy: { enabled: false, maxSnapshots: 20 },
       createdAt: now,
       updatedAt: now
     },
@@ -38,7 +38,7 @@ export function createDefaultWorkspaceState(now: number): {
       schemaVersion: 1,
       theme: config.theme,
       editor: structuredClone(config.editor),
-      defaultStorageMode: 'local-library'
+      defaultStorageMode: 'private-session'
     },
     profile
   }
