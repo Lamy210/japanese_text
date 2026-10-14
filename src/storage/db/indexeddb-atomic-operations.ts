@@ -9,7 +9,9 @@ import { migrateV1ToV2 } from './migration-v1-v2'
 import {
   INDEX_WORKSPACE_ID,
   LEGACY_DOCUMENTS_STORE,
+  META_ACTIVE_WORKSPACE_ID,
   STORE_DOCUMENT_SNAPSHOTS,
+  STORE_META,
   STORE_PREFERENCES,
   STORE_RULE_PROFILES,
   STORE_SUPPRESSIONS,
@@ -59,6 +61,28 @@ export function createIndexedDbAtomicOperations(
           requestToPromise(tx.objectStore(STORE_PREFERENCES).put(preferences, 'global')),
           requestToPromise(tx.objectStore(STORE_RULE_PROFILES).put(profile)),
           requestToPromise(tx.objectStore(STORE_WORKSPACES).put(workspace))
+        ])
+        await done
+      } catch (error) {
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
+    async createWorkspaceAndActivate(workspaceValue, profileValue) {
+      const workspace = validateWorkspaceRecord(workspaceValue)
+      const profile = validateRuleProfileRecord(profileValue)
+      if (workspace.activeRuleProfileId !== profile.id) {
+        throw new Error('workspace.activeRuleProfileId must reference the created profile')
+      }
+
+      const tx = db.transaction([STORE_RULE_PROFILES, STORE_WORKSPACES, STORE_META], 'readwrite')
+      const done = transactionDone(tx)
+
+      try {
+        await Promise.all([
+          requestToPromise(tx.objectStore(STORE_RULE_PROFILES).put(profile)),
+          requestToPromise(tx.objectStore(STORE_WORKSPACES).put(workspace)),
+          requestToPromise(tx.objectStore(STORE_META).put(workspace.id, META_ACTIVE_WORKSPACE_ID))
         ])
         await done
       } catch (error) {

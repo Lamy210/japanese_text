@@ -126,6 +126,22 @@ export function createMemoryStorageContext(): MemoryStorageContext {
       profiles = nextProfiles
       workspaces = nextWorkspaces
     },
+    async createWorkspaceAndActivate(workspace, profile) {
+      const validatedWorkspace = clone(validateWorkspaceRecord(workspace))
+      const validatedProfile = clone(validateRuleProfileRecord(profile))
+      if (validatedWorkspace.activeRuleProfileId !== validatedProfile.id) {
+        throw new Error('workspace.activeRuleProfileId must reference the created profile')
+      }
+
+      const nextWorkspaces = cloneMap(workspaces)
+      const nextProfiles = cloneMap(profiles)
+      nextWorkspaces.set(validatedWorkspace.id, validatedWorkspace)
+      nextProfiles.set(validatedProfile.id, validatedProfile)
+
+      workspaces = nextWorkspaces
+      profiles = nextProfiles
+      activeWorkspaceId = validatedWorkspace.id
+    },
     async deletePersistedDocuments(workspaceId) {
       const nextDocuments = cloneMap(documents)
       for (const [id, document] of nextDocuments) {

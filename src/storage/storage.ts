@@ -7,6 +7,7 @@
 
 import type { AppConfig } from '../core/config/schema'
 import type { DocumentType } from '../core/types'
+import { createWorkspaceService } from '../workspace/workspace-service'
 import type { StorageContext } from './bootstrap'
 import { composeAppConfig, splitAppConfig, type ProjectedStorageState } from './compat/app-config-projection'
 import { getStorageContext } from './runtime'
@@ -31,17 +32,15 @@ export function isStorageAvailable(): boolean {
 }
 
 async function getActiveState(context: StorageContext): Promise<ProjectedStorageState> {
-  const workspaces = await context.repositories.workspaces.list()
-  const workspace = workspaces[0]
-  if (workspace === undefined) throw new Error('Active workspace is missing')
-
-  const preferences = await context.repositories.preferences.get()
-  if (preferences === undefined) throw new Error('Global preferences are missing')
-
-  const profile = await context.repositories.profiles.get(workspace.activeRuleProfileId)
-  if (profile === undefined) throw new Error('Active rule profile is missing')
-
-  return { workspace, preferences, profile }
+  const active = await createWorkspaceService({
+    repositories: context.repositories,
+    atomic: context.atomic
+  }).getActive()
+  return {
+    workspace: active.workspace,
+    preferences: active.preferences,
+    profile: active.profile
+  }
 }
 
 function newestDocument<T extends { updatedAt: number }>(values: T[]): T | undefined {
