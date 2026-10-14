@@ -160,6 +160,21 @@ export function createMemoryStorageContext(): MemoryStorageContext {
 
       workspaces = nextWorkspaces
       documents = nextDocuments
+    },
+    async deleteWorkspaceAndSelectNext(workspaceId, nextWorkspaceId) {
+      if (workspaceId === nextWorkspaceId) throw new Error('next workspace must differ from deleted workspace')
+      if (!workspaces.has(nextWorkspaceId)) throw new Error(`Next workspace not found: ${nextWorkspaceId}`)
+
+      const nextWorkspaces = cloneMap(workspaces)
+      const nextDocuments = cloneMap(documents)
+      nextWorkspaces.delete(workspaceId)
+      for (const [id, document] of nextDocuments) {
+        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+      }
+
+      workspaces = nextWorkspaces
+      documents = nextDocuments
+      activeWorkspaceId = nextWorkspaceId
     }
   }
 

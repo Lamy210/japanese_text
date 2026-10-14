@@ -144,9 +144,6 @@ export function createIndexedDbAtomicOperations(
       const suppressionStore = tx.objectStore(STORE_SUPPRESSIONS)
 
       try {
-        // Start with one request, then queue every dependent request from its success callback.
-        // This keeps the transaction active in real browsers instead of awaiting getAll() and
-        // attempting writes after IndexedDB has had a chance to auto-commit the transaction.
         const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
         documentKeysRequest.onsuccess = () => {
           const documentIds = new Set(
@@ -184,6 +181,73 @@ export function createIndexedDbAtomicOperations(
 
         await done
       } catch (error) {
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
+    async deleteWorkspaceAndSelectNext(workspaceId, nextWorkspaceId) {
+      if (workspaceId === nextWorkspaceId) throw new Error('next workspace must differ from deleted workspace')
+
+      const tx = db.transaction(
+        [STORE_META, STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_DOCUMENT_SNAPSHOTS, STORE_SUPPRESSIONS],
+        'readwrite'
+      )
+      const done = transactionDone(tx)
+      const workspaceStore = tx.objectStore(STORE_WORKSPACES)
+      const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
+      const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
+      const suppressionStore = tx.objectStore(STORE_SUPPRESSIONS)
+      let validationError: Error | undefined
+
+      try {
+        const nextWorkspaceRequest = workspaceStore.get(nextWorkspaceId)
+        nextWorkspaceRequest.onsuccess = () => {
+          if (nextWorkspaceRequest.result === undefined) {
+            validationError = new Error(`Next workspace not found: ${nextWorkspaceId}`)
+            tx.abort()
+            return
+          }
+
+          const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
+          documentKeysRequest.onsuccess = () => {
+            const documentIds = new Set(
+              documentKeysRequest.result.filter((key): key is string => typeof key === 'string')
+            )
+
+            for (const documentId of documentIds) documentStore.delete(documentId)
+            workspaceStore.delete(workspaceId)
+            tx.objectStore(STORE_META).put(nextWorkspaceId, META_ACTIVE_WORKSPACE_ID)
+
+            const snapshotCursorRequest = snapshotStore.openCursor()
+            snapshotCursorRequest.onsuccess = () => {
+              const cursor = snapshotCursorRequest.result
+              if (cursor === null) return
+              const raw = cursor.value
+              if (isRecord(raw) && typeof raw.documentId === 'string' && documentIds.has(raw.documentId)) {
+                cursor.delete()
+              }
+              cursor.continue()
+            }
+
+            const suppressionCursorRequest = suppressionStore.openCursor()
+            suppressionCursorRequest.onsuccess = () => {
+              const cursor = suppressionCursorRequest.result
+              if (cursor === null) return
+              const raw = cursor.value
+              if (isRecord(raw)) {
+                const workspaceScoped = raw.scope === 'workspace' && raw.scopeId === workspaceId
+                const documentScoped =
+                  raw.scope === 'document' && typeof raw.scopeId === 'string' && documentIds.has(raw.scopeId)
+                if (workspaceScoped || documentScoped) cursor.delete()
+              }
+              cursor.continue()
+            }
+          }
+        }
+
+        await done
+      } catch (error) {
+        if (validationError !== undefined) throw validationError
         return abortAndRethrow(tx, done, error)
       }
     }

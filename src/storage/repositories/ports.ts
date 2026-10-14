@@ -70,4 +70,5 @@ export interface AtomicOperationsPort {
   createWorkspaceAndActivate(workspace: Workspace, profile: RuleProfile): Promise<void>
   deletePersistedDocuments(workspaceId: string): Promise<void>
   deleteWorkspaceCascade(workspaceId: string): Promise<void>
+  deleteWorkspaceAndSelectNext(workspaceId: string, nextWorkspaceId: string): Promise<void>
 }
