@@ -61,5 +61,6 @@ export interface AtomicProjectedStorageState {
 export interface AtomicOperationsPort {
   migrateV1ToV2(): Promise<MigrationResult>
   saveProjectedState(value: AtomicProjectedStorageState): Promise<void>
+  deletePersistedDocuments(workspaceId: string): Promise<void>
   deleteWorkspaceCascade(workspaceId: string): Promise<void>
 }
