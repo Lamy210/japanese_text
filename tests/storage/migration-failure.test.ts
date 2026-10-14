@@ -1,6 +1,8 @@
 import { IDBFactory } from 'fake-indexeddb'
 import { describe, expect, it } from 'vitest'
 import { createDefaultConfig } from '../../src/core/config/validate'
+import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
+import { createIndexedDbAtomicOperations } from '../../src/storage/db/indexeddb-atomic-operations'
 import { requestToPromise, transactionDone } from '../../src/storage/db/idb-utils'
 import {
   META_STORAGE_SCHEMA_VERSION,
@@ -127,6 +129,42 @@ describe('migration failure containment', () => {
     expect(await get(db, STORE_WORKSPACE_DOCUMENTS, MIGRATED_DOCUMENT_ID)).toMatchObject({
       content: 'legacy body'
     })
+    db.close()
+  })
+})
+
+describe('atomic projected storage updates', () => {
+  it('rolls back preferences and profile when the workspace write fails', async () => {
+    const factory = new IDBFactory()
+    const db = await createFailureInjectionDatabase(factory)
+    const baseline = createDefaultWorkspaceState(1000)
+    baseline.workspace.id = 'atomic-workspace'
+    baseline.workspace.name = 'Baseline Workspace'
+    baseline.workspace.activeRuleProfileId = 'atomic-profile'
+    baseline.profile.id = 'atomic-profile'
+    baseline.profile.name = 'Baseline Profile'
+
+    const seed = db.transaction(
+      [STORE_WORKSPACES, STORE_PREFERENCES, STORE_RULE_PROFILES],
+      'readwrite'
+    )
+    const seedDone = transactionDone(seed)
+    seed.objectStore(STORE_WORKSPACES).put(baseline.workspace)
+    seed.objectStore(STORE_PREFERENCES).put(baseline.preferences, 'global')
+    seed.objectStore(STORE_RULE_PROFILES).put(baseline.profile)
+    await seedDone
+
+    const next = structuredClone(baseline)
+    next.preferences.theme = 'dark'
+    next.profile.name = 'Changed Profile'
+    next.workspace.name = 'Migrated Workspace'
+
+    const atomic = createIndexedDbAtomicOperations(db)
+    await expect(atomic.saveProjectedState(next)).rejects.toBeTruthy()
+
+    expect(await get(db, STORE_PREFERENCES, 'global')).toMatchObject({ theme: 'system' })
+    expect(await get(db, STORE_RULE_PROFILES, 'atomic-profile')).toMatchObject({ name: 'Baseline Profile' })
+    expect(await get(db, STORE_WORKSPACES, 'atomic-workspace')).toMatchObject({ name: 'Baseline Workspace' })
     db.close()
   })
 })
