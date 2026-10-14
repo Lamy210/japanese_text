@@ -143,8 +143,8 @@ describe('v1 to v2 migration', () => {
   })
 
   it('defaults to private-session when legacy config has no privacy field', async () => {
+    const config = structuredClone(createDefaultConfig()) as unknown as Record<string, unknown>
     const factory = new IDBFactory()
-    const config = structuredClone(createDefaultConfig()) as Record<string, unknown>
     delete config.privacy
     await createV1Database(factory, { config, document: legacyDocument() })
     const db = await openDatabase(factory)
