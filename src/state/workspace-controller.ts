@@ -1,3 +1,4 @@
+import type { AppConfig } from '../core/config/schema'
 import type { StorageContext } from '../storage/bootstrap'
 import { getStorageContext } from '../storage/runtime'
 import {
@@ -67,6 +68,10 @@ function currentEditorDocument(now: () => number): SessionDocument {
   }
 }
 
+function currentConfig(): AppConfig {
+  return JSON.parse(JSON.stringify(appState.config)) as AppConfig
+}
+
 export function createWorkspaceController(
   dependencies: WorkspaceControllerDependencies = {}
 ): WorkspaceController {
@@ -115,9 +120,7 @@ export function createWorkspaceController(
     storageContext: StorageContext,
     active: WorkspaceContext
   ): Promise<SessionDocument | undefined> {
-    if (active.workspace.storageMode === 'private-session') {
-      return sessionDocuments.get(active.workspace.id)
-    }
+    if (active.workspace.storageMode === 'private-session') return sessionDocuments.get(active.workspace.id)
     if (active.workspace.storageMode !== 'local-library') return undefined
 
     const document = newestDocument(await storageContext.repositories.documents.listByWorkspace(active.workspace.id))
@@ -156,6 +159,12 @@ export function createWorkspaceController(
       createdAt: existing?.createdAt ?? document.updatedAt,
       updatedAt: document.updatedAt
     })
+  }
+
+  async function persistCurrentWorkspaceConfig(): Promise<void> {
+    const workspaceId = appState.activeWorkspaceId()
+    if (workspaceId === undefined) return
+    await (await service()).saveConfig(workspaceId, currentConfig())
   }
 
   async function routeCurrentDocument(): Promise<void> {
@@ -218,6 +227,7 @@ export function createWorkspaceController(
     async switchWorkspace(workspaceId: string): Promise<void> {
       if (workspaceId === appState.activeWorkspaceId()) return
       await runMutation(async () => {
+        await persistCurrentWorkspaceConfig()
         const workspaceService = await service()
         const result = await workspaceService.switchTo(workspaceId, currentEditorDocument(now))
         applyContext(result.context)
@@ -231,6 +241,7 @@ export function createWorkspaceController(
 
     async createWorkspace(name: string): Promise<void> {
       await runMutation(async () => {
+        await persistCurrentWorkspaceConfig()
         await routeCurrentDocument()
         const workspaceService = await service()
         const created = await workspaceService.create({ name })
@@ -271,7 +282,7 @@ export function createWorkspaceController(
         const workspaceId = appState.activeWorkspaceId()
         if (workspaceId === undefined) throw new Error('Active workspace is missing')
         const current = currentEditorDocument(now)
-        if (mode === 'private-session') cancelPendingDocumentPersistence()
+        cancelPendingDocumentPersistence()
 
         const workspaceService = await service()
         const updated = await workspaceService.setStorageMode(workspaceId, mode, current)
