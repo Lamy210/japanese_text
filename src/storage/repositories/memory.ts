@@ -116,6 +116,13 @@ export function createMemoryStorageContext(): MemoryStorageContext {
       profiles = nextProfiles
       workspaces = nextWorkspaces
     },
+    async deletePersistedDocuments(workspaceId) {
+      const nextDocuments = cloneMap(documents)
+      for (const [id, document] of nextDocuments) {
+        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+      }
+      documents = nextDocuments
+    },
     async deleteWorkspaceCascade(workspaceId) {
       const nextWorkspaces = cloneMap(workspaces)
       const nextDocuments = cloneMap(documents)
