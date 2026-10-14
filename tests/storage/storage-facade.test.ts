@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultConfig } from '../../src/core/config/validate'
 import { DEFAULT_WORKSPACE_ID } from '../../src/core/workspace/defaults'
 import { createStorageContext } from '../../src/storage/bootstrap'
+import { createWorkspaceService } from '../../src/workspace/workspace-service'
 
 const DB_NAME = 'japanese-writing-toolkit'
 
@@ -150,7 +151,7 @@ describe('legacy-compatible storage facade', () => {
     })
   })
 
-  it('splits saveConfig and recomposes equivalent compatibility semantics', async () => {
+  it('persists config/profile changes while preserving the canonical workspace privacy mode', async () => {
     const facade = await loadFacade(new IDBFactory())
     const config = createDefaultConfig()
     config.theme = 'dark'
@@ -160,16 +161,26 @@ describe('legacy-compatible storage facade', () => {
 
     await facade.saveConfig(config)
 
-    await expect(facade.loadConfig()).resolves.toEqual(config)
+    await expect(facade.loadConfig()).resolves.toMatchObject({
+      theme: 'dark',
+      editor: { fontSize: 19 },
+      ngWords: [{ id: 'ng-1', word: '禁止', severity: 'error' }],
+      privacy: { autoSave: false, privacyMode: true }
+    })
   })
 
-  it('persists and restores a recent document only in local-library mode', async () => {
+  it('persists and restores a recent document only after explicit Local Library opt-in', async () => {
     const facade = await loadFacade(new IDBFactory())
-    const config = (await facade.loadConfig())!
-    config.privacy = { autoSave: true, privacyMode: false }
-    await facade.saveConfig(config)
-
+    const context = await facade.getStorageContext()
+    const service = createWorkspaceService({
+      repositories: context.repositories,
+      atomic: context.atomic,
+      durableBackend: context.durable
+    })
+    const active = await service.getActive()
     const document = { name: 'draft.md', content: '# Draft', docType: 'markdown' as const, updatedAt: 5000 }
+
+    await service.setStorageMode(active.workspace.id, 'local-library', document)
     await facade.saveRecentDocument(document)
 
     await expect(facade.loadRecentDocument()).resolves.toEqual(document)
