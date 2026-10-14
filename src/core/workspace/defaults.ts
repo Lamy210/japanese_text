@@ -1,6 +1,7 @@
 import { createDefaultConfig } from '../config/validate'
 import type { GlobalPreferences, RuleProfile, Workspace } from './types'
 
+export const WORKSPACE_MODEL_SCHEMA_VERSION = 1
 export const DEFAULT_WORKSPACE_ID = 'local-default-workspace'
 export const DEFAULT_PROFILE_ID = 'local-default-profile'
 
@@ -35,7 +36,7 @@ export function createDefaultWorkspaceState(now: number): {
       updatedAt: now
     },
     preferences: {
-      schemaVersion: 1,
+      schemaVersion: WORKSPACE_MODEL_SCHEMA_VERSION,
       theme: config.theme,
       editor: structuredClone(config.editor),
       defaultStorageMode: 'private-session'
