@@ -70,11 +70,13 @@ export function createIndexedDbAtomicOperations(
       const hasLegacyDocuments = db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
       const stores = [
         STORE_WORKSPACE_DOCUMENTS,
+        STORE_DOCUMENT_SNAPSHOTS,
         ...(hasLegacyDocuments ? [LEGACY_DOCUMENTS_STORE] : [])
       ]
       const tx = db.transaction(stores, 'readwrite')
       const done = transactionDone(tx)
       const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
+      const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
 
       try {
         if (hasLegacyDocuments) {
@@ -83,8 +85,21 @@ export function createIndexedDbAtomicOperations(
 
         const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
         documentKeysRequest.onsuccess = () => {
-          for (const key of documentKeysRequest.result) {
-            documentStore.delete(key)
+          const documentIds = new Set(
+            documentKeysRequest.result.filter((key): key is string => typeof key === 'string')
+          )
+
+          for (const key of documentIds) documentStore.delete(key)
+
+          const snapshotCursorRequest = snapshotStore.openCursor()
+          snapshotCursorRequest.onsuccess = () => {
+            const cursor = snapshotCursorRequest.result
+            if (cursor === null) return
+            const raw = cursor.value
+            if (isRecord(raw) && typeof raw.documentId === 'string' && documentIds.has(raw.documentId)) {
+              cursor.delete()
+            }
+            cursor.continue()
           }
         }
 
