@@ -102,6 +102,20 @@ export function createMemoryStorageContext(): MemoryStorageContext {
     async migrateV1ToV2() {
       return { state: 'not-needed' }
     },
+    async saveProjectedState(value) {
+      const validatedPreferences = clone(validatePreferencesRecord(value.preferences))
+      const validatedProfile = clone(validateRuleProfileRecord(value.profile))
+      const validatedWorkspace = clone(validateWorkspaceRecord(value.workspace))
+      const nextWorkspaces = cloneMap(workspaces)
+      const nextProfiles = cloneMap(profiles)
+
+      nextWorkspaces.set(validatedWorkspace.id, validatedWorkspace)
+      nextProfiles.set(validatedProfile.id, validatedProfile)
+
+      preferences = validatedPreferences
+      profiles = nextProfiles
+      workspaces = nextWorkspaces
+    },
     async deleteWorkspaceCascade(workspaceId) {
       const nextWorkspaces = cloneMap(workspaces)
       const nextDocuments = cloneMap(documents)
