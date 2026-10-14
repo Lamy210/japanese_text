@@ -36,6 +36,7 @@ export function createMemoryStorageContext(): MemoryStorageContext {
   let profiles = new Map<string, RuleProfile>()
   let documents = new Map<string, StoredWorkspaceDocument>()
   let preferences: GlobalPreferences | undefined
+  let activeWorkspaceId: string | undefined
 
   const repositories: StorageRepositories = {
     workspaces: {
@@ -52,6 +53,15 @@ export function createMemoryStorageContext(): MemoryStorageContext {
       },
       async delete(id) {
         workspaces.delete(id)
+      }
+    },
+    selection: {
+      async getActiveWorkspaceId() {
+        return activeWorkspaceId
+      },
+      async setActiveWorkspaceId(workspaceId) {
+        if (workspaceId.length === 0) throw new Error('workspaceId must not be empty')
+        activeWorkspaceId = workspaceId
       }
     },
     preferences: {
