@@ -7,6 +7,7 @@ import type { AtomicOperationsPort } from '../repositories/ports'
 import { requestToPromise, transactionDone } from './idb-utils'
 import { migrateV1ToV2 } from './migration-v1-v2'
 import {
+  INDEX_WORKSPACE_ID,
   STORE_DOCUMENT_SNAPSHOTS,
   STORE_PREFERENCES,
   STORE_RULE_PROFILES,
@@ -75,39 +76,44 @@ export function createIndexedDbAtomicOperations(
       const suppressionStore = tx.objectStore(STORE_SUPPRESSIONS)
 
       try {
-        const [documents, snapshots, suppressions] = await Promise.all([
-          requestToPromise(documentStore.getAll()),
-          requestToPromise(snapshotStore.getAll()),
-          requestToPromise(suppressionStore.getAll())
-        ])
+        // Start with one request, then queue every dependent request from its success callback.
+        // This keeps the transaction active in real browsers instead of awaiting getAll() and
+        // attempting writes after IndexedDB has had a chance to auto-commit the transaction.
+        const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
+        documentKeysRequest.onsuccess = () => {
+          const documentIds = new Set(
+            documentKeysRequest.result.filter((key): key is string => typeof key === 'string')
+          )
 
-        const documentIds = new Set<string>()
-        for (const raw of documents) {
-          if (isRecord(raw) && raw.workspaceId === workspaceId && typeof raw.id === 'string') {
-            documentIds.add(raw.id)
-            documentStore.delete(raw.id)
+          for (const documentId of documentIds) documentStore.delete(documentId)
+          tx.objectStore(STORE_WORKSPACES).delete(workspaceId)
+
+          const snapshotCursorRequest = snapshotStore.openCursor()
+          snapshotCursorRequest.onsuccess = () => {
+            const cursor = snapshotCursorRequest.result
+            if (cursor === null) return
+            const raw = cursor.value
+            if (isRecord(raw) && typeof raw.documentId === 'string' && documentIds.has(raw.documentId)) {
+              cursor.delete()
+            }
+            cursor.continue()
+          }
+
+          const suppressionCursorRequest = suppressionStore.openCursor()
+          suppressionCursorRequest.onsuccess = () => {
+            const cursor = suppressionCursorRequest.result
+            if (cursor === null) return
+            const raw = cursor.value
+            if (isRecord(raw)) {
+              const workspaceScoped = raw.scope === 'workspace' && raw.scopeId === workspaceId
+              const documentScoped =
+                raw.scope === 'document' && typeof raw.scopeId === 'string' && documentIds.has(raw.scopeId)
+              if (workspaceScoped || documentScoped) cursor.delete()
+            }
+            cursor.continue()
           }
         }
 
-        for (const raw of snapshots) {
-          if (
-            isRecord(raw) &&
-            typeof raw.id === 'string' &&
-            typeof raw.documentId === 'string' &&
-            documentIds.has(raw.documentId)
-          ) {
-            snapshotStore.delete(raw.id)
-          }
-        }
-
-        for (const raw of suppressions) {
-          if (!isRecord(raw) || typeof raw.id !== 'string') continue
-          const workspaceScoped = raw.scope === 'workspace' && raw.scopeId === workspaceId
-          const documentScoped = raw.scope === 'document' && typeof raw.scopeId === 'string' && documentIds.has(raw.scopeId)
-          if (workspaceScoped || documentScoped) suppressionStore.delete(raw.id)
-        }
-
-        tx.objectStore(STORE_WORKSPACES).delete(workspaceId)
         await done
       } catch (error) {
         return abortAndRethrow(tx, done, error)
