@@ -233,6 +233,7 @@ export function persistConfigDebounced(): void {
   if (!isStorageAvailable()) return
   if (configSaveTimer !== null) clearTimeout(configSaveTimer)
   configSaveTimer = setTimeout(() => {
+    configSaveTimer = null
     const config = JSON.parse(JSON.stringify(appState.config)) as AppConfig
     persistConfig(config).catch(() => {
       appState.pushToast('warning', '設定の保存に失敗しました (IndexedDB)。')
@@ -246,6 +247,7 @@ export function persistDocumentDebounced(): void {
   if (appState.config.privacy.privacyMode || !appState.config.privacy.autoSave) return
   if (documentSaveTimer !== null) clearTimeout(documentSaveTimer)
   documentSaveTimer = setTimeout(() => {
+    documentSaveTimer = null
     saveRecentDocument({
       name: appState.documentName(),
       content: appState.documentText(),
@@ -263,6 +265,10 @@ export function persistAndRelint(): void {
 /** Privacy Mode有効化時: 保存済み本文を即座に削除 (§28) */
 export function onPrivacyModeChanged(enabled: boolean): void {
   if (enabled) {
+    if (documentSaveTimer !== null) {
+      clearTimeout(documentSaveTimer)
+      documentSaveTimer = null
+    }
     void deleteRecentDocument()
     appState.pushToast('info', 'プライバシーモードが有効です。文書本文はブラウザに保存されません。')
   }
