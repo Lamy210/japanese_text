@@ -9,11 +9,8 @@ import type { AppConfig } from '../core/config/schema'
 import type { DocumentType } from '../core/types'
 import { createStorageContext, type StorageContext } from './bootstrap'
 import { composeAppConfig, splitAppConfig, type ProjectedStorageState } from './compat/app-config-projection'
-import { transactionDone } from './db/idb-utils'
-import { LEGACY_DOCUMENTS_STORE } from './db/schema'
 
 const LOCAL_RECENT_DOCUMENT_ID = 'local-recent-document'
-const LEGACY_RECENT_DOCUMENT_KEY = 'recent'
 
 export interface StoredDocument {
   name: string
@@ -63,7 +60,6 @@ export async function saveConfig(config: AppConfig): Promise<void> {
   const context = await getContext()
   const current = await getActiveState(context)
   const next = splitAppConfig(config, current, Date.now())
-
   await context.atomic.saveProjectedState(next)
 }
 
@@ -118,38 +114,15 @@ export async function loadRecentDocument(): Promise<StoredDocument | undefined> 
   }
 }
 
-async function deleteLegacyRecentDocument(context: StorageContext): Promise<void> {
-  const db = context.db
-  if (db === undefined || !db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)) return
-
-  const tx = db.transaction(LEGACY_DOCUMENTS_STORE, 'readwrite')
-  const done = transactionDone(tx)
-  tx.objectStore(LEGACY_DOCUMENTS_STORE).delete(LEGACY_RECENT_DOCUMENT_KEY)
-  await done
-}
-
 /**
- * Explicit privacy deletion: scrub both v2 and retained v1 body records independently.
- * A failure in one cleanup path must not prevent the other path from being attempted.
+ * Explicit privacy deletion: scrub both v2 and retained v1 body records atomically
+ * when durable IndexedDB is in use. Memory fallback removes its session documents.
  */
 export async function deleteRecentDocument(): Promise<void> {
-  let context: StorageContext
   try {
-    context = await getContext()
-  } catch {
-    return
-  }
-
-  try {
+    const context = await getContext()
     const { workspace } = await getActiveState(context)
-    const documents = await context.repositories.documents.listByWorkspace(workspace.id)
-    await Promise.all(documents.map((document) => context.repositories.documents.delete(document.id)))
-  } catch {
-    // Best-effort v2 scrub. Legacy cleanup is still attempted below.
-  }
-
-  try {
-    await deleteLegacyRecentDocument(context)
+    await context.atomic.deletePersistedDocuments(workspace.id)
   } catch {
     // Preserve the historical best-effort API used by the UI privacy toggle.
   }
