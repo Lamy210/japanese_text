@@ -1,8 +1,7 @@
 /**
  * Header — 仕様書 §9.1 Desktop Header
  *
- * 配置: App Name / Open / Export / Lint / Format / Preset / Settings / Theme
- * モバイルでは診断パネル (Bottom Sheet) のトグルを兼ねる。
+ * 配置: App Name / Workspace / Open / Export / Lint / Format / Preset / Settings / Theme
  */
 
 import { Show } from 'solid-js'
@@ -17,6 +16,7 @@ import {
 } from '../state/actions'
 import { BUILTIN_PRESETS, PRESET_LABELS } from '../core/config/presets'
 import type { PresetId } from '../core/config/schema'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 const SEVERITY_ICON: Record<string, string> = { error: '✕', warning: '!', info: 'i' }
 
@@ -31,7 +31,7 @@ export function Header() {
     const input = event.target as HTMLInputElement
     const file = input.files?.[0]
     if (file !== undefined) void openDocumentFile(file)
-    input.value = '' // 同じファイルを再選択可能にする
+    input.value = ''
   }
 
   const counts = () => appState.diagnosticCounts()
@@ -49,6 +49,7 @@ export function Header() {
       </div>
 
       <div class="header-actions">
+        <WorkspaceSwitcher />
         <input
           ref={fileInput}
           type="file"

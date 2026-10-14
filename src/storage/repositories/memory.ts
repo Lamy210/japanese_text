@@ -31,11 +31,12 @@ export interface MemoryStorageContext {
   atomicOperations: AtomicOperationsPort
 }
 
-export function createMemoryStorageContext(): MemoryStorageContext {
+export function createMemoryStorageContext(now: () => number = Date.now): MemoryStorageContext {
   let workspaces = new Map<string, Workspace>()
   let profiles = new Map<string, RuleProfile>()
   let documents = new Map<string, StoredWorkspaceDocument>()
   let preferences: GlobalPreferences | undefined
+  let activeWorkspaceId: string | undefined
 
   const repositories: StorageRepositories = {
     workspaces: {
@@ -52,6 +53,15 @@ export function createMemoryStorageContext(): MemoryStorageContext {
       },
       async delete(id) {
         workspaces.delete(id)
+      }
+    },
+    selection: {
+      async getActiveWorkspaceId() {
+        return activeWorkspaceId
+      },
+      async setActiveWorkspaceId(workspaceId) {
+        if (workspaceId.length === 0) throw new Error('workspaceId must not be empty')
+        activeWorkspaceId = workspaceId
       }
     },
     preferences: {
@@ -116,6 +126,22 @@ export function createMemoryStorageContext(): MemoryStorageContext {
       profiles = nextProfiles
       workspaces = nextWorkspaces
     },
+    async createWorkspaceAndActivate(workspace, profile) {
+      const validatedWorkspace = clone(validateWorkspaceRecord(workspace))
+      const validatedProfile = clone(validateRuleProfileRecord(profile))
+      if (validatedWorkspace.activeRuleProfileId !== validatedProfile.id) {
+        throw new Error('workspace.activeRuleProfileId must reference the created profile')
+      }
+
+      const nextWorkspaces = cloneMap(workspaces)
+      const nextProfiles = cloneMap(profiles)
+      nextWorkspaces.set(validatedWorkspace.id, validatedWorkspace)
+      nextProfiles.set(validatedProfile.id, validatedProfile)
+
+      workspaces = nextWorkspaces
+      profiles = nextProfiles
+      activeWorkspaceId = validatedWorkspace.id
+    },
     async deletePersistedDocuments(workspaceId) {
       const nextDocuments = cloneMap(documents)
       for (const [id, document] of nextDocuments) {
@@ -128,6 +154,59 @@ export function createMemoryStorageContext(): MemoryStorageContext {
       const nextDocuments = cloneMap(documents)
 
       nextWorkspaces.delete(workspaceId)
+      for (const [id, document] of nextDocuments) {
+        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+      }
+
+      workspaces = nextWorkspaces
+      documents = nextDocuments
+    },
+    async deleteWorkspaceAndSelectNext(workspaceId, nextWorkspaceId) {
+      if (workspaceId === nextWorkspaceId) throw new Error('next workspace must differ from deleted workspace')
+      if (!workspaces.has(nextWorkspaceId)) throw new Error(`Next workspace not found: ${nextWorkspaceId}`)
+
+      const nextWorkspaces = cloneMap(workspaces)
+      const nextDocuments = cloneMap(documents)
+      nextWorkspaces.delete(workspaceId)
+      for (const [id, document] of nextDocuments) {
+        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+      }
+
+      workspaces = nextWorkspaces
+      documents = nextDocuments
+      activeWorkspaceId = nextWorkspaceId
+    },
+    async enableLocalLibrary(workspaceId, documentValue) {
+      const workspace = workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+      const document = clone(validateDocumentRecord(documentValue))
+      if (document.workspaceId !== workspaceId) {
+        throw new Error('document.workspaceId must match the target workspace')
+      }
+
+      const nextWorkspaces = cloneMap(workspaces)
+      const nextDocuments = cloneMap(documents)
+      nextWorkspaces.set(workspaceId, {
+        ...clone(workspace),
+        storageMode: 'local-library',
+        updatedAt: now()
+      })
+      nextDocuments.set(document.id, document)
+
+      workspaces = nextWorkspaces
+      documents = nextDocuments
+    },
+    async makeWorkspacePrivate(workspaceId) {
+      const workspace = workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+
+      const nextWorkspaces = cloneMap(workspaces)
+      const nextDocuments = cloneMap(documents)
+      nextWorkspaces.set(workspaceId, {
+        ...clone(workspace),
+        storageMode: 'private-session',
+        updatedAt: now()
+      })
       for (const [id, document] of nextDocuments) {
         if (document.workspaceId === workspaceId) nextDocuments.delete(id)
       }

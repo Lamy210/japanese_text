@@ -13,6 +13,11 @@ export interface WorkspaceRepository {
   delete(id: string): Promise<void>
 }
 
+export interface WorkspaceSelectionRepository {
+  getActiveWorkspaceId(): Promise<string | undefined>
+  setActiveWorkspaceId(workspaceId: string): Promise<void>
+}
+
 export interface PreferencesRepository {
   get(): Promise<GlobalPreferences | undefined>
   save(value: GlobalPreferences): Promise<void>
@@ -34,6 +39,7 @@ export interface DocumentRepository {
 
 export interface StorageRepositories {
   workspaces: WorkspaceRepository
+  selection: WorkspaceSelectionRepository
   preferences: PreferencesRepository
   profiles: RuleProfileRepository
   documents: DocumentRepository
@@ -61,6 +67,10 @@ export interface AtomicProjectedStorageState {
 export interface AtomicOperationsPort {
   migrateV1ToV2(): Promise<MigrationResult>
   saveProjectedState(value: AtomicProjectedStorageState): Promise<void>
+  createWorkspaceAndActivate(workspace: Workspace, profile: RuleProfile): Promise<void>
   deletePersistedDocuments(workspaceId: string): Promise<void>
   deleteWorkspaceCascade(workspaceId: string): Promise<void>
+  deleteWorkspaceAndSelectNext(workspaceId: string, nextWorkspaceId: string): Promise<void>
+  enableLocalLibrary(workspaceId: string, document: StoredWorkspaceDocument): Promise<void>
+  makeWorkspacePrivate(workspaceId: string): Promise<void>
 }

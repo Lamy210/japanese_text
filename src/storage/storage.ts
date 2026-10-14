@@ -7,10 +7,16 @@
 
 import type { AppConfig } from '../core/config/schema'
 import type { DocumentType } from '../core/types'
-import { createStorageContext, type StorageContext } from './bootstrap'
-import { composeAppConfig, splitAppConfig, type ProjectedStorageState } from './compat/app-config-projection'
+import { createWorkspaceService } from '../workspace/workspace-service'
+import type { StorageContext } from './bootstrap'
+import {
+  composeAppConfig,
+  splitAppConfigPreservingStorageMode,
+  type ProjectedStorageState
+} from './compat/app-config-projection'
+import { getStorageContext } from './runtime'
 
-const LOCAL_RECENT_DOCUMENT_ID = 'local-recent-document'
+export { getStorageContext, resetStorageRuntimeForTests } from './runtime'
 
 export interface StoredDocument {
   name: string
@@ -18,8 +24,6 @@ export interface StoredDocument {
   docType: DocumentType
   updatedAt: number
 }
-
-let contextPromise: Promise<StorageContext> | null = null
 
 export function isStorageAvailable(): boolean {
   try {
@@ -29,23 +33,17 @@ export function isStorageAvailable(): boolean {
   }
 }
 
-function getContext(): Promise<StorageContext> {
-  if (contextPromise === null) contextPromise = createStorageContext()
-  return contextPromise
-}
-
 async function getActiveState(context: StorageContext): Promise<ProjectedStorageState> {
-  const workspaces = await context.repositories.workspaces.list()
-  const workspace = workspaces[0]
-  if (workspace === undefined) throw new Error('Active workspace is missing')
-
-  const preferences = await context.repositories.preferences.get()
-  if (preferences === undefined) throw new Error('Global preferences are missing')
-
-  const profile = await context.repositories.profiles.get(workspace.activeRuleProfileId)
-  if (profile === undefined) throw new Error('Active rule profile is missing')
-
-  return { workspace, preferences, profile }
+  const active = await createWorkspaceService({
+    repositories: context.repositories,
+    atomic: context.atomic,
+    durableBackend: context.durable
+  }).getActive()
+  return {
+    workspace: active.workspace,
+    preferences: active.preferences,
+    profile: active.profile
+  }
 }
 
 function newestDocument<T extends { updatedAt: number }>(values: T[]): T | undefined {
@@ -55,37 +53,35 @@ function newestDocument<T extends { updatedAt: number }>(values: T[]): T | undef
   )
 }
 
-/** Save existing AppConfig semantics into the split v2 persistence model atomically. */
+/** Save config/profile preferences without changing the canonical Workspace storage mode. */
 export async function saveConfig(config: AppConfig): Promise<void> {
-  const context = await getContext()
+  const context = await getStorageContext()
   const current = await getActiveState(context)
-  const next = splitAppConfig(config, current, Date.now())
+  const next = splitAppConfigPreservingStorageMode(config, current, Date.now())
   await context.atomic.saveProjectedState(next)
 }
 
 /** Load a validated v2 state and project it back to the existing AppConfig shape. */
 export async function loadConfig(): Promise<AppConfig | undefined> {
   try {
-    const context = await getContext()
+    const context = await getStorageContext()
     return composeAppConfig(await getActiveState(context))
   } catch {
     return undefined
   }
 }
 
-/**
- * Save the current document only when the active workspace explicitly opted into
- * local-library persistence. Private/file-backed modes never write body text here.
- */
-export async function saveRecentDocument(doc: StoredDocument): Promise<void> {
-  const context = await getContext()
-  const { workspace } = await getActiveState(context)
+/** Persist a body only to the explicitly named local-library workspace. */
+export async function saveWorkspaceDocument(workspaceId: string, doc: StoredDocument): Promise<void> {
+  const context = await getStorageContext()
+  const workspace = await context.repositories.workspaces.get(workspaceId)
+  if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
   if (workspace.storageMode !== 'local-library') return
 
-  const existing = newestDocument(await context.repositories.documents.listByWorkspace(workspace.id))
+  const existing = newestDocument(await context.repositories.documents.listByWorkspace(workspaceId))
   await context.repositories.documents.save({
-    id: existing?.id ?? LOCAL_RECENT_DOCUMENT_ID,
-    workspaceId: workspace.id,
+    id: existing?.id ?? `local-recent-document:${workspaceId}`,
+    workspaceId,
     name: doc.name,
     content: doc.content,
     docType: doc.docType,
@@ -95,13 +91,14 @@ export async function saveRecentDocument(doc: StoredDocument): Promise<void> {
   })
 }
 
-export async function loadRecentDocument(): Promise<StoredDocument | undefined> {
+/** Load a body only from the explicitly named local-library workspace. */
+export async function loadWorkspaceDocument(workspaceId: string): Promise<StoredDocument | undefined> {
   try {
-    const context = await getContext()
-    const { workspace } = await getActiveState(context)
-    if (workspace.storageMode !== 'local-library') return undefined
+    const context = await getStorageContext()
+    const workspace = await context.repositories.workspaces.get(workspaceId)
+    if (workspace === undefined || workspace.storageMode !== 'local-library') return undefined
 
-    const document = newestDocument(await context.repositories.documents.listByWorkspace(workspace.id))
+    const document = newestDocument(await context.repositories.documents.listByWorkspace(workspaceId))
     if (document === undefined || typeof document.content !== 'string') return undefined
     return {
       name: document.name,
@@ -114,13 +111,31 @@ export async function loadRecentDocument(): Promise<StoredDocument | undefined> 
   }
 }
 
+/** Compatibility wrapper for the currently active workspace. */
+export async function saveRecentDocument(doc: StoredDocument): Promise<void> {
+  const context = await getStorageContext()
+  const { workspace } = await getActiveState(context)
+  await saveWorkspaceDocument(workspace.id, doc)
+}
+
+/** Compatibility wrapper for the currently active workspace. */
+export async function loadRecentDocument(): Promise<StoredDocument | undefined> {
+  try {
+    const context = await getStorageContext()
+    const { workspace } = await getActiveState(context)
+    return loadWorkspaceDocument(workspace.id)
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * Explicit privacy deletion: scrub both v2 and retained v1 body records atomically
  * when durable IndexedDB is in use. Memory fallback removes its session documents.
  */
 export async function deleteRecentDocument(): Promise<void> {
   try {
-    const context = await getContext()
+    const context = await getStorageContext()
     const { workspace } = await getActiveState(context)
     await context.atomic.deletePersistedDocuments(workspace.id)
   } catch {
