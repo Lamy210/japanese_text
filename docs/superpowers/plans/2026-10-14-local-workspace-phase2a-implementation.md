@@ -2,170 +2,219 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** IndexedDB v1 の既存データを破壊せずに local-first storage model v2 へ移行し、Workspace / RuleProfile / multi-document の後続開発を支える永続化境界を導入する。
+**Goal:** IndexedDB v1 の既存データを破壊せず local-first storage model v2 へ移行し、Workspace / RuleProfile / multi-document の後続開発を支える永続化境界を導入する。
 
-**Architecture:** UI と `appState` は Phase 2A では既存 `AppConfig` / recent-document API を維持し、その裏側に domain model、repository ports、IndexedDB v2 adapter、memory fallback、v1→v2 migration、AppConfig compatibility projection を導入する。schema upgrade と data migration は分離し、multi-store 更新は adapter 内の atomic operation で完結させる。
+**Architecture:** UI と `appState` は Phase 2A では既存 `AppConfig` / recent-document API を維持し、その裏側に domain model、repository ports、IndexedDB v2 adapter、memory fallback、v1→v2 migration、AppConfig compatibility projection を導入する。schema upgrade と data migration を分離し、multi-store mutation は storage adapter 内の atomic operation で完結させる。
 
 **Tech Stack:** TypeScript 7、SolidJS、Vitest 5、IndexedDB、`fake-indexeddb@6.2.5`（test only）、Bun 1.4.3、Vite 8。
 
-**Spec:** `docs/superpowers/specs/2026-10-14-local-workspace-rule-platform-design.md`
+**Spec:**
+- `docs/superpowers/specs/2026-10-14-local-workspace-rule-platform-design.md`
+- `docs/superpowers/specs/2026-10-14-local-workspace-phase2a-clarifications.md`
 
 ## Global Constraints
 
 - Backend / Login / LLM / Cloud Sync は追加しない。
-- 新規 installation の既定 storage mode は `private-session`。
+- 新規 installation の canonical default は `private-session`。
+- compatibility `AppConfig` の fresh default は `privacy: { autoSave: false, privacyMode: true }`。
 - 本文をサーバーへ送信しない。
-- DB name は `japanese-writing-toolkit` を維持し、IndexedDB version は `2`。
-- v1 legacy stores `settings` / `documents` は Phase 2A で削除しない。
+- DB name は `japanese-writing-toolkit`、IndexedDB version は `2`。
+- v1 legacy **stores** `settings` / `documents` は Phase 2A で削除しない。
+- migration 自体は legacy records を削除・更新しない。
+- ただし migration 完了後の明示的 Privacy deletion は user intent を優先し、対応する legacy `documents/recent` record も削除する。
 - 新 stores は `meta`, `workspaces`, `preferences`, `ruleProfiles`, `workspaceDocuments`, `documentSnapshots`, `suppressions`。
-- `onupgradeneeded` は store / index 作成だけを行い、user data migration は open 後の通常 transaction で行う。
+- `onupgradeneeded` は store / index 作成だけ。user data migration は open 後の通常 transaction。
 - Config schema version / Storage DB version / Export format version を連動させない。
 - diagnostics / worker state / lint timing は永続化しない。
 - UI 全面改修、Rule Platform v2、Suppression UI、Export/Import、File System Access は Phase 2A の非対象。
-- DB v2 へ上げた後の rollback で `DB_VERSION=1` に戻してはならない。
-- 既存の lint / formatter / editor behavior を変更しない。
-- すべての product-code change は failing test → minimal implementation → passing test の順で行う。
+- DB v2 へ上げた後の rollback で `DB_VERSION=1` に戻さない。
+- 既存 lint / formatter / editor behavior を変更しない。
+- `customRules` は field を保持するが Phase 2A では `[]` のみ有効。non-empty は reject。
+- product-code change は failing test → minimal implementation → passing test の順。
 
 ## Review Focus
 
-1. **旧 privacy 設定と stale recent document の組み合わせ:** `privacyMode=true` または `autoSave=false` の v1 user に、legacy recent document が残っていても v2 `workspaceDocuments` へ本文をコピーしないこと。
-2. **migration 中断 / 再実行:** records 書き込み後・complete marker 前などの失敗を模擬しても、再実行で duplicate workspace/profile/document が増えず、legacy stores を維持すること。
-3. **corrupt v1 config + valid legacy document:** app を起動不能にせず private-session defaults を作り、legacy document を破壊・自動永続化せず recovery path を残すこと。
-4. **IndexedDB record corruption:** v2 store に不正 object が混入しても repository read で型 assertion だけを行わず、その record 単位で validation failure として扱うこと。
-5. **IndexedDB unavailable / open failure:** `loadConfig()` / bootstrap が reject 連鎖で editor 起動を止めず、memory/default path へ degrade すること。
+1. **旧 privacy 設定 + stale recent document:** `privacyMode=true` または `autoSave=false` の v1 user について stale body を v2 にコピーしない。
+2. **migration 中断 / retry:** retry で duplicate workspace/profile/document を作らず、legacy records を migration 中に破壊しない。
+3. **corrupt v1 config + valid document:** app を起動不能にせず private-session defaults を作り、本文は自動永続化せず recovery data としてのみ扱う。
+4. **corrupt v2 record:** repository read は型 assertion で信用せず record validation failure にする。
+5. **IndexedDB unavailable/open failure:** import/boot 時に crash せず memory/default path へ degrade する。
 
 ---
 
-## File Structure
+## File Map
 
-### New domain files
+**Create**
 
-- `src/core/workspace/types.ts` — Workspace / preferences / profile / document / snapshot / suppression の persistence-independent types。
-- `src/core/workspace/defaults.ts` — 新規 installation 用 private-session defaults と deterministic migrated IDs。
-- `src/core/workspace/validate.ts` — persisted v2 records の whitelist validation。
-
-### New storage ports / adapters
-
-- `src/storage/repositories/ports.ts` — repository interfaces と Phase 2A atomic operation interfaces。
-- `src/storage/repositories/memory.ts` — memory fallback + contract-test reference implementation。
+- `src/core/workspace/types.ts` — persistence-independent domain types。
+- `src/core/workspace/defaults.ts` — defaults / stable bootstrap IDs。
+- `src/core/workspace/validate.ts` — persisted v2 record validation。
+- `src/storage/repositories/ports.ts` — repositories / atomic operation ports。
+- `src/storage/repositories/memory.ts` — memory fallback。
 - `src/storage/repositories/indexeddb.ts` — IndexedDB repositories。
-- `src/storage/db/schema.ts` — DB / store / index constants。
-- `src/storage/db/idb-utils.ts` — IDBRequest / transaction helper。
-- `src/storage/db/open-database.ts` — schema v2 creation only。
-- `src/storage/db/migration-v1-v2.ts` — legacy data migration execution。
-- `src/storage/db/indexeddb-atomic-operations.ts` — multi-store atomic mutations。
-- `src/storage/bootstrap.ts` — IndexedDB or memory context の生成と migration 起動。
-- `src/storage/compat/app-config-projection.ts` — v2 model ↔ existing `AppConfig` bridge。
-
-### Existing integration files
-
-- `src/storage/storage.ts` — public legacy-compatible façade を v2 context へ接続。
-- `src/app/App.tsx` — Phase 2A では必要最小限の bootstrap warning / restore behavior のみ調整。
-- `src/state/actions.ts` — public storage function signatures が維持できれば原則変更しない。
-- `package.json`, `bun.lock` — `fake-indexeddb@6.2.5` dev dependency。
-
-### New tests
-
-- `tests/storage/workspace-domain.test.ts`
+- `src/storage/db/schema.ts` — DB/store/index constants。
+- `src/storage/db/idb-utils.ts` — request/transaction helpers。
+- `src/storage/db/open-database.ts` — schema upgrade only。
+- `src/storage/db/migration-v1-v2.ts` — migration execution。
+- `src/storage/db/indexeddb-atomic-operations.ts` — atomic multi-store operations。
+- `src/storage/bootstrap.ts` — IDB/memory context bootstrap。
+- `src/storage/compat/app-config-projection.ts` — v2 model ↔ existing AppConfig。
 - `tests/storage/repository-contract.ts`
+- `tests/storage/workspace-domain.test.ts`
 - `tests/storage/memory-repositories.test.ts`
 - `tests/storage/indexeddb-schema.test.ts`
 - `tests/storage/indexeddb-repositories.test.ts`
-- `tests/storage/migration-v1-v2.test.ts`
 - `tests/storage/app-config-projection.test.ts`
+- `tests/storage/migration-v1-v2.test.ts`
 - `tests/storage/storage-facade.test.ts`
+
+**Modify**
+
+- `src/core/config/schema.ts` — fresh privacy default only。
+- `src/storage/storage.ts` — public API-compatible façade。
+- `src/app/App.tsx` — only if façade alone cannot preserve startup semantics。
+- `src/state/actions.ts` — only if a failing regression test requires a change。
+- `package.json`, `bun.lock` — `fake-indexeddb@6.2.5`。
 
 ---
 
-### Task 1: Domain model と private-session defaults
+### Task 1: Domain model と fresh private-session default
 
 **Files:**
 - Create: `src/core/workspace/types.ts`
 - Create: `src/core/workspace/defaults.ts`
 - Create: `src/core/workspace/validate.ts`
+- Modify: `src/core/config/schema.ts`
 - Test: `tests/storage/workspace-domain.test.ts`
 
 **Interfaces:**
-- Consumes: existing `ThemeMode`, `EditorPreferences`, `PresetId`, `RuleSetting`, `NgWordEntry`, `TermEntry`, `CitationPolicy`, `FormatterPolicy`, `DocumentType`。
-- Produces:
-  - `type StorageMode = 'private-session' | 'local-library' | 'file-backed'`
-  - `interface SnapshotPolicy { enabled: boolean; maxSnapshots: number }`
-  - `interface Workspace`
-  - `interface GlobalPreferences`
-  - `interface RuleProfile`
-  - `interface StoredWorkspaceDocument`
-  - `interface DocumentSnapshot`
-  - `interface Suppression`
-  - `createDefaultWorkspaceState(now: number): { workspace: Workspace; preferences: GlobalPreferences; profile: RuleProfile }`
-  - `validateWorkspaceRecord(raw: unknown): Workspace`
-  - `validatePreferencesRecord(raw: unknown): GlobalPreferences`
-  - `validateRuleProfileRecord(raw: unknown): RuleProfile`
-  - `validateDocumentRecord(raw: unknown): StoredWorkspaceDocument`
-
-- [ ] **Step 1: Write failing domain/default tests**
-
-Add tests asserting:
 
 ```ts
+type StorageMode = 'private-session' | 'local-library' | 'file-backed'
+
+interface SnapshotPolicy {
+  enabled: boolean
+  maxSnapshots: number
+}
+
+interface Workspace {
+  id: string
+  name: string
+  activeRuleProfileId: string
+  storageMode: StorageMode
+  snapshotPolicy: SnapshotPolicy
+  createdAt: number
+  updatedAt: number
+}
+
+interface GlobalPreferences {
+  schemaVersion: number
+  theme: ThemeMode
+  editor: EditorPreferences
+  defaultStorageMode: 'private-session' | 'local-library'
+}
+
+interface RuleProfile {
+  id: string
+  name: string
+  sourcePresetId?: PresetId
+  rules: Record<string, RuleSetting>
+  ngWords: NgWordEntry[]
+  terminology: TermEntry[]
+  citation: CitationPolicy
+  formatter: FormatterPolicy
+  customRules: unknown[]
+  createdAt: number
+  updatedAt: number
+}
+
+interface StoredWorkspaceDocument {
+  id: string
+  workspaceId: string
+  name: string
+  docType: DocumentType
+  content?: string
+  sourceKind: 'local' | 'file'
+  createdAt: number
+  updatedAt: number
+}
+```
+
+Produces:
+
+```ts
+const WORKSPACE_MODEL_SCHEMA_VERSION = 1
+function createDefaultWorkspaceState(now: number): {
+  workspace: Workspace
+  preferences: GlobalPreferences
+  profile: RuleProfile
+}
+function validateWorkspaceRecord(raw: unknown): Workspace
+function validatePreferencesRecord(raw: unknown): GlobalPreferences
+function validateRuleProfileRecord(raw: unknown): RuleProfile
+function validateDocumentRecord(raw: unknown): StoredWorkspaceDocument
+```
+
+- [ ] **Step 1: Write failing tests**
+
+Assert fresh defaults:
+
+```ts
+expect(DEFAULT_PRIVACY).toEqual({ autoSave: false, privacyMode: true })
 expect(createDefaultWorkspaceState(1000).workspace.storageMode).toBe('private-session')
 expect(createDefaultWorkspaceState(1000).preferences.defaultStorageMode).toBe('private-session')
 expect(createDefaultWorkspaceState(1000).profile.sourcePresetId).toBe('general')
-expect(createDefaultWorkspaceState(1000).workspace.snapshotPolicy.enabled).toBe(false)
+expect(createDefaultWorkspaceState(1000).workspace.snapshotPolicy).toEqual({ enabled: false, maxSnapshots: 20 })
 ```
 
-Also assert that validators reject arrays, missing IDs, invalid storage modes, invalid timestamps, and non-empty `customRules` during Phase 2A. `customRules` exists in the persisted shape but Phase 2A only accepts `[]`; executable/custom DSL support remains Phase 2F.
+Validators must reject arrays, missing IDs, invalid storage modes/timestamps, malformed rule/profile structures, and `customRules.length > 0`.
 
-- [ ] **Step 2: Run the new test file and verify failure**
+- [ ] **Step 2: Run and confirm RED**
 
 Run: `bun run test -- tests/storage/workspace-domain.test.ts`
 
-Expected: FAIL because workspace domain modules do not exist.
+Expected: FAIL because the new domain modules/default are not implemented.
 
-- [ ] **Step 3: Implement domain types, defaults, and validators**
+- [ ] **Step 3: Implement types/defaults/validators and change `DEFAULT_PRIVACY`**
 
-Use `general` preset + existing default terminology/citation/formatter behavior when creating the default profile. Set `SnapshotPolicy` default to `{ enabled: false, maxSnapshots: 20 }`; the limit is inert while snapshots are disabled.
-
-Use stable constant IDs for the single bootstrap entities created in Phase 2A:
+Use stable fresh IDs:
 
 ```text
 local-default-workspace
 local-default-profile
 ```
 
-Migration-specific IDs are separate constants added in Task 6.
+Use existing General preset/default terminology/citation/formatter when constructing the default profile.
 
-- [ ] **Step 4: Run domain tests**
+- [ ] **Step 4: Run and confirm GREEN**
 
-Run: `bun run test -- tests/storage/workspace-domain.test.ts`
-
-Expected: PASS.
-
-- [ ] **Step 5: Run typecheck**
-
-Run: `bun run lint`
-
-Expected: PASS.
-
-- [ ] **Step 6: Commit**
+Run:
 
 ```bash
-git add src/core/workspace tests/storage/workspace-domain.test.ts
+bun run test -- tests/storage/workspace-domain.test.ts
+bun run lint
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/core/workspace src/core/config/schema.ts tests/storage/workspace-domain.test.ts
 git commit -m "feat: add workspace storage domain model"
 ```
 
 ---
 
-### Task 2: Repository ports と Memory implementation
+### Task 2: Repository ports + Memory adapter
 
 **Files:**
 - Create: `src/storage/repositories/ports.ts`
 - Create: `src/storage/repositories/memory.ts`
 - Create: `tests/storage/repository-contract.ts`
-- Create: `tests/storage/memory-repositories.test.ts`
+- Test: `tests/storage/memory-repositories.test.ts`
 
 **Interfaces:**
-- Consumes: Task 1 domain models and validators。
-- Produces:
 
 ```ts
 interface WorkspaceRepository {
@@ -194,10 +243,17 @@ interface DocumentRepository {
   delete(id: string): Promise<void>
 }
 
+interface RecoveredDocument {
+  name: string
+  content: string
+  docType: DocumentType
+  updatedAt: number
+}
+
 interface MigrationResult {
   state: 'not-needed' | 'migrated' | 'recovered-with-warning' | 'failed'
   warning?: string
-  recoveredLegacyDocument?: LegacyStoredDocument
+  recoveredDocument?: RecoveredDocument
 }
 
 interface AtomicOperationsPort {
@@ -206,31 +262,21 @@ interface AtomicOperationsPort {
 }
 ```
 
-`importWorkspaceBundle()` is deliberately not added in Phase 2A because the validated import bundle contract belongs to Phase 2G. Add it when that contract exists rather than introduce an unused placeholder method now.
+Phase 2G の `importWorkspaceBundle()` は import schema と同時に追加する。
 
-- [ ] **Step 1: Write a reusable repository contract suite**
+- [ ] **Step 1: Write reusable contract tests**
 
-The contract must assert for workspace/profile/document repositories:
+For workspace/profile/document repositories assert save/get, overwrite same ID, delete isolation, workspace query isolation, and defensive cloning.
 
-- save → get round-trip
-- save same ID replaces rather than duplicates
-- delete removes only the requested record
-- workspace document query never returns another workspace's documents
-- returned objects are not shared mutable references with internal memory state
-
-- [ ] **Step 2: Run memory repository tests and verify failure**
+- [ ] **Step 2: Run and confirm RED**
 
 Run: `bun run test -- tests/storage/memory-repositories.test.ts`
 
-Expected: FAIL because memory repositories do not exist.
+- [ ] **Step 3: Implement ports + memory adapter**
 
-- [ ] **Step 3: Implement ports and memory repositories**
+Validate on write; clone on write/read. `deleteWorkspaceCascade()` uses cloned maps and swaps only after the full operation succeeds. Memory `migrateV1ToV2()` returns `not-needed`.
 
-Memory repositories must run persisted-record validators on write and clone on read/write boundaries. Implement `deleteWorkspaceCascade()` atomically from the caller's perspective by applying changes to cloned maps and swapping them only after all validation succeeds.
-
-`migrateV1ToV2()` in the memory adapter returns `not-needed`; memory fallback never pretends to migrate persistent v1 data.
-
-- [ ] **Step 4: Run memory contract tests**
+- [ ] **Step 4: Verify**
 
 Run: `bun run test -- tests/storage/memory-repositories.test.ts`
 
@@ -245,7 +291,7 @@ git commit -m "feat: add storage repository ports and memory adapter"
 
 ---
 
-### Task 3: IndexedDB v2 schema creation
+### Task 3: IndexedDB v2 schema-only upgrade
 
 **Files:**
 - Modify: `package.json`
@@ -256,63 +302,55 @@ git commit -m "feat: add storage repository ports and memory adapter"
 - Test: `tests/storage/indexeddb-schema.test.ts`
 
 **Interfaces:**
-- Produces:
-  - `DB_NAME = 'japanese-writing-toolkit'`
-  - `DB_VERSION = 2`
-  - store-name constants for all 7 v2 stores and 2 legacy stores
-  - `openDatabase(factory: IDBFactory = indexedDB): Promise<IDBDatabase>`
-  - `requestToPromise<T>(request: IDBRequest<T>): Promise<T>`
-  - `transactionDone(tx: IDBTransaction): Promise<void>`
 
-- [ ] **Step 1: Add `fake-indexeddb@6.2.5` as a dev dependency**
+```ts
+const DB_NAME = 'japanese-writing-toolkit'
+const DB_VERSION = 2
+function openDatabase(factory: IDBFactory): Promise<IDBDatabase>
+function requestToPromise<T>(request: IDBRequest<T>): Promise<T>
+function transactionDone(tx: IDBTransaction): Promise<void>
+```
+
+Store constants include all 7 v2 stores plus legacy `settings` / `documents` names. `openDatabase()` must not have `indexedDB` as a default parameter; caller injects the factory after feature detection.
+
+- [ ] **Step 1: Add test dependency**
 
 Run: `bun add -d fake-indexeddb@6.2.5`
 
-Expected: `package.json` and `bun.lock` change only for the test dependency graph.
+- [ ] **Step 2: Write schema fixture tests**
 
-- [ ] **Step 2: Write schema upgrade tests before implementation**
+Start from a v1 DB with legacy records. After v2 open assert:
 
-Create a v1 fixture database containing:
+- DB version `2`。
+- existing legacy stores/records remain unchanged。
+- all v2 stores exist。
+- indexes:
+  - `workspaceDocuments`: `workspaceId`, `updatedAt`
+  - `documentSnapshots`: `documentId`, compound `[documentId, createdAt]`
+  - `suppressions`: compound `[scope, scopeId]`, `ruleId`
+- no workspace/profile/document data conversion occurs in `onupgradeneeded`。
+- a fresh database without legacy stores also opens correctly; migration code must therefore tolerate missing legacy stores。
 
-```text
-settings/app-config
- documents/recent
+- [ ] **Step 3: Run RED**
+
+Run: `bun run test -- tests/storage/indexeddb-schema.test.ts`
+
+- [ ] **Step 4: Implement schema-only opener**
+
+Create v2 stores/indexes idempotently. Do not create legacy stores on a fresh v2 installation merely for compatibility; preserve them only when already present.
+
+- [ ] **Step 5: Verify**
+
+Run:
+
+```bash
+bun run test -- tests/storage/indexeddb-schema.test.ts
+bun run test
 ```
-
-Then open it through the new v2 opener and assert:
-
-- DB version is `2`.
-- legacy `settings` / `documents` still exist.
-- all v2 stores exist.
-- `workspaceDocuments` has indexes `workspaceId` and `updatedAt`.
-- `documentSnapshots` has indexes `documentId` and `[documentId, createdAt]`.
-- `suppressions` has indexes `[scope, scopeId]` and `ruleId`.
-- legacy values are byte-for-byte/deep-equal unchanged after schema upgrade.
-- no migrated workspace/profile/document is created by `onupgradeneeded` itself.
-
-- [ ] **Step 3: Run schema test and verify failure**
-
-Run: `bun run test -- tests/storage/indexeddb-schema.test.ts`
-
-Expected: FAIL because the v2 opener does not exist.
-
-- [ ] **Step 4: Implement schema-only `openDatabase()`**
-
-`onupgradeneeded` must create missing stores/indexes idempotently and must not read/transform application data.
-
-- [ ] **Step 5: Run schema test**
-
-Run: `bun run test -- tests/storage/indexeddb-schema.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Run full existing suite**
-
-Run: `bun run test`
-
-Expected: existing tests still PASS.
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add package.json bun.lock src/storage/db tests/storage/indexeddb-schema.test.ts
@@ -321,7 +359,7 @@ git commit -m "feat: add IndexedDB v2 schema"
 
 ---
 
-### Task 4: IndexedDB repository implementations
+### Task 4: IndexedDB repositories
 
 **Files:**
 - Create: `src/storage/repositories/indexeddb.ts`
@@ -329,32 +367,33 @@ git commit -m "feat: add IndexedDB v2 schema"
 - Reuse: `tests/storage/repository-contract.ts`
 
 **Interfaces:**
-- Consumes: Task 2 ports, Task 3 `IDBDatabase`, Task 1 validators。
-- Produces:
-  - `createIndexedDbRepositories(db: IDBDatabase): StorageRepositories`
-  - where `StorageRepositories` contains `workspaces`, `preferences`, `profiles`, `documents`.
 
-- [ ] **Step 1: Apply the same contract suite to IndexedDB repositories**
+```ts
+interface StorageRepositories {
+  workspaces: WorkspaceRepository
+  preferences: PreferencesRepository
+  profiles: RuleProfileRepository
+  documents: DocumentRepository
+}
 
-Use a fresh `fake-indexeddb` database per test and delete it after each test.
+function createIndexedDbRepositories(db: IDBDatabase): StorageRepositories
+```
 
-Add a corruption test that inserts an invalid raw record directly into `workspaces`, then asserts `workspaces.get(id)` rejects with a storage validation error rather than returning the raw object.
+- [ ] **Step 1: Apply repository contract suite to IndexedDB**
 
-- [ ] **Step 2: Run IndexedDB repository tests and verify failure**
+Add direct-corruption test: insert malformed raw workspace and verify repository `get()` rejects with validation error rather than returning asserted data.
 
-Run: `bun run test -- tests/storage/indexeddb-repositories.test.ts`
-
-Expected: FAIL because IndexedDB repositories do not exist.
-
-- [ ] **Step 3: Implement IndexedDB repositories**
-
-Use one transaction per single-repository operation. Reads must validate persisted records before returning them. `listByWorkspace()` must use the `workspaceId` index rather than loading/filtering the entire store.
-
-- [ ] **Step 4: Run IndexedDB repository contract tests**
+- [ ] **Step 2: Run RED**
 
 Run: `bun run test -- tests/storage/indexeddb-repositories.test.ts`
 
-Expected: PASS.
+- [ ] **Step 3: Implement repositories**
+
+One transaction per single-repository mutation. `listByWorkspace()` must use the `workspaceId` index. Validate every persisted object on read.
+
+- [ ] **Step 4: Verify**
+
+Run: `bun run test -- tests/storage/indexeddb-repositories.test.ts`
 
 - [ ] **Step 5: Commit**
 
@@ -372,8 +411,6 @@ git commit -m "feat: add IndexedDB storage repositories"
 - Test: `tests/storage/app-config-projection.test.ts`
 
 **Interfaces:**
-- Consumes: existing `AppConfig`, Task 1 `GlobalPreferences`, `Workspace`, `RuleProfile`。
-- Produces:
 
 ```ts
 interface ProjectedStorageState {
@@ -383,60 +420,47 @@ interface ProjectedStorageState {
 }
 
 function composeAppConfig(state: ProjectedStorageState): AppConfig
-function splitAppConfig(config: AppConfig, current: ProjectedStorageState, now: number): ProjectedStorageState
+function splitAppConfig(
+  config: AppConfig,
+  current: ProjectedStorageState,
+  now: number
+): ProjectedStorageState
 ```
 
-Mapping rules:
+Canonical privacy mapping:
 
 ```text
-local-library -> privacy.autoSave=true, privacy.privacyMode=false
-private-session -> privacy.autoSave=false, privacy.privacyMode=true
+local-library  -> autoSave=true,  privacyMode=false
+private-session -> autoSave=false, privacyMode=true
 
-privacyMode=true -> private-session
-autoSave=false -> private-session
-autoSave=true && privacyMode=false -> local-library
+privacyMode=true                         -> private-session
+autoSave=false                           -> private-session
+autoSave=true && privacyMode=false       -> local-library
 ```
-
-`file-backed` is not produced by existing `AppConfig` in Phase 2A.
 
 - [ ] **Step 1: Write projection tests**
 
-Assert:
+Assert theme/editor → preferences; rules/ngWords/terminology/citation/formatter → profile; preset ↔ `sourcePresetId`; deep clone boundaries; storage mapping; `split(compose(domain))` preserves domain semantics; `compose(split(config))` preserves lint/editor/theme semantics while privacy booleans normalize canonically.
 
-- theme/editor live in `GlobalPreferences`.
-- rules/ngWords/terminology/citation/formatter live in `RuleProfile`.
-- preset maps to/from `sourcePresetId`; `custom` stays `custom` semantics.
-- storage mapping follows the table above.
-- `split(compose(domainState))` preserves all Phase 2A domain semantics.
-- `compose(split(appConfig))` preserves lint/rule/editor/theme semantics; privacy booleans may normalize to the canonical pair for their storage mode.
-- nested arrays/maps are cloned; mutating the composed `AppConfig` does not mutate the persisted domain records.
-
-- [ ] **Step 2: Run projection test and verify failure**
+- [ ] **Step 2: Run RED**
 
 Run: `bun run test -- tests/storage/app-config-projection.test.ts`
 
-Expected: FAIL because projection functions do not exist.
+- [ ] **Step 3: Implement pure projection**
 
-- [ ] **Step 3: Implement projection functions**
+No browser/IndexedDB calls in this module.
 
-Do not call IndexedDB or browser APIs from this module.
-
-- [ ] **Step 4: Run projection tests**
-
-Run: `bun run test -- tests/storage/app-config-projection.test.ts`
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Verify and commit**
 
 ```bash
+bun run test -- tests/storage/app-config-projection.test.ts
 git add src/storage/compat tests/storage/app-config-projection.test.ts
 git commit -m "feat: add AppConfig storage compatibility projection"
 ```
 
 ---
 
-### Task 6: v1 → v2 migration mapping and atomic execution
+### Task 6: Atomic v1 → v2 migration
 
 **Files:**
 - Create: `src/storage/db/migration-v1-v2.ts`
@@ -444,59 +468,71 @@ git commit -m "feat: add AppConfig storage compatibility projection"
 - Test: `tests/storage/migration-v1-v2.test.ts`
 
 **Interfaces:**
-- Consumes: Task 1 defaults/validators, Task 3 DB, existing `validateAppConfig()` / `migrateConfig()`, existing v1 `StoredDocument` shape。
-- Produces:
-  - `MIGRATED_WORKSPACE_ID = 'migrated-v1-workspace'`
-  - `MIGRATED_PROFILE_ID = 'migrated-v1-profile'`
-  - `MIGRATED_DOCUMENT_ID = 'migrated-v1-recent-document'`
-  - `migrateV1ToV2(db: IDBDatabase, now?: () => number): Promise<MigrationResult>`
-  - `createIndexedDbAtomicOperations(db: IDBDatabase): AtomicOperationsPort`
 
-- [ ] **Step 1: Write v1 fixture helpers and mapping tests**
+```ts
+const MIGRATED_WORKSPACE_ID = 'migrated-v1-workspace'
+const MIGRATED_PROFILE_ID = 'migrated-v1-profile'
+const MIGRATED_DOCUMENT_ID = 'migrated-v1-recent-document'
 
-Cover at minimum:
+function migrateV1ToV2(
+  db: IDBDatabase,
+  now?: () => number
+): Promise<MigrationResult>
 
-1. valid config + recent doc + `autoSave=true`, `privacyMode=false` → local-library workspace and copied v2 document.
-2. valid config + no recent doc → no v2 document.
-3. `privacyMode=true` + stale recent doc → private-session workspace; do **not** copy document content into `workspaceDocuments`; legacy record remains.
-4. `autoSave=false` + stale recent doc → same privacy-preserving behavior.
-5. corrupt config + valid recent doc → create default private-session preferences/workspace/profile; do not persist legacy body into v2; return `recovered-with-warning` with in-memory `recoveredLegacyDocument` reference/value.
-6. migration called twice → exactly one workspace, one profile, at most one migrated document.
-7. pre-existing `complete` marker → return `not-needed` without rewriting domain records.
-8. forced transaction abort before complete → no partial new records from that transaction, legacy stores remain, subsequent retry succeeds.
-9. migration failure → write `failed` marker in a separate best-effort meta transaction without deleting legacy data.
+function createIndexedDbAtomicOperations(db: IDBDatabase): AtomicOperationsPort
+```
 
-- [ ] **Step 2: Run migration tests and verify failure**
+Meta keys:
+
+```text
+storage-schema-version
+v1-migration-status
+```
+
+- [ ] **Step 1: Write migration fixtures/tests**
+
+Must cover:
+
+1. valid config + recent doc + local-library intent → migrated workspace/profile/document。
+2. valid config + no doc → no migrated document。
+3. `privacyMode=true` + stale doc → private-session; no v2 body copy; legacy record remains during migration。
+4. `autoSave=false` + stale doc → same。
+5. config missing `privacy` → privacy-safe private-session default。
+6. corrupt config + valid doc → default private state, no v2 body copy, `recovered-with-warning` + `recoveredDocument`。
+7. fresh DB with no legacy stores → default private state + complete marker。
+8. migration called twice → no duplicates。
+9. `complete` marker → `not-needed` and no rewrites。
+10. `pending`/`failed` marker → retry allowed。
+11. forced transaction abort → target records + complete marker do not partially commit; retry succeeds。
+12. failure path writes best-effort `failed` marker separately while legacy records remain。
+13. success sets `meta/storage-schema-version = 2` and complete status atomically with migrated target records。
+
+- [ ] **Step 2: Run RED**
 
 Run: `bun run test -- tests/storage/migration-v1-v2.test.ts`
 
-Expected: FAIL because migration implementation does not exist.
+- [ ] **Step 3: Implement migration**
 
-- [ ] **Step 3: Implement atomic migration**
+Write `pending` status before the main migration transaction. Build the main transaction's store list dynamically so missing legacy stores on a fresh DB do not fail transaction creation. When legacy config exists, validate using existing config migration/validation; persisted explicit privacy values win. New target records + `storage-schema-version=2` + `complete` marker commit in one transaction.
 
-The main migration transaction must include all legacy source stores needed and all target stores/`meta` updated by migration. Write migrated domain records and the `complete` marker in the same successful transaction.
+Do not delete/update legacy source records in this migration function.
 
-Do not delete or mutate legacy source records.
+- [ ] **Step 4: Implement `deleteWorkspaceCascade()`**
 
-When config is absent entirely (fresh installation), create the Task 1 default private-session state and mark migration complete without manufacturing a recent document.
+One readwrite transaction across `workspaces`, `workspaceDocuments`, `documentSnapshots`, `suppressions`. Do not automatically delete RuleProfile in Phase 2A.
 
-- [ ] **Step 4: Implement `deleteWorkspaceCascade()` transactionally**
+- [ ] **Step 5: Verify**
 
-In one `readwrite` transaction across `workspaces`, `workspaceDocuments`, `documentSnapshots`, and `suppressions`, remove the workspace and records scoped to it. Do not delete a RuleProfile in Phase 2A because profiles are independently referencable and multi-workspace sharing is a future concern.
+Run:
 
-- [ ] **Step 5: Run migration tests**
-
-Run: `bun run test -- tests/storage/migration-v1-v2.test.ts`
-
-Expected: PASS.
-
-- [ ] **Step 6: Run repository + schema tests together**
-
-Run: `bun run test -- tests/storage/indexeddb-schema.test.ts tests/storage/indexeddb-repositories.test.ts tests/storage/migration-v1-v2.test.ts`
+```bash
+bun run test -- tests/storage/migration-v1-v2.test.ts
+bun run test -- tests/storage/indexeddb-schema.test.ts tests/storage/indexeddb-repositories.test.ts tests/storage/migration-v1-v2.test.ts
+```
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/storage/db/migration-v1-v2.ts src/storage/db/indexeddb-atomic-operations.ts tests/storage/migration-v1-v2.test.ts
@@ -505,15 +541,14 @@ git commit -m "feat: migrate legacy storage to IndexedDB v2"
 
 ---
 
-### Task 7: Storage bootstrap と memory fallback
+### Task 7: Storage bootstrap + memory fallback
 
 **Files:**
 - Create: `src/storage/bootstrap.ts`
 - Modify: `src/storage/repositories/memory.ts`
-- Test: `tests/storage/storage-facade.test.ts` (bootstrap section)
+- Test: `tests/storage/storage-facade.test.ts` (bootstrap cases)
 
 **Interfaces:**
-- Produces:
 
 ```ts
 interface StorageContext {
@@ -529,48 +564,35 @@ function createStorageContext(options?: {
 }): Promise<StorageContext>
 ```
 
-- [ ] **Step 1: Write bootstrap failure/fallback tests**
+- [ ] **Step 1: Write fallback tests**
 
-Assert:
+Assert fake IDB normal path → durable; missing factory/open failure → memory context + fresh private defaults; module import does not require global `indexedDB`; memory context works for current-session reads/writes.
 
-- normal fake IndexedDB → `durable=true`, migration runs once.
-- `IDBFactory.open()` failure → resolves with `durable=false`, memory repositories, default private-session state.
-- no global IndexedDB path can be injected as unavailable without throwing during module import.
-- fallback context remains usable for repository reads/writes during the current session.
-
-- [ ] **Step 2: Run bootstrap tests and verify failure**
+- [ ] **Step 2: Run RED**
 
 Run: `bun run test -- tests/storage/storage-facade.test.ts`
-
-Expected: FAIL because bootstrap does not exist.
 
 - [ ] **Step 3: Implement bootstrap**
 
-Never reject solely because persistent storage is unavailable. Reject only programmer/invariant errors that cannot be represented as fallback; normal IDB open/migration failure must produce a memory context with `MigrationResult.state='failed'` and a warning string.
+Normal IndexedDB open/migration failures must degrade to memory/default state rather than brick the editor. Return `MigrationResult.state='failed'` + warning for degraded persistent path.
 
-- [ ] **Step 4: Run bootstrap tests**
-
-Run: `bun run test -- tests/storage/storage-facade.test.ts`
-
-Expected: PASS for bootstrap cases.
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Verify and commit**
 
 ```bash
+bun run test -- tests/storage/storage-facade.test.ts
 git add src/storage/bootstrap.ts src/storage/repositories/memory.ts tests/storage/storage-facade.test.ts
 git commit -m "feat: add storage bootstrap and memory fallback"
 ```
 
 ---
 
-### Task 8: Replace legacy `storage.ts` internals without changing its public API
+### Task 8: Rewire legacy `storage.ts` façade
 
 **Files:**
 - Modify: `src/storage/storage.ts`
 - Test: `tests/storage/storage-facade.test.ts`
 
-**Interfaces:**
-- Preserve these existing exports/signatures:
+**Preserve public API:**
 
 ```ts
 interface StoredDocument {
@@ -588,47 +610,44 @@ function loadRecentDocument(): Promise<StoredDocument | undefined>
 function deleteRecentDocument(): Promise<void>
 ```
 
-Add only test/debug-safe reset injection if necessary, e.g. `__resetStorageForTests()` guarded as a non-product behavior; do not expose storage internals to UI components.
-
-- [ ] **Step 1: Write façade compatibility tests**
+- [ ] **Step 1: Write façade tests**
 
 Assert:
 
-- fresh installation `loadConfig()` returns a valid canonical AppConfig whose privacy representation is private-session (`autoSave=false`, `privacyMode=true`).
-- `saveConfig()` splits fields across preferences/profile/workspace and `loadConfig()` recomposes equivalent semantics.
-- in local-library mode, `saveRecentDocument()` writes one `workspaceDocuments` record using the active workspace.
-- in private-session mode, `saveRecentDocument()` resolves without persisting content.
-- `deleteRecentDocument()` removes the active migrated/default workspace document but never deletes legacy `documents/recent` during Phase 2A.
-- corrupt v2 record does not make `loadConfig()` return unvalidated data.
-- IDB failure path returns defaults / memory behavior without throwing through `loadConfig()`.
+- fresh `loadConfig()` → valid private-session canonical AppConfig。
+- `saveConfig()` splits and `loadConfig()` recomposes equivalent semantics。
+- local-library `saveRecentDocument()` persists under active workspace。
+- private-session `saveRecentDocument()` resolves without persistent body write。
+- migrated local-library `loadRecentDocument()` restores migrated v2 document。
+- migrated private-session does not restore stale legacy body automatically。
+- explicit `deleteRecentDocument()` removes v2 active document **and**, after migration is complete, legacy `documents/recent` record if present; legacy store remains。
+- corrupt v2 records are not returned unvalidated。
+- IDB failure does not escape from `loadConfig()` as an app-breaking error。
 
-- [ ] **Step 2: Run façade tests and verify failure**
-
-Run: `bun run test -- tests/storage/storage-facade.test.ts`
-
-Expected: FAIL against the old direct-v1 implementation.
-
-- [ ] **Step 3: Reimplement `storage.ts` as a lazy compatibility façade**
-
-Use one cached `Promise<StorageContext>` so concurrent calls share initialization/migration.
-
-Active entities in Phase 2A are the single migrated/default workspace and its active profile. Do not add workspace switching UI yet.
-
-`isStorageAvailable()` retains its UI meaning: return whether the browser exposes IndexedDB synchronously. Durable-open failure discovered later is surfaced through fallback context, not by changing the synchronous signature.
-
-- [ ] **Step 4: Run façade tests**
+- [ ] **Step 2: Run RED**
 
 Run: `bun run test -- tests/storage/storage-facade.test.ts`
 
+- [ ] **Step 3: Implement lazy façade**
+
+Use one cached `Promise<StorageContext>`. Phase 2A active entities are the migrated/default workspace + active profile; no workspace switching UI.
+
+`isStorageAvailable()` remains synchronous feature detection. Durable-open failure is handled later by the fallback context.
+
+For explicit privacy deletion, remove persisted v2 body and legacy `recent` body. This is the only Phase 2A path allowed to mutate the legacy document record, because it is direct user intent rather than migration cleanup.
+
+- [ ] **Step 4: Verify**
+
+Run:
+
+```bash
+bun run test -- tests/storage/storage-facade.test.ts
+bun run test -- tests/storage
+```
+
 Expected: PASS.
 
-- [ ] **Step 5: Run all storage tests**
-
-Run: `bun run test -- tests/storage`
-
-Expected: PASS.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src/storage/storage.ts tests/storage/storage-facade.test.ts
@@ -637,180 +656,97 @@ git commit -m "refactor: route legacy storage API through v2 repositories"
 
 ---
 
-### Task 9: Minimal app bootstrap integration and regression protection
+### Task 9: Startup regression integration
 
 **Files:**
-- Modify: `src/app/App.tsx`
-- Modify only if required: `src/state/actions.ts`
-- Test: extend `tests/storage/storage-facade.test.ts` or add focused pure helper tests; do not introduce DOM-heavy E2E in Phase 2A.
+- Modify if required: `src/app/App.tsx`
+- Modify only if required by failing test: `src/state/actions.ts`
+- Tests: existing suite + storage tests
 
-**Interfaces:**
-- Consumes existing `loadConfig()`, `loadRecentDocument()`, `isStorageAvailable()` façade only。
-- Produces no new UI-facing subsystem API.
+- [ ] **Step 1: Verify the compatibility façade is sufficient before changing UI/state code**
 
-- [ ] **Step 1: Add regression tests for startup semantics that can be tested without mounting the full Solid app**
+Run all tests and inspect startup logic against canonical AppConfig privacy values.
 
-Pin these expectations through façade/projection tests:
+- [ ] **Step 2: If a regression exists, write its failing test first**
 
-- fresh user does not restore/persist document body by default.
-- migrated local-library user still restores the migrated recent document.
-- migrated private-session user does not restore stale legacy body automatically.
-- corrupt config recovery never blocks loading a valid default AppConfig.
+Required startup semantics:
 
-- [ ] **Step 2: Adjust `App.tsx` only where old defaults conflict with the new canonical projection**
+- fresh user does not persist/restore body by default。
+- migrated local-library user restores migrated recent doc。
+- migrated private user does not restore stale legacy body。
+- corrupt config still yields valid default app config and lint startup。
 
-Keep existing startup order: storage feature detection → config restore → configLoaded → eligible recent document restore → initial lint.
+- [ ] **Step 3: Make the smallest integration change**
 
-Do not add workspace UI, storage quota UI, or new dialogs.
+Keep existing startup order: storage detection → config restore → `configLoaded` → eligible doc restore → initial lint. Do not add Phase 2B UI.
 
-If existing `App.tsx` already behaves correctly solely through the façade's canonical AppConfig, leave it unchanged.
+Keep `src/state/actions.ts` unchanged if its existing `privacyMode || !autoSave` check already enforces private-session correctly.
 
-- [ ] **Step 3: Keep `src/state/actions.ts` unchanged unless a failing test proves a compatibility break**
+- [ ] **Step 4: Verify**
 
-The existing checks:
+Run:
 
-```text
-privacyMode || !autoSave -> do not autosave
+```bash
+bun run test
+bun run lint
 ```
-
-must continue to enforce private-session after projection. Avoid speculative refactoring.
-
-- [ ] **Step 4: Run existing and new tests**
-
-Run: `bun run test`
-
-Expected: all existing tests plus Phase 2A tests PASS.
-
-- [ ] **Step 5: Run typecheck**
-
-Run: `bun run lint`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit only if app/action files actually changed**
+- [ ] **Step 5: Commit only if product integration files changed**
 
 ```bash
 git add src/app/App.tsx src/state/actions.ts tests/storage
 git commit -m "fix: preserve startup behavior on storage v2"
 ```
 
-Skip the commit if no product file change is required.
+Skip if no integration change is necessary.
 
 ---
 
-### Task 10: Verification, review, and PR preparation
+### Task 10: Full verification + review gate
 
-**Files:**
-- No planned product-code changes unless verification exposes a defect.
-- Update: PR description/checklist after implementation.
+**Files:** no planned product changes unless verification/review exposes a real defect.
 
-**Interfaces:**
-- Consumes all previous tasks.
-- Produces a Phase 2A branch ready for whole-branch review.
-
-- [ ] **Step 1: Run the full test suite from a clean dependency install**
-
-Run:
+- [ ] **Step 1: Clean verification**
 
 ```bash
 bun ci
 bun run test
-```
-
-Expected: all tests PASS. Record the final test count in the PR; do not assume it remains 125 after adding Phase 2A tests.
-
-- [ ] **Step 2: Run static/build gates**
-
-Run:
-
-```bash
 bun run lint
 bun run build
 bun run build:pages
-```
-
-Expected: all commands exit 0.
-
-- [ ] **Step 3: Verify Pages asset paths exactly as CI does**
-
-Run:
-
-```bash
 grep -q '/japanese_text/assets/' dist/index.html
 grep -R -q '/japanese_text/assets/analysis.worker-' dist/assets
 ```
 
-Expected: both commands exit 0.
+Expected: all exit 0. Record actual final test count; do not hard-code 125.
 
-- [ ] **Step 4: Review the complete diff against Phase 2A non-goals**
+- [ ] **Step 2: Scope review**
 
-Reject/remove any accidental implementation of:
+Remove accidental Phase 2B+ work: workspace UI, RuleProvider refactor, Suppression UI, File System Access, backend/sync, new proofreading rules, legacy store deletion.
 
-- workspace management UI
-- RuleProvider/RuleManifest refactor
-- Suppression UI
-- File System Access
-- Cloud Sync / backend
-- new proofreading rules
-- legacy store deletion
-
-- [ ] **Step 5: Review migration safety manually from tests and code**
+- [ ] **Step 3: Migration safety review**
 
 Confirm:
 
-- `onupgradeneeded` contains no application data conversion.
-- complete marker and migrated records commit atomically.
-- failed migration does not delete legacy records.
-- retry is idempotent.
-- private-session never writes document content to v2 stores.
-- no code path downgrades DB version to 1.
+- `onupgradeneeded` has no user-data conversion。
+- complete marker + migrated target records commit atomically。
+- pending/failed retry is idempotent。
+- migration never removes legacy source records。
+- explicit privacy deletion does remove body from both active v2 persistence and legacy recent record。
+- private-session never writes document body to v2 storage。
+- rollback never sets DB version back to 1。
 
-- [ ] **Step 6: Push and inspect GitHub Actions PR CI**
+- [ ] **Step 4: Whole-branch code review**
 
-Expected checks:
+Review migration atomicity, IndexedDB transaction lifetime, privacy regression, persisted-record validation, projection semantic loss, fallback behavior, and scope leakage.
 
-- Install dependencies ✅
-- Typecheck ✅
-- Unit tests ✅
-- Production build ✅
-- GitHub Pages build ✅
-- Pages asset-path verification ✅
+For every finding classify: true issue / false positive / design disagreement; collect evidence; for non-trivial fixes compare alternatives; add regression test before behavior fixes.
 
-- [ ] **Step 7: Request whole-branch code review**
+- [ ] **Step 5: Re-run full verification after review fixes**
 
-Review focus:
-
-1. migration atomicity / retry
-2. privacy regressions
-3. IndexedDB transaction lifecycle mistakes
-4. validation at persistence boundaries
-5. compatibility projection semantic loss
-6. fallback behavior
-7. unnecessary Phase 2B+ scope leakage
-
-- [ ] **Step 8: For every review finding, classify before editing**
-
-For each finding record:
-
-- true issue / false positive / design disagreement
-- evidence
-- at least one alternative fix when non-trivial
-- chosen fix and regression risk
-
-Then add a regression test before fixing true behavior bugs.
-
-- [ ] **Step 9: Final verification after review fixes**
-
-Run again:
-
-```bash
-bun run lint
-bun run test
-bun run build
-bun run build:pages
-```
-
-Expected: all PASS and PR CI green before merge.
+Same command set as Step 1. All must pass and PR CI must be green before merge.
 
 ---
 
@@ -825,22 +761,21 @@ Expected: all PASS and PR CI green before merge.
 7. `feat: add storage bootstrap and memory fallback`
 8. `refactor: route legacy storage API through v2 repositories`
 9. optional `fix: preserve startup behavior on storage v2`
-10. review-fix commits only when justified by tests/evidence
+10. evidence-backed review fixes only
 
 ## Definition of Done
 
-Phase 2A is complete only when all of the following are true:
-
-- Existing DB v1 data can open as DB v2 without deleting legacy stores.
-- Migration is idempotent and atomic for target records + completion marker.
-- New installations use private-session by default.
-- Existing `autoSave=true && privacyMode=false` users retain local-library intent.
-- Existing private users do not have stale legacy body silently copied into v2 persistent document storage.
-- Corrupt v1 config cannot brick the editor/linter.
-- IndexedDB unavailable/open failure degrades to usable memory/default state.
-- Persisted v2 records are validated on read.
-- Existing `AppConfig`-based UI/state continues to function through compatibility projection.
-- Existing `storage.ts` public API remains callable by `App.tsx` / `actions.ts`.
-- Full test suite, typecheck, ordinary build, Pages build, and Pages path checks pass.
-- Whole-branch review has no unresolved Critical/Important issue.
-- Phase 2B+ features have not leaked into this PR.
+- v1 DB opens as v2 without migration-time deletion of legacy stores/records。
+- migration is idempotent and target records + completion marker are atomic。
+- fresh users are private-session even when IndexedDB is unavailable。
+- explicit persisted old privacy settings retain their intent。
+- private legacy users do not get stale body silently copied to v2 persistence。
+- explicit privacy deletion does not leave a recoverable legacy recent body behind。
+- corrupt v1 config cannot brick editor/linter and does not cause automatic body persistence。
+- IndexedDB unavailable/open failure degrades to usable memory/default state。
+- v2 records are validated on read。
+- existing AppConfig UI/state continues through compatibility projection。
+- existing `storage.ts` public API remains usable by `App.tsx` / `actions.ts`。
+- full tests, typecheck, normal build, Pages build, Pages path checks, and PR CI pass。
+- whole-branch review has no unresolved Critical/Important issue。
+- Phase 2B+ functionality is not implemented in this PR。
