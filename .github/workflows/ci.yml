@@ -40,3 +40,11 @@ jobs:
 
       - name: Production build
         run: bun run build
+
+      - name: GitHub Pages build
+        run: bun run build:pages
+
+      - name: Verify GitHub Pages asset paths
+        run: |
+          grep -q '/japanese_text/assets/' dist/index.html
+          grep -R -q '/japanese_text/assets/analysis.worker-' dist/assets
