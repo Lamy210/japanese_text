@@ -34,19 +34,19 @@ export function composeAppConfig(state: ProjectedStorageState): AppConfig {
   }
 }
 
-export function splitAppConfig(
+function splitCommon(
   config: AppConfig,
   current: ProjectedStorageState,
-  now: number
+  now: number,
+  storageMode: Workspace['storageMode'],
+  defaultStorageMode: GlobalPreferences['defaultStorageMode']
 ): ProjectedStorageState {
-  const storageMode = storageModeFromConfig(config)
-
   return {
     preferences: {
       schemaVersion: current.preferences.schemaVersion,
       theme: config.theme,
       editor: structuredClone(config.editor),
-      defaultStorageMode: storageMode
+      defaultStorageMode
     },
     workspace: {
       ...structuredClone(current.workspace),
@@ -68,3 +68,34 @@ export function splitAppConfig(
     }
   }
 }
+
+/** Legacy migration path: old AppConfig privacy flags represent the user's persisted intent. */
+export function splitAppConfigForMigration(
+  config: AppConfig,
+  current: ProjectedStorageState,
+  now: number
+): ProjectedStorageState {
+  const storageMode = storageModeFromConfig(config)
+  return splitCommon(config, current, now, storageMode, storageMode)
+}
+
+/**
+ * Ordinary config persistence must never change the canonical workspace storage policy.
+ * Storage mode transitions are explicit Workspace actions only.
+ */
+export function splitAppConfigPreservingStorageMode(
+  config: AppConfig,
+  current: ProjectedStorageState,
+  now: number
+): ProjectedStorageState {
+  return splitCommon(
+    config,
+    current,
+    now,
+    current.workspace.storageMode,
+    current.preferences.defaultStorageMode
+  )
+}
+
+/** @deprecated Use an intent-specific split function. Kept for Phase 2A migration compatibility. */
+export const splitAppConfig = splitAppConfigForMigration
