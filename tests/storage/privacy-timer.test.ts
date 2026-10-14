@@ -16,7 +16,7 @@ afterEach(() => {
 })
 
 describe('privacy autosave cancellation', () => {
-  it('cancels a queued document autosave before deleting persisted body', async () => {
+  it('clears the queued document autosave before privacy deletion starts', async () => {
     installIndexedDb(new IDBFactory())
     vi.resetModules()
 
@@ -32,16 +32,13 @@ describe('privacy autosave cancellation', () => {
 
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     actions.persistDocumentDebounced()
+    expect(vi.getTimerCount()).toBe(1)
 
     appState.updateConfig((draft) => {
       draft.privacy = { autoSave: false, privacyMode: true }
     })
     actions.onPrivacyModeChanged(true)
 
-    // Ensure the privacy deletion has completed before the queued autosave is allowed to run.
-    await storage.deleteRecentDocument()
-    await vi.advanceTimersByTimeAsync(1000)
-
-    await expect(storage.loadRecentDocument()).resolves.toBeUndefined()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
