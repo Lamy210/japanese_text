@@ -90,9 +90,10 @@ export const DEFAULT_EDITOR: EditorPreferences = {
   showLineNumbers: true
 }
 
+/** 新規ユーザーは本文を永続化しない Private Session から開始する。 */
 export const DEFAULT_PRIVACY: PrivacyPolicy = {
-  autoSave: true,
-  privacyMode: false
+  autoSave: false,
+  privacyMode: true
 }
 
 /** 内蔵デフォルト用語集 (Technical Writing 向けの標準的な表記統一) */
