@@ -1,8 +1,15 @@
+import {
+  validatePreferencesRecord,
+  validateRuleProfileRecord,
+  validateWorkspaceRecord
+} from '../../core/workspace/validate'
 import type { AtomicOperationsPort } from '../repositories/ports'
 import { requestToPromise, transactionDone } from './idb-utils'
 import { migrateV1ToV2 } from './migration-v1-v2'
 import {
   STORE_DOCUMENT_SNAPSHOTS,
+  STORE_PREFERENCES,
+  STORE_RULE_PROFILES,
   STORE_SUPPRESSIONS,
   STORE_WORKSPACE_DOCUMENTS,
   STORE_WORKSPACES
@@ -12,6 +19,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+async function abortAndRethrow(tx: IDBTransaction, done: Promise<void>, error: unknown): Promise<never> {
+  try {
+    tx.abort()
+  } catch {
+    // The transaction may already have failed or completed.
+  }
+  try {
+    await done
+  } catch {
+    // Preserve the original operation error.
+  }
+  throw error
+}
+
 export function createIndexedDbAtomicOperations(
   db: IDBDatabase,
   now: () => number = Date.now
@@ -19,6 +40,28 @@ export function createIndexedDbAtomicOperations(
   return {
     migrateV1ToV2() {
       return migrateV1ToV2(db, now)
+    },
+
+    async saveProjectedState(value) {
+      const preferences = validatePreferencesRecord(value.preferences)
+      const profile = validateRuleProfileRecord(value.profile)
+      const workspace = validateWorkspaceRecord(value.workspace)
+      const tx = db.transaction(
+        [STORE_PREFERENCES, STORE_RULE_PROFILES, STORE_WORKSPACES],
+        'readwrite'
+      )
+      const done = transactionDone(tx)
+
+      try {
+        await Promise.all([
+          requestToPromise(tx.objectStore(STORE_PREFERENCES).put(preferences, 'global')),
+          requestToPromise(tx.objectStore(STORE_RULE_PROFILES).put(profile)),
+          requestToPromise(tx.objectStore(STORE_WORKSPACES).put(workspace))
+        ])
+        await done
+      } catch (error) {
+        return abortAndRethrow(tx, done, error)
+      }
     },
 
     async deleteWorkspaceCascade(workspaceId) {
@@ -67,17 +110,7 @@ export function createIndexedDbAtomicOperations(
         tx.objectStore(STORE_WORKSPACES).delete(workspaceId)
         await done
       } catch (error) {
-        try {
-          tx.abort()
-        } catch {
-          // Transaction may already have failed.
-        }
-        try {
-          await done
-        } catch {
-          // Preserve original operation error.
-        }
-        throw error
+        return abortAndRethrow(tx, done, error)
       }
     }
   }
