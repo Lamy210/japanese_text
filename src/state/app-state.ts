@@ -190,10 +190,17 @@ export const appState = {
     }
   },
   updateConfig: (mutator: (draft: AppConfig) => void): void => {
-    const next = structuredClone(unwrap(config))
+    const current = unwrap(config)
+    const next = structuredClone(current)
     mutator(next)
+    const privacyChangeRequested =
+      next.privacy.autoSave !== current.privacy.autoSave || next.privacy.privacyMode !== current.privacy.privacyMode
+    // Workspace.storageMode is canonical in Phase 2B. Generic settings mutations cannot
+    // change the compatibility privacy view; direct attempts are redirected to Workspace Manage.
+    next.privacy = structuredClone(current.privacy)
     const validated = validateAppConfig(next)
     setConfig(validated)
+    if (privacyChangeRequested) setWorkspaceManagerOpen(true)
   },
   applyPreset: (presetId: PresetId): void => {
     const preset = getPreset(presetId)
