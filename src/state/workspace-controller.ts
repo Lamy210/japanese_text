@@ -7,6 +7,8 @@ import {
 } from '../workspace/session-document-store'
 import {
   createStorageCapabilityService,
+  type StorageCapability,
+  type StorageCapabilityService,
   type StorageManagerLike
 } from '../workspace/storage-capability'
 import {
@@ -22,6 +24,7 @@ export interface WorkspaceControllerDependencies {
   relint?: () => void
   toast?: (kind: Toast['kind'], message: string) => void
   storageManager?: StorageManagerLike
+  cancelPendingDocumentPersistence?: () => void
   now?: () => number
 }
 
@@ -29,6 +32,11 @@ export interface WorkspaceController {
   bootstrap(): Promise<void>
   refresh(): Promise<void>
   switchWorkspace(workspaceId: string): Promise<void>
+  createWorkspace(name: string): Promise<void>
+  renameWorkspace(workspaceId: string, name: string): Promise<void>
+  deleteWorkspace(workspaceId: string): Promise<void>
+  setStorageMode(mode: 'private-session' | 'local-library'): Promise<void>
+  requestPersistence(): Promise<StorageCapability>
   getService(): Promise<WorkspaceService>
   getContext(): Promise<StorageContext>
 }
@@ -65,11 +73,13 @@ export function createWorkspaceController(
   const getContextDependency = dependencies.getContext ?? getStorageContext
   const relint = dependencies.relint ?? (() => undefined)
   const toast = dependencies.toast ?? appState.pushToast
+  const cancelPendingDocumentPersistence = dependencies.cancelPendingDocumentPersistence ?? (() => undefined)
   const now = dependencies.now ?? Date.now
   const sessionDocuments: SessionDocumentStore = createSessionDocumentStore()
 
   let contextPromise: Promise<StorageContext> | undefined
   let servicePromise: Promise<WorkspaceService> | undefined
+  let capabilityService: StorageCapabilityService | undefined
 
   async function context(): Promise<StorageContext> {
     contextPromise ??= getContextDependency()
@@ -101,6 +111,25 @@ export function createWorkspaceController(
     appState.setDocument(document.content, document.name, document.docType)
   }
 
+  async function loadDocument(
+    storageContext: StorageContext,
+    active: WorkspaceContext
+  ): Promise<SessionDocument | undefined> {
+    if (active.workspace.storageMode === 'private-session') {
+      return sessionDocuments.get(active.workspace.id)
+    }
+    if (active.workspace.storageMode !== 'local-library') return undefined
+
+    const document = newestDocument(await storageContext.repositories.documents.listByWorkspace(active.workspace.id))
+    if (document === undefined || typeof document.content !== 'string') return undefined
+    return {
+      name: document.name,
+      content: document.content,
+      docType: document.docType,
+      updatedAt: document.updatedAt
+    }
+  }
+
   async function loadBootDocument(
     storageContext: StorageContext,
     active: WorkspaceContext
@@ -108,21 +137,38 @@ export function createWorkspaceController(
     if (storageContext.migration.recoveredDocument !== undefined && active.workspace.storageMode === 'private-session') {
       return structuredClone(storageContext.migration.recoveredDocument)
     }
+    return loadDocument(storageContext, active)
+  }
 
-    if (active.workspace.storageMode === 'private-session') {
-      return sessionDocuments.get(active.workspace.id)
-    }
-    if (active.workspace.storageMode !== 'local-library') return undefined
-
-    const document = newestDocument(
-      await storageContext.repositories.documents.listByWorkspace(active.workspace.id)
-    )
-    if (document === undefined || typeof document.content !== 'string') return undefined
-    return {
+  async function saveLocalDocument(
+    storageContext: StorageContext,
+    workspaceId: string,
+    document: SessionDocument
+  ): Promise<void> {
+    const existing = newestDocument(await storageContext.repositories.documents.listByWorkspace(workspaceId))
+    await storageContext.repositories.documents.save({
+      id: existing?.id ?? `local-recent-document:${workspaceId}`,
+      workspaceId,
       name: document.name,
       content: document.content,
       docType: document.docType,
+      sourceKind: 'local',
+      createdAt: existing?.createdAt ?? document.updatedAt,
       updatedAt: document.updatedAt
+    })
+  }
+
+  async function routeCurrentDocument(): Promise<void> {
+    const workspaceService = await service()
+    const active = await workspaceService.getActive()
+    const document = currentEditorDocument(now)
+    if (active.workspace.storageMode === 'private-session') {
+      sessionDocuments.set(active.workspace.id, document)
+      return
+    }
+    if (active.workspace.storageMode === 'local-library') {
+      cancelPendingDocumentPersistence()
+      await saveLocalDocument(await context(), active.workspace.id, document)
     }
   }
 
@@ -133,13 +179,22 @@ export function createWorkspaceController(
     appState.setWorkspaceSummaries(await workspaceService.list())
   }
 
+  async function runMutation(operation: () => Promise<void>): Promise<void> {
+    appState.setWorkspaceMutationPending(true)
+    try {
+      await operation()
+    } finally {
+      appState.setWorkspaceMutationPending(false)
+    }
+  }
+
   return {
     async bootstrap(): Promise<void> {
       appState.setWorkspaceReady(false)
       const storageContext = await context()
       appState.setStorageAvailable(storageContext.durable)
 
-      const capabilityService = createStorageCapabilityService(
+      capabilityService = createStorageCapabilityService(
         resolveBrowserStorageManager(dependencies.storageManager),
         storageContext.durable
       )
@@ -154,9 +209,7 @@ export function createWorkspaceController(
       appState.setConfigLoaded(true)
       appState.setWorkspaceReady(true)
 
-      if (storageContext.migration.warning !== undefined) {
-        toast('warning', storageContext.migration.warning)
-      }
+      if (storageContext.migration.warning !== undefined) toast('warning', storageContext.migration.warning)
       relint()
     },
 
@@ -164,8 +217,7 @@ export function createWorkspaceController(
 
     async switchWorkspace(workspaceId: string): Promise<void> {
       if (workspaceId === appState.activeWorkspaceId()) return
-      appState.setWorkspaceMutationPending(true)
-      try {
+      await runMutation(async () => {
         const workspaceService = await service()
         const result = await workspaceService.switchTo(workspaceId, currentEditorDocument(now))
         applyContext(result.context)
@@ -174,9 +226,72 @@ export function createWorkspaceController(
         appState.resetDiagnosticsForDocumentContext()
         if (result.warning !== undefined) toast('warning', result.warning)
         relint()
-      } finally {
-        appState.setWorkspaceMutationPending(false)
+      })
+    },
+
+    async createWorkspace(name: string): Promise<void> {
+      await runMutation(async () => {
+        await routeCurrentDocument()
+        const workspaceService = await service()
+        const created = await workspaceService.create({ name })
+        applyContext(created)
+        applyDocument(undefined)
+        appState.setWorkspaceSummaries(await workspaceService.list())
+        appState.resetDiagnosticsForDocumentContext()
+        relint()
+      })
+    },
+
+    async renameWorkspace(workspaceId: string, name: string): Promise<void> {
+      await runMutation(async () => {
+        const workspaceService = await service()
+        await workspaceService.rename(workspaceId, name)
+        appState.setWorkspaceSummaries(await workspaceService.list())
+      })
+    },
+
+    async deleteWorkspace(workspaceId: string): Promise<void> {
+      await runMutation(async () => {
+        const previousActiveId = appState.activeWorkspaceId()
+        const workspaceService = await service()
+        const result = await workspaceService.delete(workspaceId)
+        applyContext(result.active)
+        appState.setWorkspaceSummaries(await workspaceService.list())
+
+        if (previousActiveId === workspaceId) {
+          applyDocument(await loadDocument(await context(), result.active))
+          appState.resetDiagnosticsForDocumentContext()
+          relint()
+        }
+      })
+    },
+
+    async setStorageMode(mode: 'private-session' | 'local-library'): Promise<void> {
+      await runMutation(async () => {
+        const workspaceId = appState.activeWorkspaceId()
+        if (workspaceId === undefined) throw new Error('Active workspace is missing')
+        const current = currentEditorDocument(now)
+        if (mode === 'private-session') cancelPendingDocumentPersistence()
+
+        const workspaceService = await service()
+        const updated = await workspaceService.setStorageMode(workspaceId, mode, current)
+        applyContext(updated)
+        appState.setWorkspaceSummaries(await workspaceService.list())
+        relint()
+      })
+    },
+
+    async requestPersistence(): Promise<StorageCapability> {
+      if (capabilityService === undefined) {
+        const storageContext = await context()
+        capabilityService = createStorageCapabilityService(
+          resolveBrowserStorageManager(dependencies.storageManager),
+          storageContext.durable
+        )
       }
+      const capability = await capabilityService.requestPersistence()
+      appState.setStorageCapability(capability)
+      return capability
     },
 
     getService: service,
