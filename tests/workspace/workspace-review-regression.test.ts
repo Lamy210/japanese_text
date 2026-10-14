@@ -91,6 +91,28 @@ describe('Phase 2B final review regressions', () => {
     expect(cancelPendingDocumentPersistence).toHaveBeenCalledTimes(1)
   })
 
+  it('preserves the latest in-memory profile when storage mode changes', async () => {
+    const context = await createStorageContext({ factory: new IDBFactory(), now: () => 150 })
+    const { appState, controller } = await controllerHarness(context)
+    await controller.bootstrap()
+    const workspaceId = appState.activeWorkspaceId()!
+    const profileId = (await context.repositories.workspaces.get(workspaceId))!.activeRuleProfileId
+
+    appState.updateConfig((draft) => {
+      draft.ngWords.push({ id: 'mode-ng', word: '切替前設定', severity: 'warning' })
+    })
+    appState.setDocument('current body', 'current.md', 'markdown')
+    await controller.setStorageMode('local-library')
+
+    expect(appState.config.ngWords).toContainEqual(expect.objectContaining({
+      id: 'mode-ng',
+      word: '切替前設定'
+    }))
+    await expect(context.repositories.profiles.get(profileId)).resolves.toMatchObject({
+      ngWords: [expect.objectContaining({ id: 'mode-ng', word: '切替前設定' })]
+    })
+  })
+
   it('repairs a missing target profile instead of leaving selection and UI context split', async () => {
     const memory = createMemoryStorageContext(() => 1000)
     const a = createDefaultWorkspaceState(100)
