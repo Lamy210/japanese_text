@@ -191,9 +191,14 @@ describe('Explicit workspace autosave', () => {
       name: 'captured.md', content: 'belongs to A', docType: 'markdown', updatedAt: 500
     })
     await context.repositories.selection.setActiveWorkspaceId('workspace-b')
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(800)
+    vi.useRealTimers()
 
-    const aDocs = await context.repositories.documents.listByWorkspace('workspace-a')
+    let aDocs = await context.repositories.documents.listByWorkspace('workspace-a')
+    for (let attempt = 0; attempt < 20 && aDocs.length === 0; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      aDocs = await context.repositories.documents.listByWorkspace('workspace-a')
+    }
     const bDocs = await context.repositories.documents.listByWorkspace('workspace-b')
     expect(aDocs).toHaveLength(1)
     expect(aDocs[0]?.content).toBe('belongs to A')
