@@ -2,8 +2,6 @@
  * アプリケーション状態 — 仕様書 §40 State Management
  *
  * Redux等のglobal state libraryは導入せず、SolidJS primitives (signal / store) を利用する。
- * 主要state: currentDocument / currentRevision / diagnostics / selectedDiagnostic /
- *           ruleConfig / preset / editorPreferences / analysisState
  */
 
 import { createMemo, createSignal, createRoot } from 'solid-js'
@@ -18,6 +16,8 @@ import {
 } from '../core/config/schema'
 import { createDefaultConfig, validateAppConfig } from '../core/config/validate'
 import { getPreset } from '../core/config/presets'
+import type { WorkspaceSummary } from '../workspace/workspace-service'
+import type { StorageCapability } from '../workspace/storage-capability'
 import { WELCOME_DOCUMENT } from './welcome-document'
 
 export interface TierResult {
@@ -49,70 +49,68 @@ const [tierResults, setTierResults] = createStore<Record<RuleTier, TierResult | 
 const [selectedDiagnosticId, setSelectedDiagnosticId] = createSignal<string | null>(null)
 const [severityFilter, setSeverityFilter] = createSignal<'all' | 'error' | 'warning' | 'info'>('all')
 
-/** 表示する診断 = 現在revisionと一致するtier結果のマージ (§24: 最新revisionのみ表示)
- * モジュールスコープのmemoはアプリ寿命と同じため createRoot で包む (破棄警告の解消) */
 const derived = createRoot(() => {
-const diagnostics = createMemo<Diagnostic[]>(() => {
-  const rev = revision()
-  const merged: Diagnostic[] = []
-  for (const tier of ['fast', 'deep', 'idle'] as const) {
-    const result = tierResults[tier]
-    if (result !== undefined && result.revision === rev) {
-      merged.push(...result.diagnostics)
+  const diagnostics = createMemo<Diagnostic[]>(() => {
+    const rev = revision()
+    const merged: Diagnostic[] = []
+    for (const tier of ['fast', 'deep', 'idle'] as const) {
+      const result = tierResults[tier]
+      if (result !== undefined && result.revision === rev) {
+        merged.push(...result.diagnostics)
+      }
     }
-  }
-  return merged.sort((a, b) => a.start - b.start || a.end - b.end || a.ruleId.localeCompare(b.ruleId))
-})
+    return merged.sort((a, b) => a.start - b.start || a.end - b.end || a.ruleId.localeCompare(b.ruleId))
+  })
 
-const filteredDiagnostics = createMemo<Diagnostic[]>(() => {
-  const filter = severityFilter()
-  if (filter === 'all') return diagnostics()
-  return diagnostics().filter((d) => d.severity === filter)
-})
+  const filteredDiagnostics = createMemo<Diagnostic[]>(() => {
+    const filter = severityFilter()
+    if (filter === 'all') return diagnostics()
+    return diagnostics().filter((d) => d.severity === filter)
+  })
 
-const diagnosticCounts = createMemo(() => {
-  const counts = { error: 0, warning: 0, info: 0, fixable: 0 }
-  for (const d of diagnostics()) {
-    counts[d.severity]++
-    if (d.fixKind !== 'none' && d.replacement !== undefined) counts.fixable++
-  }
-  return counts
-})
+  const diagnosticCounts = createMemo(() => {
+    const counts = { error: 0, warning: 0, info: 0, fixable: 0 }
+    for (const d of diagnostics()) {
+      counts[d.severity]++
+      if (d.fixKind !== 'none' && d.replacement !== undefined) counts.fixable++
+    }
+    return counts
+  })
 
-const activeRuleErrors = createMemo<RuleError[]>(() => {
-  const rev = revision()
-  const errors: RuleError[] = []
-  const seen = new Set<string>()
-  for (const tier of ['fast', 'deep', 'idle'] as const) {
-    const result = tierResults[tier]
-    if (result !== undefined && result.revision === rev) {
-      for (const err of result.ruleErrors) {
-        const key = `${err.ruleId}:${err.message}`
-        if (!seen.has(key)) {
-          seen.add(key)
-          errors.push(err)
+  const activeRuleErrors = createMemo<RuleError[]>(() => {
+    const rev = revision()
+    const errors: RuleError[] = []
+    const seen = new Set<string>()
+    for (const tier of ['fast', 'deep', 'idle'] as const) {
+      const result = tierResults[tier]
+      if (result !== undefined && result.revision === rev) {
+        for (const err of result.ruleErrors) {
+          const key = `${err.ruleId}:${err.message}`
+          if (!seen.has(key)) {
+            seen.add(key)
+            errors.push(err)
+          }
         }
       }
     }
-  }
-  return errors
-})
+    return errors
+  })
 
-const lastTimings = createMemo(() => {
-  const rev = revision()
-  return {
-    fast: tierResults.fast?.revision === rev ? tierResults.fast.durationMs : undefined,
-    deep: tierResults.deep?.revision === rev ? tierResults.deep.durationMs : undefined,
-    idle: tierResults.idle?.revision === rev ? tierResults.idle.durationMs : undefined
-  }
-})
+  const lastTimings = createMemo(() => {
+    const rev = revision()
+    return {
+      fast: tierResults.fast?.revision === rev ? tierResults.fast.durationMs : undefined,
+      deep: tierResults.deep?.revision === rev ? tierResults.deep.durationMs : undefined,
+      idle: tierResults.idle?.revision === rev ? tierResults.idle.durationMs : undefined
+    }
+  })
 
-return { diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings }
+  return { diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings }
 })
 const { diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings } = derived
 
 // ----------------------------------------------------------------
-// Config state (IndexedDBから復元、なければデフォルト)
+// Config state
 // ----------------------------------------------------------------
 const [config, setConfigState] = createStore<AppConfig>(createDefaultConfig())
 const [configLoaded, setConfigLoaded] = createSignal(false)
@@ -120,6 +118,16 @@ const [configLoaded, setConfigLoaded] = createSignal(false)
 function setConfig(next: AppConfig): void {
   setConfigState({ ...next })
 }
+
+// ----------------------------------------------------------------
+// Workspace / storage state
+// ----------------------------------------------------------------
+const [workspaceSummaries, setWorkspaceSummaries] = createSignal<WorkspaceSummary[]>([])
+const [activeWorkspaceId, setActiveWorkspaceId] = createSignal<string | undefined>(undefined)
+const [workspaceReady, setWorkspaceReady] = createSignal(false)
+const [workspaceManagerOpen, setWorkspaceManagerOpen] = createSignal(false)
+const [workspaceMutationPending, setWorkspaceMutationPending] = createSignal(false)
+const [storageCapability, setStorageCapability] = createSignal<StorageCapability | undefined>(undefined)
 
 // ----------------------------------------------------------------
 // Analysis / Worker state
@@ -134,7 +142,7 @@ const [storageAvailable, setStorageAvailable] = createSignal<boolean>(true)
 // UI state
 // ----------------------------------------------------------------
 const [settingsOpen, setSettingsOpen] = createSignal(false)
-const [panelOpen, setPanelOpen] = createSignal(true) // tablet drawer / mobile bottom sheet
+const [panelOpen, setPanelOpen] = createSignal(true)
 const [settingsTab, setSettingsTab] = createSignal<'rules' | 'ngwords' | 'terminology' | 'citation' | 'general'>(
   'rules'
 )
@@ -158,9 +166,6 @@ function pushToast(kind: Toast['kind'], message: string): void {
   }, 4200)
 }
 
-// ----------------------------------------------------------------
-// Export (読み取り専用シグナル + 制御関数)
-// ----------------------------------------------------------------
 export const appState = {
   // document
   documentText,
@@ -173,11 +178,11 @@ export const appState = {
     if (type !== undefined) setDocType(type)
     setRevision((r) => r + 1)
   },
-  /** エディタ入力による本文更新 (revisionを進める) */
   onDocumentEdited: (text: string): void => {
     setDocumentText(text)
     setRevision((r) => r + 1)
   },
+
   // diagnostics
   diagnostics,
   filteredDiagnostics,
@@ -189,10 +194,14 @@ export const appState = {
   activeRuleErrors,
   lastTimings,
   tierResults,
-  /** Worker結果の反映 (revision一致時のみ — §24) */
   applyWorkerResult: (tier: RuleTier, result: TierResult): void => {
     setTierResults(tier, result)
   },
+  resetDiagnosticsForDocumentContext: (): void => {
+    setSelectedDiagnosticId(null)
+    setTierResults({ fast: undefined, deep: undefined, idle: undefined })
+  },
+
   // config
   config,
   configLoaded,
@@ -207,7 +216,6 @@ export const appState = {
     }
   },
   updateConfig: (mutator: (draft: AppConfig) => void): void => {
-    // 疎な更新のため、コピー→変更→検証→反映 (常にvalidな状態を保つ)
     const next = structuredClone(unwrap(config))
     mutator(next)
     const validated = validateAppConfig(next)
@@ -222,6 +230,7 @@ export const appState = {
       draft.preset = presetId
     })
   },
+
   // ng words / terminology helpers
   addNgWord: (entry: NgWordEntry): void => {
     appState.updateConfig((d) => {
@@ -248,6 +257,21 @@ export const appState = {
       d.theme = theme
     })
   },
+
+  // workspace/storage
+  workspaceSummaries,
+  setWorkspaceSummaries: (values: WorkspaceSummary[]): void => setWorkspaceSummaries(structuredClone(values)),
+  activeWorkspaceId,
+  setActiveWorkspaceId,
+  workspaceReady,
+  setWorkspaceReady,
+  workspaceManagerOpen,
+  setWorkspaceManagerOpen,
+  workspaceMutationPending,
+  setWorkspaceMutationPending,
+  storageCapability,
+  setStorageCapability,
+
   // analysis
   analysisStatus,
   setAnalysisStatus,
@@ -259,6 +283,7 @@ export const appState = {
   setSegmenterAvailable,
   storageAvailable,
   setStorageAvailable,
+
   // ui
   settingsOpen,
   setSettingsOpen,
@@ -266,12 +291,12 @@ export const appState = {
   setPanelOpen,
   settingsTab,
   setSettingsTab,
+
   // toasts
   toasts,
   pushToast
 }
 
-/** storeの実体を取り出す (structuredClone用) */
 function unwrap(store: AppConfig): AppConfig {
   return JSON.parse(JSON.stringify(store)) as AppConfig
 }
