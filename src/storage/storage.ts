@@ -7,7 +7,6 @@
 
 import type { AppConfig } from '../core/config/schema'
 import type { DocumentType } from '../core/types'
-import type { RuleProfile, Workspace } from '../core/workspace/types'
 import { createStorageContext, type StorageContext } from './bootstrap'
 import { composeAppConfig, splitAppConfig, type ProjectedStorageState } from './compat/app-config-projection'
 import { transactionDone } from './db/idb-utils'
@@ -130,31 +129,28 @@ async function deleteLegacyRecentDocument(context: StorageContext): Promise<void
 }
 
 /**
- * Explicit privacy deletion: remove body text from v2 persistence and from the
- * retained v1 legacy recent record so a later recovery path cannot resurrect it.
+ * Explicit privacy deletion: scrub both v2 and retained v1 body records independently.
+ * A failure in one cleanup path must not prevent the other path from being attempted.
  */
 export async function deleteRecentDocument(): Promise<void> {
+  let context: StorageContext
   try {
-    const context = await getContext()
+    context = await getContext()
+  } catch {
+    return
+  }
+
+  try {
     const { workspace } = await getActiveState(context)
     const documents = await context.repositories.documents.listByWorkspace(workspace.id)
-
     await Promise.all(documents.map((document) => context.repositories.documents.delete(document.id)))
+  } catch {
+    // Best-effort v2 scrub. Legacy cleanup is still attempted below.
+  }
+
+  try {
     await deleteLegacyRecentDocument(context)
   } catch {
     // Preserve the historical best-effort API used by the UI privacy toggle.
   }
 }
-
-/** @internal Useful for module-isolated tests; product code must not depend on it. */
-export function __resetStorageContextForTests(): void {
-  contextPromise = null
-}
-
-/** @internal Runtime state accessor kept private from normal UI code. */
-export async function __getStorageContextForTests(): Promise<StorageContext> {
-  return getContext()
-}
-
-/** @internal Type anchors ensure compatibility state stays explicit during Phase 2A. */
-export type { Workspace, RuleProfile }
