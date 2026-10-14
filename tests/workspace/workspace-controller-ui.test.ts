@@ -83,6 +83,24 @@ describe('workspace UI controller operations', () => {
     expect(appState.documentName()).toBe('original.md')
   })
 
+  it('cancels queued persistence before switching away from a Local Library workspace', async () => {
+    const context = await createStorageContext({ factory: new IDBFactory(), now: () => 250 })
+    const { appState, controller, cancelPendingDocumentPersistence } = await harness(context)
+    await controller.bootstrap()
+    const localWorkspaceId = appState.activeWorkspaceId()!
+    appState.setDocument('local body', 'local.md', 'markdown')
+    await controller.setStorageMode('local-library')
+    await controller.createWorkspace('Second')
+    const secondWorkspaceId = appState.activeWorkspaceId()!
+    await controller.switchWorkspace(localWorkspaceId)
+
+    cancelPendingDocumentPersistence.mockClear()
+    appState.setDocument('fresh local body', 'local.md', 'markdown')
+    await controller.switchWorkspace(secondWorkspaceId)
+
+    expect(cancelPendingDocumentPersistence).toHaveBeenCalledTimes(1)
+  })
+
   it('does not optimistically mutate state when rename validation fails', async () => {
     const context = await createStorageContext({ factory: new IDBFactory(), now: () => 300 })
     const { appState, controller } = await harness(context)
