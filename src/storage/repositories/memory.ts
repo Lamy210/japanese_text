@@ -31,7 +31,7 @@ export interface MemoryStorageContext {
   atomicOperations: AtomicOperationsPort
 }
 
-export function createMemoryStorageContext(): MemoryStorageContext {
+export function createMemoryStorageContext(now: () => number = Date.now): MemoryStorageContext {
   let workspaces = new Map<string, Workspace>()
   let profiles = new Map<string, RuleProfile>()
   let documents = new Map<string, StoredWorkspaceDocument>()
@@ -175,6 +175,44 @@ export function createMemoryStorageContext(): MemoryStorageContext {
       workspaces = nextWorkspaces
       documents = nextDocuments
       activeWorkspaceId = nextWorkspaceId
+    },
+    async enableLocalLibrary(workspaceId, documentValue) {
+      const workspace = workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+      const document = clone(validateDocumentRecord(documentValue))
+      if (document.workspaceId !== workspaceId) {
+        throw new Error('document.workspaceId must match the target workspace')
+      }
+
+      const nextWorkspaces = cloneMap(workspaces)
+      const nextDocuments = cloneMap(documents)
+      nextWorkspaces.set(workspaceId, {
+        ...clone(workspace),
+        storageMode: 'local-library',
+        updatedAt: now()
+      })
+      nextDocuments.set(document.id, document)
+
+      workspaces = nextWorkspaces
+      documents = nextDocuments
+    },
+    async makeWorkspacePrivate(workspaceId) {
+      const workspace = workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+
+      const nextWorkspaces = cloneMap(workspaces)
+      const nextDocuments = cloneMap(documents)
+      nextWorkspaces.set(workspaceId, {
+        ...clone(workspace),
+        storageMode: 'private-session',
+        updatedAt: now()
+      })
+      for (const [id, document] of nextDocuments) {
+        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+      }
+
+      workspaces = nextWorkspaces
+      documents = nextDocuments
     }
   }
 
