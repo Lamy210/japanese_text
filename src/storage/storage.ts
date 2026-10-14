@@ -59,15 +59,13 @@ function newestDocument<T extends { updatedAt: number }>(values: T[]): T | undef
   )
 }
 
-/** Save existing AppConfig semantics into the split v2 persistence model. */
+/** Save existing AppConfig semantics into the split v2 persistence model atomically. */
 export async function saveConfig(config: AppConfig): Promise<void> {
   const context = await getContext()
   const current = await getActiveState(context)
   const next = splitAppConfig(config, current, Date.now())
 
-  await context.repositories.preferences.save(next.preferences)
-  await context.repositories.profiles.save(next.profile)
-  await context.repositories.workspaces.save(next.workspace)
+  await context.atomic.saveProjectedState(next)
 }
 
 /** Load a validated v2 state and project it back to the existing AppConfig shape. */
