@@ -199,6 +199,25 @@ describe('v1 to v2 migration', () => {
     db.close()
   })
 
+  it('serializes concurrent migrations so completion is not rewritten', async () => {
+    const factory = new IDBFactory()
+    await createV1Database(factory, { config: createDefaultConfig() })
+    const db = await openDatabase(factory)
+
+    const results = await Promise.all([
+      migrateV1ToV2(db, () => 1000),
+      migrateV1ToV2(db, () => 2000)
+    ])
+
+    expect(results.map((result) => result.state).sort()).toEqual(['migrated', 'not-needed'])
+    expect(await get(db, STORE_WORKSPACES, MIGRATED_WORKSPACE_ID)).toMatchObject({
+      createdAt: 1000,
+      updatedAt: 1000
+    })
+    expect(await get(db, STORE_META, META_V1_MIGRATION_STATUS)).toEqual({ state: 'complete', migratedAt: 1000 })
+    db.close()
+  })
+
   it.each(['pending', 'failed'] as const)('retries when marker state is %s', async (state) => {
     const factory = new IDBFactory()
     await createV1Database(factory, { config: createDefaultConfig() })
