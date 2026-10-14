@@ -1,7 +1,11 @@
 import type { AppConfig } from '../core/config/schema'
 import { createDefaultWorkspaceState } from '../core/workspace/defaults'
 import type { GlobalPreferences, RuleProfile, StorageMode, Workspace } from '../core/workspace/types'
-import { composeAppConfig } from '../storage/compat/app-config-projection'
+import {
+  composeAppConfig,
+  splitAppConfigPreservingStorageMode,
+  type ProjectedStorageState
+} from '../storage/compat/app-config-projection'
 import type { AtomicOperationsPort, StorageRepositories } from '../storage/repositories/ports'
 import {
   createSessionDocumentStore,
@@ -48,6 +52,7 @@ export interface WorkspaceServiceDependencies {
 export interface WorkspaceService {
   getActive(): Promise<WorkspaceContext>
   list(): Promise<WorkspaceSummary[]>
+  saveConfig(workspaceId: string, config: AppConfig): Promise<WorkspaceContext>
   create(input: { name: string }): Promise<WorkspaceContext>
   rename(workspaceId: string, name: string): Promise<Workspace>
   switchTo(targetWorkspaceId: string, currentDocument: SessionDocument): Promise<WorkspaceSwitchResult>
@@ -101,6 +106,15 @@ function toSessionDocument(document: {
   }
 }
 
+function contextFromProjected(state: ProjectedStorageState): WorkspaceContext {
+  return {
+    workspace: state.workspace,
+    profile: state.profile,
+    preferences: state.preferences,
+    config: composeAppConfig(state)
+  }
+}
+
 export function createWorkspaceService(dependencies: WorkspaceServiceDependencies): WorkspaceService {
   const { repositories, atomic } = dependencies
   const now = dependencies.now ?? Date.now
@@ -113,15 +127,51 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
     if (preferences === undefined) throw new Error('Global preferences are missing')
 
     const profile = await repositories.profiles.get(workspace.activeRuleProfileId)
+    if (profile === undefined) throw new Error(`Active rule profile is missing for workspace ${workspace.id}`)
+
+    return contextFromProjected({ workspace, profile, preferences })
+  }
+
+  async function loadContextRecovering(
+    workspace: Workspace
+  ): Promise<{ context: WorkspaceContext; warning?: string }> {
+    const defaults = createDefaultWorkspaceState(now())
+    let recovered = false
+
+    let preferences: GlobalPreferences | undefined
+    try {
+      preferences = await repositories.preferences.get()
+    } catch {
+      preferences = undefined
+    }
+    if (preferences === undefined) {
+      preferences = defaults.preferences
+      await repositories.preferences.save(preferences)
+      recovered = true
+    }
+
+    let profile: RuleProfile | undefined
+    try {
+      profile = await repositories.profiles.get(workspace.activeRuleProfileId)
+    } catch {
+      profile = undefined
+    }
     if (profile === undefined) {
-      throw new Error(`Active rule profile is missing for workspace ${workspace.id}`)
+      const timestamp = now()
+      profile = {
+        ...structuredClone(defaults.profile),
+        id: workspace.activeRuleProfileId,
+        name: 'Recovered General Japanese',
+        createdAt: timestamp,
+        updatedAt: timestamp
+      }
+      await repositories.profiles.save(profile)
+      recovered = true
     }
 
     return {
-      workspace,
-      profile,
-      preferences,
-      config: composeAppConfig({ workspace, profile, preferences })
+      context: contextFromProjected({ workspace, profile, preferences }),
+      ...(recovered ? { warning: 'Workspace context recovered from missing or invalid persisted state.' } : {})
     }
   }
 
@@ -137,13 +187,13 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
 
   async function getActive(): Promise<WorkspaceContext> {
     const selected = await resolveSelectedWorkspace()
-    if (selected !== undefined) return loadContext(selected)
+    if (selected !== undefined) return (await loadContextRecovering(selected)).context
 
     const workspaces = (await repositories.workspaces.list()).sort(compareWorkspaceIdentity)
     const repaired = workspaces[0]
     if (repaired !== undefined) {
       await repositories.selection.setActiveWorkspaceId(repaired.id)
-      return loadContext(repaired)
+      return (await loadContextRecovering(repaired)).context
     }
 
     const defaults = createDefaultWorkspaceState(now())
@@ -181,6 +231,19 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
       }))
     },
 
+    async saveConfig(workspaceId, config): Promise<WorkspaceContext> {
+      const workspace = await repositories.workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+      const current = await loadContext(workspace)
+      const next = splitAppConfigPreservingStorageMode(config, {
+        workspace: current.workspace,
+        profile: current.profile,
+        preferences: current.preferences
+      }, now())
+      await atomic.saveProjectedState(next)
+      return contextFromProjected(next)
+    },
+
     async create(input): Promise<WorkspaceContext> {
       const name = normalizeWorkspaceName(input.name)
       const active = await getActive()
@@ -208,11 +271,7 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
       const name = normalizeWorkspaceName(rawName)
       const workspace = await repositories.workspaces.get(workspaceId)
       if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
-      const renamed: Workspace = {
-        ...workspace,
-        name,
-        updatedAt: now()
-      }
+      const renamed: Workspace = { ...workspace, name, updatedAt: now() }
       await repositories.workspaces.save(renamed)
       return renamed
     },
@@ -228,23 +287,29 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
         sessionDocuments.set(current.workspace.id, currentDocument)
       }
 
-      await repositories.selection.setActiveWorkspaceId(target.id)
-      const context = await loadContext(target)
+      const recovered = await loadContextRecovering(target)
+      let document: SessionDocument | undefined
+      let warning = recovered.warning
 
       if (target.storageMode === 'local-library') {
-        const stored = newestDocument(await repositories.documents.listByWorkspace(target.id))
-        return {
-          context,
-          ...(stored === undefined ? {} : { document: toSessionDocument(stored) })
+        try {
+          const stored = newestDocument(await repositories.documents.listByWorkspace(target.id))
+          document = stored === undefined ? undefined : toSessionDocument(stored)
+        } catch {
+          warning = warning === undefined
+            ? 'Workspace document recovery skipped invalid persisted body.'
+            : `${warning} Workspace document recovery skipped invalid persisted body.`
         }
+      } else if (target.storageMode === 'private-session') {
+        document = sessionDocuments.get(target.id)
       }
 
-      if (target.storageMode === 'private-session') {
-        const document = sessionDocuments.get(target.id)
-        return { context, ...(document === undefined ? {} : { document }) }
+      await repositories.selection.setActiveWorkspaceId(target.id)
+      return {
+        context: recovered.context,
+        ...(document === undefined ? {} : { document }),
+        ...(warning === undefined ? {} : { warning })
       }
-
-      return { context }
     },
 
     async delete(workspaceId): Promise<WorkspaceDeleteResult> {
@@ -260,33 +325,23 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
         if (successor === undefined) throw new Error('No successor workspace is available')
         await atomic.deleteWorkspaceAndSelectNext(workspaceId, successor.id)
         sessionDocuments.delete(workspaceId)
-        return {
-          active: await loadContext(successor),
-          deletedWorkspaceId: workspaceId
-        }
+        return { active: (await loadContextRecovering(successor)).context, deletedWorkspaceId: workspaceId }
       }
 
       await atomic.deleteWorkspaceCascade(workspaceId)
       sessionDocuments.delete(workspaceId)
-      return {
-        active,
-        deletedWorkspaceId: workspaceId
-      }
+      return { active, deletedWorkspaceId: workspaceId }
     },
 
     async setStorageMode(workspaceId, mode, currentDocument): Promise<WorkspaceContext> {
       const workspace = await repositories.workspaces.get(workspaceId)
       if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
-      if (workspace.storageMode === 'file-backed') {
-        throw new Error('file-backed storage is not configurable in Phase 2B')
-      }
+      if (workspace.storageMode === 'file-backed') throw new Error('file-backed storage is not configurable in Phase 2B')
       if (workspace.storageMode === mode) return loadContext(workspace)
 
       if (mode === 'local-library') {
         if (!durableBackend) throw new Error('Local Library requires durable browser storage')
-        if (currentDocument === undefined) {
-          throw new Error('Current document is required when enabling Local Library')
-        }
+        if (currentDocument === undefined) throw new Error('Current document is required when enabling Local Library')
 
         await atomic.enableLocalLibrary(workspaceId, {
           id: `local-recent-document:${workspaceId}`,
