@@ -162,7 +162,12 @@ export async function importConfigFile(file: File): Promise<void> {
     const raw = await file.text()
     const parsed: unknown = JSON.parse(raw)
     const migrated = migrateConfig(parsed)
-    const result = appState.loadConfigFrom(migrated)
+    const currentPrivacy = structuredClone(appState.config.privacy)
+    const importCandidate =
+      typeof migrated === 'object' && migrated !== null && !Array.isArray(migrated)
+        ? { ...(migrated as Record<string, unknown>), privacy: currentPrivacy }
+        : migrated
+    const result = appState.loadConfigFrom(importCandidate)
     if (!result.ok) {
       // §30: 不正configによってApp全体を起動不能にしてはならない → 旧設定を維持
       appState.pushToast('error', `設定のImportに失敗しました: ${result.error}`)
