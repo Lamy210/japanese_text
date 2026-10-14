@@ -52,7 +52,14 @@ export interface MigrationResult {
   recoveredDocument?: RecoveredDocument
 }
 
+export interface AtomicProjectedStorageState {
+  preferences: GlobalPreferences
+  workspace: Workspace
+  profile: RuleProfile
+}
+
 export interface AtomicOperationsPort {
   migrateV1ToV2(): Promise<MigrationResult>
+  saveProjectedState(value: AtomicProjectedStorageState): Promise<void>
   deleteWorkspaceCascade(workspaceId: string): Promise<void>
 }
