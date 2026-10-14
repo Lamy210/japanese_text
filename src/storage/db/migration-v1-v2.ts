@@ -132,6 +132,8 @@ export async function migrateV1ToV2(
     tx = db.transaction(transactionStores, 'readwrite')
     done = transactionDone(tx)
 
+    const metaStore = tx.objectStore(STORE_META)
+    const statusRequest = metaStore.get(META_V1_MIGRATION_STATUS)
     const configRequest = hasLegacySettings
       ? tx.objectStore(LEGACY_SETTINGS_STORE).get('app-config')
       : undefined
@@ -139,10 +141,19 @@ export async function migrateV1ToV2(
       ? tx.objectStore(LEGACY_DOCUMENTS_STORE).get('recent')
       : undefined
 
-    const [rawConfig, rawDocument] = await Promise.all([
+    const [transactionStatus, rawConfig, rawDocument] = await Promise.all([
+      requestToPromise(statusRequest),
       configRequest === undefined ? Promise.resolve(undefined) : requestToPromise(configRequest),
       documentRequest === undefined ? Promise.resolve(undefined) : requestToPromise(documentRequest)
     ])
+
+    // Another tab may have completed migration after our initial status check and
+    // pending marker write. Re-check while holding the same multi-store transaction
+    // that would perform target writes so completion can never be overwritten.
+    if (isCompleteStatus(transactionStatus)) {
+      await done
+      return { state: 'not-needed' }
+    }
 
     const legacyDocument = parseLegacyDocument(rawDocument)
     const hasAnyLegacyStore = hasLegacySettings || hasLegacyDocuments
@@ -185,9 +196,8 @@ export async function migrateV1ToV2(
       })
     }
 
-    const meta = tx.objectStore(STORE_META)
-    meta.put(2, META_STORAGE_SCHEMA_VERSION)
-    meta.put({ state: 'complete', migratedAt: timestamp }, META_V1_MIGRATION_STATUS)
+    metaStore.put(2, META_STORAGE_SCHEMA_VERSION)
+    metaStore.put({ state: 'complete', migratedAt: timestamp }, META_V1_MIGRATION_STATUS)
     await done
 
     if (warning !== undefined) {
