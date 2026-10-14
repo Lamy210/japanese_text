@@ -9,7 +9,11 @@ import type { AppConfig } from '../core/config/schema'
 import type { DocumentType } from '../core/types'
 import { createWorkspaceService } from '../workspace/workspace-service'
 import type { StorageContext } from './bootstrap'
-import { composeAppConfig, splitAppConfig, type ProjectedStorageState } from './compat/app-config-projection'
+import {
+  composeAppConfig,
+  splitAppConfigPreservingStorageMode,
+  type ProjectedStorageState
+} from './compat/app-config-projection'
 import { getStorageContext } from './runtime'
 
 export { getStorageContext, resetStorageRuntimeForTests } from './runtime'
@@ -32,7 +36,8 @@ export function isStorageAvailable(): boolean {
 async function getActiveState(context: StorageContext): Promise<ProjectedStorageState> {
   const active = await createWorkspaceService({
     repositories: context.repositories,
-    atomic: context.atomic
+    atomic: context.atomic,
+    durableBackend: context.durable
   }).getActive()
   return {
     workspace: active.workspace,
@@ -48,11 +53,11 @@ function newestDocument<T extends { updatedAt: number }>(values: T[]): T | undef
   )
 }
 
-/** Save existing AppConfig semantics into the split v2 persistence model atomically. */
+/** Save config/profile preferences without changing the canonical Workspace storage mode. */
 export async function saveConfig(config: AppConfig): Promise<void> {
   const context = await getStorageContext()
   const current = await getActiveState(context)
-  const next = splitAppConfig(config, current, Date.now())
+  const next = splitAppConfigPreservingStorageMode(config, current, Date.now())
   await context.atomic.saveProjectedState(next)
 }
 
