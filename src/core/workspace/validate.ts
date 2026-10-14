@@ -1,6 +1,7 @@
 import { validateAppConfig } from '../config/validate'
 import type { PresetId, ThemeMode } from '../config/schema'
 import type { DocumentType } from '../types'
+import { WORKSPACE_MODEL_SCHEMA_VERSION } from './defaults'
 import type { GlobalPreferences, RuleProfile, StoredWorkspaceDocument, StorageMode, Workspace } from './types'
 
 export class WorkspaceRecordValidationError extends Error {
@@ -75,8 +76,10 @@ export function validateWorkspaceRecord(raw: unknown): Workspace {
 
 export function validatePreferencesRecord(raw: unknown): GlobalPreferences {
   const value = requireRecord(raw, 'preferences')
-  if (value.schemaVersion !== 1) {
-    throw new WorkspaceRecordValidationError('preferences.schemaVersion must be 1')
+  if (value.schemaVersion !== WORKSPACE_MODEL_SCHEMA_VERSION) {
+    throw new WorkspaceRecordValidationError(
+      `preferences.schemaVersion must be ${WORKSPACE_MODEL_SCHEMA_VERSION}`
+    )
   }
 
   const theme = requireString(value.theme, 'preferences.theme') as ThemeMode
@@ -104,7 +107,7 @@ export function validatePreferencesRecord(raw: unknown): GlobalPreferences {
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: WORKSPACE_MODEL_SCHEMA_VERSION,
     theme,
     editor: {
       fontSize: editor.fontSize,
