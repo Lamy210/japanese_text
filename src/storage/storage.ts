@@ -7,8 +7,11 @@
 
 import type { AppConfig } from '../core/config/schema'
 import type { DocumentType } from '../core/types'
-import { createStorageContext, type StorageContext } from './bootstrap'
+import type { StorageContext } from './bootstrap'
 import { composeAppConfig, splitAppConfig, type ProjectedStorageState } from './compat/app-config-projection'
+import { getStorageContext } from './runtime'
+
+export { getStorageContext, resetStorageRuntimeForTests } from './runtime'
 
 const LOCAL_RECENT_DOCUMENT_ID = 'local-recent-document'
 
@@ -19,19 +22,12 @@ export interface StoredDocument {
   updatedAt: number
 }
 
-let contextPromise: Promise<StorageContext> | null = null
-
 export function isStorageAvailable(): boolean {
   try {
     return typeof indexedDB !== 'undefined' && indexedDB !== null
   } catch {
     return false
   }
-}
-
-function getContext(): Promise<StorageContext> {
-  if (contextPromise === null) contextPromise = createStorageContext()
-  return contextPromise
 }
 
 async function getActiveState(context: StorageContext): Promise<ProjectedStorageState> {
@@ -57,7 +53,7 @@ function newestDocument<T extends { updatedAt: number }>(values: T[]): T | undef
 
 /** Save existing AppConfig semantics into the split v2 persistence model atomically. */
 export async function saveConfig(config: AppConfig): Promise<void> {
-  const context = await getContext()
+  const context = await getStorageContext()
   const current = await getActiveState(context)
   const next = splitAppConfig(config, current, Date.now())
   await context.atomic.saveProjectedState(next)
@@ -66,7 +62,7 @@ export async function saveConfig(config: AppConfig): Promise<void> {
 /** Load a validated v2 state and project it back to the existing AppConfig shape. */
 export async function loadConfig(): Promise<AppConfig | undefined> {
   try {
-    const context = await getContext()
+    const context = await getStorageContext()
     return composeAppConfig(await getActiveState(context))
   } catch {
     return undefined
@@ -78,7 +74,7 @@ export async function loadConfig(): Promise<AppConfig | undefined> {
  * local-library persistence. Private/file-backed modes never write body text here.
  */
 export async function saveRecentDocument(doc: StoredDocument): Promise<void> {
-  const context = await getContext()
+  const context = await getStorageContext()
   const { workspace } = await getActiveState(context)
   if (workspace.storageMode !== 'local-library') return
 
@@ -97,7 +93,7 @@ export async function saveRecentDocument(doc: StoredDocument): Promise<void> {
 
 export async function loadRecentDocument(): Promise<StoredDocument | undefined> {
   try {
-    const context = await getContext()
+    const context = await getStorageContext()
     const { workspace } = await getActiveState(context)
     if (workspace.storageMode !== 'local-library') return undefined
 
@@ -120,7 +116,7 @@ export async function loadRecentDocument(): Promise<StoredDocument | undefined> 
  */
 export async function deleteRecentDocument(): Promise<void> {
   try {
-    const context = await getContext()
+    const context = await getStorageContext()
     const { workspace } = await getActiveState(context)
     await context.atomic.deletePersistedDocuments(workspace.id)
   } catch {
