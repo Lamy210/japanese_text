@@ -227,6 +227,7 @@ export function createWorkspaceController(
     async switchWorkspace(workspaceId: string): Promise<void> {
       if (workspaceId === appState.activeWorkspaceId()) return
       await runMutation(async () => {
+        cancelPendingDocumentPersistence()
         await persistCurrentWorkspaceConfig()
         const workspaceService = await service()
         const result = await workspaceService.switchTo(workspaceId, currentEditorDocument(now))
@@ -283,6 +284,7 @@ export function createWorkspaceController(
         if (workspaceId === undefined) throw new Error('Active workspace is missing')
         const current = currentEditorDocument(now)
         cancelPendingDocumentPersistence()
+        await persistCurrentWorkspaceConfig()
 
         const workspaceService = await service()
         const updated = await workspaceService.setStorageMode(workspaceId, mode, current)
