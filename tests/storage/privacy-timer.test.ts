@@ -10,6 +10,7 @@ function installIndexedDb(factory: IDBFactory): void {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.useRealTimers()
   Reflect.deleteProperty(globalThis, 'indexedDB')
   vi.resetModules()
@@ -32,13 +33,13 @@ describe('privacy autosave cancellation', () => {
 
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     actions.persistDocumentDebounced()
-    expect(vi.getTimerCount()).toBe(1)
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
 
     appState.updateConfig((draft) => {
       draft.privacy = { autoSave: false, privacyMode: true }
     })
     actions.onPrivacyModeChanged(true)
 
-    expect(vi.getTimerCount()).toBe(0)
+    expect(clearTimeoutSpy).toHaveBeenCalledTimes(1)
   })
 })
