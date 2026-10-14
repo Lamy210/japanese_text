@@ -1,5 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
+import { createIndexedDbAtomicOperations } from '../../src/storage/db/indexeddb-atomic-operations'
 import { openDatabase } from '../../src/storage/db/open-database'
 import { createIndexedDbRepositories } from '../../src/storage/repositories/indexeddb'
 import { createMemoryStorageContext } from '../../src/storage/repositories/memory'
@@ -8,6 +10,11 @@ type SelectionRepository = {
   getActiveWorkspaceId(): Promise<string | undefined>
   setActiveWorkspaceId(workspaceId: string): Promise<void>
 }
+
+type CreateAndActivate = (
+  workspace: ReturnType<typeof createDefaultWorkspaceState>['workspace'],
+  profile: ReturnType<typeof createDefaultWorkspaceState>['profile']
+) => Promise<void>
 
 type StorageRuntimeExport = {
   getStorageContext(): Promise<{
@@ -38,6 +45,12 @@ type StorageRuntimeExport = {
 function selectionFrom(repositories: unknown): SelectionRepository | undefined {
   if (typeof repositories !== 'object' || repositories === null) return undefined
   return (repositories as { selection?: SelectionRepository }).selection
+}
+
+function createAndActivateFrom(atomic: unknown): CreateAndActivate | undefined {
+  if (typeof atomic !== 'object' || atomic === null) return undefined
+  const operation = (atomic as { createWorkspaceAndActivate?: CreateAndActivate }).createWorkspaceAndActivate
+  return operation?.bind(atomic)
 }
 
 afterEach(() => {
@@ -99,5 +112,51 @@ describe('workspace selection repository', () => {
     await expect(storage.loadConfig()).resolves.toMatchObject({
       ngWords: [{ id: 'shared-runtime', word: '共有状態', severity: 'warning' }]
     })
+  })
+
+  it('creates an IndexedDB workspace, profile, and active selection atomically', async () => {
+    const db = await openDatabase(new IDBFactory())
+    try {
+      const repositories = createIndexedDbRepositories(db)
+      const atomic = createIndexedDbAtomicOperations(db, () => 1000)
+      const createAndActivate = createAndActivateFrom(atomic)
+      expect(createAndActivate).toBeDefined()
+      if (createAndActivate === undefined) return
+
+      const state = createDefaultWorkspaceState(1000)
+      state.workspace.id = 'workspace-created'
+      state.workspace.activeRuleProfileId = 'profile-created'
+      state.profile.id = 'profile-created'
+
+      await createAndActivate(state.workspace, state.profile)
+
+      await expect(repositories.workspaces.get(state.workspace.id)).resolves.toEqual(state.workspace)
+      await expect(repositories.profiles.get(state.profile.id)).resolves.toEqual(state.profile)
+      await expect(repositories.selection.getActiveWorkspaceId()).resolves.toBe(state.workspace.id)
+    } finally {
+      db.close()
+    }
+  })
+
+  it('does not partially create IndexedDB state when create-and-activate validation fails', async () => {
+    const db = await openDatabase(new IDBFactory())
+    try {
+      const repositories = createIndexedDbRepositories(db)
+      const atomic = createIndexedDbAtomicOperations(db)
+      const createAndActivate = createAndActivateFrom(atomic)
+      expect(createAndActivate).toBeDefined()
+      if (createAndActivate === undefined) return
+
+      const state = createDefaultWorkspaceState(1000)
+      state.workspace.id = 'workspace-invalid'
+      state.workspace.activeRuleProfileId = 'profile-invalid'
+      state.profile.id = ''
+
+      await expect(createAndActivate(state.workspace, state.profile)).rejects.toThrow()
+      await expect(repositories.workspaces.get('workspace-invalid')).resolves.toBeUndefined()
+      await expect(repositories.selection.getActiveWorkspaceId()).resolves.toBeUndefined()
+    } finally {
+      db.close()
+    }
   })
 })
