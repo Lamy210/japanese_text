@@ -24,6 +24,10 @@ interface WorkspaceServiceModule {
   }): WorkspaceService
 }
 
+type AtomicWithCreate = AtomicOperationsPort & {
+  createWorkspaceAndActivate(workspace: Workspace, profile: RuleProfile): Promise<void>
+}
+
 async function loadWorkspaceServiceModule(): Promise<WorkspaceServiceModule | undefined> {
   return vi
     .importActual<WorkspaceServiceModule>('../../src/workspace/workspace-service')
@@ -160,8 +164,8 @@ describe('WorkspaceService active selection', () => {
     const memory = createMemoryStorageContext()
     const defaults = createDefaultWorkspaceState(100)
     await memory.repositories.preferences.save(defaults.preferences)
-    const atomic: AtomicOperationsPort = {
-      ...memory.atomicOperations,
+    const atomic: AtomicWithCreate = {
+      ...(memory.atomicOperations as AtomicWithCreate),
       async createWorkspaceAndActivate() {
         throw new Error('forced atomic failure')
       }
