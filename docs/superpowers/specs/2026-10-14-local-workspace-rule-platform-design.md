@@ -150,12 +150,10 @@ Workspace / Document / RuleProfile / Suppression / CustomRule は immutable ID �
 └───────────────┬─────────────────┬───────────┘
                 │                 │
 ┌───────────────▼──────────┐  ┌───▼─────────────────────┐
-│ Analysis Core            │  │ Persistence Port         │
-│ RuleProvider / Engine    │  │ WorkspaceRepository      │
-│ Formatter / Diagnostics  │  │ DocumentRepository       │
-└───────┬────────┬─────────┘  │ ProfileRepository        │
-        │        │            │ SuppressionRepository    │
-        │        │            └────────────┬─────────────┘
+│ Analysis Core            │  │ Persistence Ports        │
+│ RuleProvider / Engine    │  │ Repositories             │
+│ Formatter / Diagnostics  │  │ AtomicOperationsPort     │
+└───────┬────────┬─────────┘  └────────────┬─────────────┘
         │        │                         │
 ┌───────▼───┐ ┌──▼──────────────┐  ┌──────▼──────────────┐
 │ Built-in  │ │ textlint / DSL  │  │ IndexedDB Adapter   │
@@ -294,7 +292,7 @@ meta
 workspaces
 preferences
 ruleProfiles
-documentsV2
+workspaceDocuments
 documentSnapshots
 suppressions
 ```
@@ -305,13 +303,14 @@ suppressions
 
 - upgrade 中断時の復旧余地を残す。
 - migration 完了を確認してから将来 DB v3 で legacy store を削除できる。
+- 新 store 名へ version number を埋め込まず、将来の schema version と logical name を分離する。
 
 ### 7.2 Key / index
 
 - `workspaces`: keyPath `id`
-- `preferences`: key `global`
+- `preferences`: out-of-line key、key `global`
 - `ruleProfiles`: keyPath `id`
-- `documentsV2`: keyPath `id`
+- `workspaceDocuments`: keyPath `id`
   - index `workspaceId`
   - index `updatedAt`
 - `documentSnapshots`: keyPath `id`
@@ -320,9 +319,23 @@ suppressions
 - `suppressions`: keyPath `id`
   - index `[scope, scopeId]`
   - index `ruleId`
-- `meta`: string key
+- `meta`: out-of-line string key
 
-### 7.3 Migration marker
+永続 record は read 時にも validation を通す。IndexedDB にある値を型 assertion だけで信用しない。
+
+### 7.3 Schema upgrade と data migration を分離
+
+`onupgradeneeded` の責務は store / index 作成だけに限定する。
+
+DB open 成功後、通常 transaction として legacy data migration を実行する。
+
+理由:
+
+- versionchange transaction 内へ複雑な application migration logic を詰め込まない。
+- migration retry / error reporting / unit test を容易にする。
+- schema creation と user data conversion の failure mode を分離する。
+
+### 7.4 Migration marker
 
 `meta/storage-schema-version = 2`
 
@@ -342,9 +355,11 @@ migration は idempotent とする。
 ### 8.1 原則
 
 - legacy data を先に削除しない。
-- new records 作成成功後に completion marker を書く。
+- migration 対象 record と completion marker は可能な限り同一 IndexedDB transaction で確定する。
+- new records 作成成功前に `complete` を書かない。
 - migration が途中で失敗しても次回起動で retry 可能。
-- 同一 ID / migration marker により duplicate record を作らない。
+- deterministic migration ID と marker により duplicate record を作らない。
+- legacy store は Phase 2A では read-only migration source とし、削除しない。
 
 ### 8.2 Config migration
 
@@ -387,7 +402,7 @@ autoSave = true && privacyMode = false
 1. deterministic migration document ID を使用。
 2. migrated workspace に document を作る。
 3. v1 record は削除しない。
-4. v2 document 保存成功後に migration complete marker を更新。
+4. workspace / profile / preferences / document / complete marker を transaction boundary 内で整合させる。
 
 recent document が存在しない場合は document record を作らない。
 
@@ -402,7 +417,13 @@ v1 config が validation 失敗した場合:
 
 本文 record が読める場合は config failure と独立して救出する。
 
-## 9. Persistence Interfaces
+### 8.5 Migration retry
+
+`failed` marker があっても legacy stores が存在する限り retry を許可する。
+
+retry 前に deterministic IDs の existing records を読み、同一 migration source 由来であれば update、異なる user data と衝突する場合は上書きせず error にする。
+
+## 9. Persistence Interfaces / Atomicity
 
 Browser API を core へ漏らさない。
 
@@ -430,9 +451,23 @@ interface SuppressionRepository { /* scope query + CRUD */ }
 - `IndexedDb*Repository`
 - `Memory*Repository`
 
+ただし、repository を順番に呼ぶだけでは複数 store の atomicity を保証できない。以下の複合操作は storage adapter の `AtomicOperationsPort` を通す。
+
+```ts
+interface AtomicOperationsPort {
+  migrateV1ToV2(): Promise<MigrationResult>
+  deleteWorkspaceCascade(workspaceId: string): Promise<void>
+  importWorkspaceBundle(bundle: ValidatedWorkspaceBundle): Promise<void>
+}
+```
+
+IndexedDB adapter は必要な stores を 1 transaction で開いて実行する。
+
+Memory adapter も同じ observable behavior を contract test で保証する。
+
 IndexedDB unavailable / open failure の場合は memory adapter へ degrade する。
 
-UI / Service はどちらを使っているかを知らない。
+UI / Service は concrete adapter を知らない。
 
 ## 10. Application Services
 
@@ -442,8 +477,8 @@ UI / Service はどちらを使っているかを知らない。
 
 - workspace create / rename / delete / activate。
 - active profile 整合性保証。
-- workspace 削除時の document / suppression cleanup。
 - storage mode transition。
+- delete など multi-store atomic operation を `AtomicOperationsPort` へ依頼。
 
 ### DocumentService
 
@@ -469,20 +504,50 @@ UI / Service はどちらを使っているかを知らない。
 
 - diagnostics へ suppression を適用。
 - persisted / ephemeral suppression の統合。
-- scope precedence を解決。
 
-precedence:
+Suppression は「最も強い scope を勝たせる」方式ではなく、適用可能な suppression のどれか 1 つでも match すれば diagnostic を suppress する。
 
-```text
-Ignore once
-> document
-> workspace
-> profile
+`Ignore once` は current revision だけに適用する ephemeral layer とする。
+
+suppression は severity を書き換えず、表示 / report 対象から除外する。
+
+## 11. Existing AppConfig Compatibility Bridge
+
+Phase 2A で storage model を先に v2 化する一方、既存 UI / `appState` は `AppConfig` を前提としている。
+
+ここを big-bang で変更しないため、一時的な compatibility projection を導入する。
+
+```ts
+interface AppConfigProjection {
+  compose(
+    preferences: GlobalPreferences,
+    workspace: Workspace,
+    profile: RuleProfile
+  ): AppConfig
+
+  decompose(next: AppConfig, current: V2Context): V2ConfigChanges
+}
 ```
 
-ただし suppression は severity を書き換えず、表示 / report 対象から除外する。
+Phase 2A では:
 
-## 11. State Management
+1. v2 records を canonical persistence とする。
+2. app 起動時に active Workspace + RuleProfile + GlobalPreferences から `AppConfig` を合成する。
+3. 既存 `appState.updateConfig()` の結果は projection で v2 records へ分解して保存する。
+4. UI component は当面 `AppConfig` のまま動く。
+5. Phase 2C で UI state を RuleProfile / GlobalPreferences native model へ移行したら bridge を削除する。
+
+projection には round-trip test を必須とする。
+
+```text
+v2 -> AppConfig -> v2
+```
+
+で、表現可能な field が欠落しないことを保証する。
+
+legacy `settings/app-config` は migration source として保持するが、migration 完了後の canonical write target にはしない。
+
+## 12. State Management
 
 `src/state/app-state.ts` を一度に解体しない。
 
@@ -500,16 +565,16 @@ src/state/profile-state.ts
 
 これにより UI 全面書き換えを避ける。
 
-## 12. Privacy Modes
+## 13. Privacy Modes
 
-### 12.1 Private Session
+### 13.1 Private Session
 
 - default。
 - config / dictionary / profile は保存可能。
 - document content は IndexedDB に保存しない。
 - reload で本文が失われることを UI に明示。
 
-### 12.2 Local Library
+### 13.2 Local Library
 
 - user opt-in。
 - document content を IndexedDB に保存。
@@ -517,7 +582,7 @@ src/state/profile-state.ts
 - permission / persistence request failure でも使用可能だが warning を表示。
 - `navigator.storage.estimate()` による usage / quota 表示を Settings へ追加する。
 
-### 12.3 File-backed
+### 13.3 File-backed
 
 後続 phase。
 
@@ -525,9 +590,9 @@ src/state/profile-state.ts
 - 非対応環境は import/download fallback。
 - browser-only hard dependency にしない。
 
-## 13. Rule Platform v2
+## 14. Rule Platform v2
 
-### 13.1 RuleManifest
+### 14.1 RuleManifest
 
 ```ts
 interface RuleManifest {
@@ -556,7 +621,7 @@ markdown/heading-order
 user/<uuid>
 ```
 
-### 13.2 RuleProvider
+### 14.2 RuleProvider
 
 ```ts
 interface RuleProvider {
@@ -574,7 +639,7 @@ Providers:
 
 `buildRuleRegistry()` は provider aggregation に置換する。
 
-### 13.3 RulePack
+### 14.3 RulePack
 
 RulePack は rule implementation を保持しない。
 
@@ -589,7 +654,7 @@ interface RulePack {
 
 Built-in preset は将来的に RulePack template として表現できる。
 
-## 14. Declarative Custom Rules
+## 15. Declarative Custom Rules
 
 任意 JavaScript 実行は禁止。
 
@@ -621,15 +686,18 @@ type DeclarativeRule =
 - flags whitelist (`gimu` 等、必要最小限)。
 - compile validation。
 - analysis Worker 内のみ実行。
-- timeout 時は Worker を破棄・再生成し、該当 rule を error として隔離。
+- main thread 側 watchdog で Worker 応答期限を監視する。
+- timeout 時は Worker を破棄・再生成する。
+- timeout に関与した custom rule ID を session quarantine set に入れ、同じ rule を自動再実行しない。
+- quarantine は rule 編集または明示再有効化で解除する。
 
 JS RegExp に完全な実行時間制限はないため、unsafe regex 対策を「pattern validation だけ」で完了扱いにしない。
 
 将来 custom regex 比率が高まった場合に RE2 / WASM 系を再評価する。
 
-## 15. Suppression
+## 16. Suppression
 
-### 15.1 UI actions
+### 16.1 UI actions
 
 Diagnostic menu から以下を提供する。
 
@@ -638,9 +706,11 @@ Diagnostic menu から以下を提供する。
 - Ignore this rule in workspace
 - Disable rule in active profile
 
+`Disable rule in active profile` は suppression record ではなく RuleProfile の設定変更である。
+
 term / message level suppression は rule ごとに対応可能な場合のみ表示。
 
-### 15.2 Inline directives
+### 16.2 Inline directives
 
 後続 phase で Markdown / text document に以下を追加可能とする。
 
@@ -652,15 +722,15 @@ term / message level suppression は rule ごとに対応可能な場合のみ�
 
 parser は directive 自体を diagnostics の文字 offset 計算から除外しない。既存 text offset と整合する方式を採る。
 
-## 16. Export / Import
+## 17. Export / Import
 
-### 16.1 Export unit
+### 17.1 Export unit
 
 - Rule Profile export
 - Workspace export
 - Full local backup
 
-### 16.2 Versioned manifest
+### 17.2 Versioned manifest
 
 ```ts
 interface ExportManifest {
@@ -678,13 +748,13 @@ Import は必ず以下を行う。
 3. schema validation。
 4. ID collision detection。
 5. dry-run summary。
-6. user confirmation 後に transaction。
+6. user confirmation 後に atomic transaction。
 
 Import 途中で既存データを破壊しない。
 
 暗号化 backup は別 phase とし、導入する場合は password-derived key + authenticated encryption を前提とする。
 
-## 17. Storage Persistence / Quota
+## 18. Storage Persistence / Quota
 
 Settings に Storage section を追加する。
 
@@ -705,7 +775,7 @@ quota exceeded 時:
 - status bar / toast で user に通知。
 - snapshot 作成失敗だけで document 本体保存を rollback しない。
 
-## 18. Error Handling
+## 19. Error Handling
 
 ### IndexedDB open failure
 
@@ -716,6 +786,7 @@ quota exceeded 時:
 ### Transaction failure
 
 - domain state を「保存済み」と表示しない。
+- atomic operation は transaction abort により部分反映を残さない。
 - retry 可能な error object に正規化。
 
 ### Migration failure
@@ -733,18 +804,19 @@ quota exceeded 時:
 
 - rule 単位で `RuleError` を生成。
 - engine 全体を停止しない。
+- Worker timeout は custom rule quarantine と Worker recreate で containment する。
 
-## 19. Security
+## 20. Security
 
 - remote script / remote plugin import 禁止。
-- import data は unknown input として validation。
+- import data / IndexedDB record は unknown input として validation。
 - prototype pollution を避けるため plain record の whitelist copy を使用。
-- regex は Worker で隔離。
+- regex は Worker で隔離し、main thread watchdog を設ける。
 - HTML rendering は user text を raw HTML として挿入しない。
 - export filename に document name を使用する場合は path separator / control character を sanitize。
 - file-backed 導入時も user gesture を必要とする browser permission model を迂回しない。
 
-## 20. Performance
+## 21. Performance
 
 ### Analysis
 
@@ -763,7 +835,7 @@ quota exceeded 時:
 
 RuleManifest 列挙は deterministic であり、同じ provider set + profile から同じ registry を構築する。
 
-## 21. Compatibility / Migration Policy
+## 22. Compatibility / Migration Policy
 
 3 種類の version を分離する。
 
@@ -788,7 +860,7 @@ v1 -> v2 -> v3
 
 `v1 -> latest` の巨大 migration 関数を作らない。
 
-## 22. File Layout Proposal
+## 23. File Layout Proposal
 
 段階的に以下へ整理する。
 
@@ -809,11 +881,13 @@ src/
       document-service.ts
       rule-profile-service.ts
       suppression-service.ts
+      app-config-projection.ts
   storage/
     db/
       open-database.ts
       migration-v1-v2.ts
       schema.ts
+      atomic-operations.ts
     repositories/
       indexeddb/
       memory/
@@ -829,19 +903,20 @@ src/
 
 機能追加と同時に責務境界を導入し、unrelated refactor は避ける。
 
-## 23. Testing Strategy
+## 24. Testing Strategy
 
 変更ごとに regression test を必須とする。
 
-### 23.1 Domain / validation unit tests
+### 24.1 Domain / validation unit tests
 
 - Workspace validation。
 - RuleProfile validation。
 - DeclarativeRule validation。
-- Suppression matching / precedence。
+- Suppression matching。
 - migration mapping。
+- AppConfig projection round-trip。
 
-### 23.2 Storage contract tests
+### 24.2 Storage contract tests
 
 同一 contract test suite を以下へ適用する。
 
@@ -854,13 +929,14 @@ src/
 - workspace index query
 - document isolation
 - transaction failure
-- delete cascade service behavior
+- atomic delete cascade
 - duplicate ID
 - migration idempotency
+- corrupt persisted record handling
 
 IndexedDB test environment が必要なら `fake-indexeddb` 等の browser API compatible test dependency を dev-only で導入する。
 
-### 23.3 Migration fixtures
+### 24.3 Migration fixtures
 
 fixture を固定する。
 
@@ -871,10 +947,13 @@ fixture を固定する。
 - corrupt config + valid doc
 - missing stores
 - migration interrupted marker
+- deterministic ID already exists
 
 同じ fixture を複数回 migration して duplicate が発生しないことを検証する。
 
-### 23.4 Rule tests
+migration transaction を意図的に fail させ、workspace/profile/document の部分反映が残らないことを検証する。
+
+### 24.4 Rule tests
 
 各 rule に最低限:
 
@@ -887,7 +966,7 @@ fixture を固定する。
 
 を用意する。
 
-### 23.5 Browser integration
+### 24.5 Browser integration
 
 後続で Playwright 等を導入する場合、最低限:
 
@@ -899,7 +978,7 @@ fixture を固定する。
 
 を対象にする。
 
-## 24. CI Quality Gates
+## 25. CI Quality Gates
 
 既存 CI:
 
@@ -916,7 +995,7 @@ Storage / Rule Platform 実装後は test suite を追加するが、GitHub Page
 
 将来 E2E を追加する場合、PR CI と Pages deploy を分離し、deploy は unit/integration gate 成功後のみ許可する。
 
-## 25. Observability
+## 26. Observability
 
 Backend telemetry は追加しない。
 
@@ -932,7 +1011,7 @@ Backend telemetry は追加しない。
 
 本文・NG words・terminology 自体は debug report に含めない。
 
-## 26. Backup / Recovery
+## 27. Backup / Recovery
 
 Local Library を有効にしたユーザーには backup 導線を用意する。
 
@@ -947,7 +1026,7 @@ Local Library を有効にしたユーザーには backup 導線を用意する�
 
 将来 persistent storage が granted でも、ブラウザデータ削除・端末故障からは保護されないため、export backup は別途必要。
 
-## 27. CLI / VSCode Future Boundary
+## 28. CLI / VSCode Future Boundary
 
 Core が SolidJS / IndexedDB / DOM に依存しない状態を目標にする。
 
@@ -965,7 +1044,7 @@ Web application
 
 `.japanese-text.json` 等の file config は将来 export format とは別 contract として設計する。
 
-## 28. 実装フェーズ
+## 29. 実装フェーズ
 
 ### Phase 2A: Storage Foundation
 
@@ -973,7 +1052,9 @@ Web application
 - repository interfaces。
 - IndexedDB v2 schema。
 - v1 -> v2 migration。
+- atomic operations port。
 - memory fallback。
+- AppConfig compatibility projection。
 - migration tests / repository contract tests。
 - UI behavior は最小変更。
 
@@ -986,9 +1067,10 @@ Web application
 
 ### Phase 2C: Rule Profiles
 
-- GlobalPreferences と RuleProfile 分離。
+- GlobalPreferences と RuleProfile を UI state でも native に利用。
 - preset clone。
 - profile create / duplicate / rename / delete / switch。
+- Phase 2A の AppConfig projection bridge を縮退・削除。
 
 ### Phase 2D: Multi-document Library
 
@@ -1010,14 +1092,14 @@ Web application
 - Ignore once / document / workspace / profile。
 - declarative literal rules。
 - guarded regex rules。
-- worker failure isolation。
+- worker watchdog / quarantine / failure isolation。
 
 ### Phase 2G: Export / Import
 
 - profile export/import。
 - workspace backup。
 - full local backup。
-- dry-run + validation。
+- dry-run + validation + atomic import。
 
 ### Later
 
@@ -1028,7 +1110,7 @@ Web application
 - VSCode extension。
 - optional encrypted cloud sync。
 
-## 29. 最初の実装スコープ
+## 30. 最初の実装スコープ
 
 最初の implementation PR は Phase 2A のみに限定する。
 
@@ -1040,23 +1122,25 @@ Web application
 
 Phase 2A では見た目の大幅変更をしない。
 
-既存 `appState` / editor / diagnostics behavior を維持しながら persistence layer を差し替え可能にする。
+既存 `appState` / editor / diagnostics behavior を compatibility projection 経由で維持しながら persistence layer を v2 化する。
 
-## 30. Phase 2A Acceptance Criteria
+## 31. Phase 2A Acceptance Criteria
 
 1. DB version 1 の既存データから version 2 へデータ損失なく migration できる。
 2. migration を複数回評価しても duplicate workspace/profile/document を生成しない。
-3. v1 legacy stores を削除しない。
-4. corrupt config でも editor / lint が起動する。
-5. IndexedDB unavailable 時に memory repository で editor / lint が継続する。
-6. 新規ユーザーは `private-session` が default。
-7. 既存ユーザーは旧 `privacy.autoSave/privacyMode` の意図を migration に反映する。
-8. profile / workspace / document repository の contract tests がある。
-9. 既存 125 tests を含む既存 test suite が regression なく通る。
-10. typecheck / production build / Pages build が通る。
-11. main へ merge する前に PR CI が green。
+3. migration transaction failure 時に v2 records の部分反映を残さない。
+4. v1 legacy stores を削除しない。
+5. corrupt config でも editor / lint が起動する。
+6. IndexedDB unavailable 時に memory repository で editor / lint が継続する。
+7. 新規ユーザーは `private-session` が default。
+8. 既存ユーザーは旧 `privacy.autoSave/privacyMode` の意図を migration に反映する。
+9. AppConfig compatibility projection の round-trip が検証される。
+10. profile / workspace / document repository の contract tests がある。
+11. existing tests を含む test suite が regression なく通る。
+12. typecheck / production build / Pages build が通る。
+13. main へ merge する前に PR CI が green。
 
-## 31. Non-goals for Phase 2A
+## 32. Non-goals for Phase 2A
 
 - Login / account。
 - Server DB。
@@ -1069,28 +1153,38 @@ Phase 2A では見た目の大幅変更をしない。
 - existing UI 全面 redesign。
 - legacy IndexedDB stores の削除。
 
-## 32. Rollback / Failure Containment
+## 33. Rollback / Failure Containment
 
-Phase 2A で legacy stores を残すため、v2 adapter に重大問題がある場合は code rollback により v1 reader を再利用できる余地を残す。
+Phase 2A で legacy stores を残すため、v2 migration 前のデータを破壊しない。
 
-v2 migration 後も v1 data を破壊しないことが rollback strategy の中心となる。
+ただし migration 完了後の canonical write target は v2 stores であり、legacy stores へ dual-write しない。したがって legacy store は「最新状態の backup」ではなく「migration 前状態の recovery source」である。
 
-DB version 自体はブラウザ側で downgrade できないため、rollback code は `DB_VERSION=2` を理解し、legacy store を読む compatibility path を保持する必要がある。
+DB version 自体はブラウザ側で downgrade できないため、rollback release も DB version 2 を open できなければならない。
 
-したがって implementation では「Git revert すれば DB_VERSION=1 に戻してよい」と考えてはならない。
+重大 regression 時の rollback は:
 
-## 33. 設計判断の要点
+1. `DB_VERSION=1` へ戻さない。
+2. DB v2 schema を理解する compatibility reader を維持する。
+3. 必要なら legacy source を読み取り専用 recovery path として利用する。
+4. post-migration user changes を失わないため、v2 stores を優先して読む。
+
+単純な Git revert だけで storage rollback が成立するとは考えない。
+
+## 34. 設計判断の要点
 
 - User Account より Workspace を先に導入する。
 - default は Private Session。
 - Local Library は明示 opt-in。
 - IndexedDB を継続利用する。
 - OPFS は現時点では YAGNI。
+- schema upgrade と data migration を分離する。
+- multi-store mutation は atomic operations port を使う。
 - config / storage / export version は分離する。
 - diagnostics は保存しない。
 - arbitrary JavaScript plugin を許可しない。
 - custom rule は declarative DSL。
-- current app-state を一度に壊さず compatibility façade を使う。
+- unsafe regex は Worker watchdog + session quarantine で containment する。
+- current app-state を一度に壊さず AppConfig compatibility projection を使う。
 - migration を最初の独立 PR とし、UI / rule refactor と分離する。
 
 この設計を Phase 2 の canonical design とし、次に Phase 2A の実装計画を作成してから TDD で開発する。
