@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultConfig } from '../../src/core/config/validate'
-import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
+import {
+  createDefaultWorkspaceState,
+  WORKSPACE_MODEL_SCHEMA_VERSION
+} from '../../src/core/workspace/defaults'
 import {
   validateDocumentRecord,
   validatePreferencesRecord,
@@ -12,7 +15,9 @@ describe('workspace storage domain', () => {
   it('defaults new users to a private session', () => {
     const state = createDefaultWorkspaceState(1000)
 
+    expect(WORKSPACE_MODEL_SCHEMA_VERSION).toBe(1)
     expect(state.workspace.storageMode).toBe('private-session')
+    expect(state.preferences.schemaVersion).toBe(WORKSPACE_MODEL_SCHEMA_VERSION)
     expect(state.preferences.defaultStorageMode).toBe('private-session')
     expect(state.profile.sourcePresetId).toBe('general')
     expect(state.profile.customRules).toEqual([])
