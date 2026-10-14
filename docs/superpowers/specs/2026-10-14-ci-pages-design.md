@@ -24,6 +24,8 @@ Pull request と `main` への push で GitHub Actions を実行する。
 4. `bun run lint`
 5. `bun run test`
 6. `bun run build`
+7. `bun run build:pages`
+8. Pages build の asset / worker path を検証
 
 CI は read-only 権限 (`contents: read`) を基本とし、アプリのビルドに不要な write 権限を与えない。
 
@@ -37,12 +39,12 @@ GitHub 公式 Pages Actions を使用する。
 
 `main` への push と手動実行 (`workflow_dispatch`) を deployment trigger とする。build と deploy を分離し、deploy は build 成功後のみ実行する。
 
-Vite の `base` は環境変数から切り替える。
+通常ビルドと Pages ビルドは `package.json` の scripts で分離する。
 
-- local / ordinary build: `/`
-- GitHub Pages build: `/japanese_text/`
+- local / ordinary build: `vite build` (`/`)
+- GitHub Pages build: `vite build --base=/japanese_text/`
 
-これによりローカル開発を壊さず project-site 配下の asset / worker URL を正しく生成する。
+これによりローカル開発や他の static hosting を壊さず、project-site 配下の asset / worker URL を正しく生成する。
 
 ## Reproducibility
 
@@ -60,12 +62,12 @@ frontend-only アプリに不要な追跡済み `.env` (`DATABASE_URL=...`) を�
 - TypeScript error: `bun run lint` で fail。
 - regression: Vitest で fail。
 - production build failure: deploy 前に fail。
-- incorrect Pages asset path: Pages build 時の Vite `base` を `/japanese_text/` に固定して防止。
-- Pages 未有効化: deployment workflow は失敗するため、Repository Settings > Pages > Source を GitHub Actions に一度だけ設定する。
+- incorrect Pages asset path: PR CI の Pages build/path check で fail。
+- Pages 未有効化: deployment workflow は fail するため、Repository Settings > Pages > Source を GitHub Actions に一度だけ設定する。
 
 ## Acceptance criteria
 
-- PR 上で CI workflow が起動し、install / typecheck / test / build が成功する。
+- PR 上で CI workflow が起動し、install / typecheck / test / ordinary build / Pages build / path check が成功する。
 - `main` への merge 後に Pages workflow が build artifact を生成する。
 - Pages が有効なら `https://lamy210.github.io/japanese_text/` でアプリが表示される。
 - local `bun run build` は root base のまま利用できる。
