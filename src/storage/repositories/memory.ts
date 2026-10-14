@@ -1,3 +1,9 @@
+/**
+ * In-memory implementation of the Phase 2A storage ports.
+ *
+ * This is the non-durable fallback when IndexedDB is unavailable or cannot be opened.
+ * Read/write boundaries are cloned so callers cannot mutate repository state by reference.
+ */
 import {
   validateDocumentRecord,
   validatePreferencesRecord,
