@@ -13,6 +13,7 @@ import {
   DB_NAME,
   LEGACY_DOCUMENTS_STORE,
   LEGACY_SETTINGS_STORE,
+  STORE_DOCUMENT_SNAPSHOTS,
   STORE_WORKSPACE_DOCUMENTS
 } from '../../src/storage/db/schema'
 
@@ -49,18 +50,32 @@ async function get(db: IDBDatabase, store: string, key: IDBValidKey): Promise<un
 }
 
 describe('privacy document deletion atomic operation', () => {
-  it('deletes v2 workspace bodies and the retained legacy recent body together', async () => {
+  it('deletes v2 bodies, snapshots, and the retained legacy recent body together', async () => {
     const factory = new IDBFactory()
     await createLegacyDatabase(factory)
     const db = await openDatabase(factory)
     await migrateV1ToV2(db, () => 1000)
 
+    const snapshotTx = db.transaction(STORE_DOCUMENT_SNAPSHOTS, 'readwrite')
+    const snapshotDone = transactionDone(snapshotTx)
+    snapshotTx.objectStore(STORE_DOCUMENT_SNAPSHOTS).put({
+      id: 'snapshot-1',
+      documentId: MIGRATED_DOCUMENT_ID,
+      revision: 1,
+      content: 'secret snapshot body',
+      reason: 'manual',
+      createdAt: 124
+    })
+    await snapshotDone
+
     expect(await get(db, STORE_WORKSPACE_DOCUMENTS, MIGRATED_DOCUMENT_ID)).toBeTruthy()
+    expect(await get(db, STORE_DOCUMENT_SNAPSHOTS, 'snapshot-1')).toBeTruthy()
     expect(await get(db, LEGACY_DOCUMENTS_STORE, 'recent')).toBeTruthy()
 
     await createIndexedDbAtomicOperations(db).deletePersistedDocuments(MIGRATED_WORKSPACE_ID)
 
     expect(await get(db, STORE_WORKSPACE_DOCUMENTS, MIGRATED_DOCUMENT_ID)).toBeUndefined()
+    expect(await get(db, STORE_DOCUMENT_SNAPSHOTS, 'snapshot-1')).toBeUndefined()
     expect(await get(db, LEGACY_DOCUMENTS_STORE, 'recent')).toBeUndefined()
     db.close()
   })
