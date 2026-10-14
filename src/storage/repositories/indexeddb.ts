@@ -7,6 +7,8 @@ import {
 import { requestToPromise, transactionDone } from '../db/idb-utils'
 import {
   INDEX_WORKSPACE_ID,
+  META_ACTIVE_WORKSPACE_ID,
+  STORE_META,
   STORE_PREFERENCES,
   STORE_RULE_PROFILES,
   STORE_WORKSPACE_DOCUMENTS,
@@ -44,6 +46,19 @@ export function createIndexedDbRepositories(db: IDBDatabase): StorageRepositorie
       async delete(id) {
         const tx = db.transaction(STORE_WORKSPACES, 'readwrite')
         await completeRequest(tx, tx.objectStore(STORE_WORKSPACES).delete(id))
+      }
+    },
+
+    selection: {
+      async getActiveWorkspaceId() {
+        const tx = db.transaction(STORE_META, 'readonly')
+        const raw = await completeRequest(tx, tx.objectStore(STORE_META).get(META_ACTIVE_WORKSPACE_ID))
+        return typeof raw === 'string' && raw.length > 0 ? raw : undefined
+      },
+      async setActiveWorkspaceId(workspaceId) {
+        if (workspaceId.length === 0) throw new Error('workspaceId must not be empty')
+        const tx = db.transaction(STORE_META, 'readwrite')
+        await completeRequest(tx, tx.objectStore(STORE_META).put(workspaceId, META_ACTIVE_WORKSPACE_ID))
       }
     },
 
