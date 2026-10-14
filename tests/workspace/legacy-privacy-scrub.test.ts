@@ -87,4 +87,34 @@ describe('legacy recent privacy scrub scope', () => {
       db.close()
     }
   })
+
+  it('does not delete migrated legacy recent data when persisted documents are scrubbed for a different workspace', async () => {
+    const factory = new IDBFactory()
+    await createLegacyDatabase(factory)
+    const db = await openDatabase(factory)
+    try {
+      const atomic = createIndexedDbAtomicOperations(db, () => 900)
+
+      await atomic.deletePersistedDocuments('workspace-unrelated')
+
+      expect(await readLegacyRecent(db)).toMatchObject({ content: 'legacy migrated body' })
+    } finally {
+      db.close()
+    }
+  })
+
+  it('deletes legacy recent data when persisted documents are scrubbed for the migrated workspace', async () => {
+    const factory = new IDBFactory()
+    await createLegacyDatabase(factory)
+    const db = await openDatabase(factory)
+    try {
+      const atomic = createIndexedDbAtomicOperations(db, () => 900)
+
+      await atomic.deletePersistedDocuments(MIGRATED_WORKSPACE_ID)
+
+      expect(await readLegacyRecent(db)).toBeUndefined()
+    } finally {
+      db.close()
+    }
+  })
 })
