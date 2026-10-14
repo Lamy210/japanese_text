@@ -1,7 +1,7 @@
 /**
  * アプリケーションアクション — Format Document / Quick Fix / Import / Export / Theme
  *
- * Format Document の処理順序 (§18):
+ * Format Document の処理順 (§18):
  * 1. Safe Fix候補収集 → 2. offset競合検査 → 3. Fix順序決定 → 4. 後方offsetから適用
  * → 5. 再Lint (shadow) → 6. 新規Error確認 → 7. Editorへ反映 (1 transaction = Undo 1回)
  */
@@ -16,8 +16,10 @@ import { appState } from './app-state'
 import {
   saveConfig as persistConfig,
   saveRecentDocument,
+  saveWorkspaceDocument,
   deleteRecentDocument,
-  isStorageAvailable
+  isStorageAvailable,
+  type StoredDocument
 } from '../storage/storage'
 
 // ----------------------------------------------------------------
@@ -242,10 +244,34 @@ export function persistConfigDebounced(): void {
 }
 
 let documentSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+export function cancelPendingDocumentPersistence(): void {
+  if (documentSaveTimer !== null) {
+    clearTimeout(documentSaveTimer)
+    documentSaveTimer = null
+  }
+}
+
+/**
+ * Schedule a document write with an explicit destination captured now.
+ * The callback never re-resolves the active workspace, preventing switch races.
+ */
+export function persistWorkspaceDocumentDebounced(workspaceId: string, document: StoredDocument): void {
+  if (!isStorageAvailable()) return
+  cancelPendingDocumentPersistence()
+  const capturedWorkspaceId = workspaceId
+  const capturedDocument = structuredClone(document)
+  documentSaveTimer = setTimeout(() => {
+    documentSaveTimer = null
+    saveWorkspaceDocument(capturedWorkspaceId, capturedDocument).catch(() => undefined)
+  }, 800)
+}
+
+/** Legacy active-workspace path retained until the workspace controller owns editor persistence. */
 export function persistDocumentDebounced(): void {
   if (!isStorageAvailable()) return
   if (appState.config.privacy.privacyMode || !appState.config.privacy.autoSave) return
-  if (documentSaveTimer !== null) clearTimeout(documentSaveTimer)
+  cancelPendingDocumentPersistence()
   documentSaveTimer = setTimeout(() => {
     documentSaveTimer = null
     saveRecentDocument({
@@ -265,10 +291,7 @@ export function persistAndRelint(): void {
 /** Privacy Mode有効化時: 保存済み本文を即座に削除 (§28) */
 export function onPrivacyModeChanged(enabled: boolean): void {
   if (enabled) {
-    if (documentSaveTimer !== null) {
-      clearTimeout(documentSaveTimer)
-      documentSaveTimer = null
-    }
+    cancelPendingDocumentPersistence()
     void deleteRecentDocument()
     appState.pushToast('info', 'プライバシーモードが有効です。文書本文はブラウザに保存されません。')
   }

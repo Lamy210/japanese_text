@@ -14,8 +14,6 @@ import { getStorageContext } from './runtime'
 
 export { getStorageContext, resetStorageRuntimeForTests } from './runtime'
 
-const LOCAL_RECENT_DOCUMENT_ID = 'local-recent-document'
-
 export interface StoredDocument {
   name: string
   content: string
@@ -68,19 +66,17 @@ export async function loadConfig(): Promise<AppConfig | undefined> {
   }
 }
 
-/**
- * Save the current document only when the active workspace explicitly opted into
- * local-library persistence. Private/file-backed modes never write body text here.
- */
-export async function saveRecentDocument(doc: StoredDocument): Promise<void> {
+/** Persist a body only to the explicitly named local-library workspace. */
+export async function saveWorkspaceDocument(workspaceId: string, doc: StoredDocument): Promise<void> {
   const context = await getStorageContext()
-  const { workspace } = await getActiveState(context)
+  const workspace = await context.repositories.workspaces.get(workspaceId)
+  if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
   if (workspace.storageMode !== 'local-library') return
 
-  const existing = newestDocument(await context.repositories.documents.listByWorkspace(workspace.id))
+  const existing = newestDocument(await context.repositories.documents.listByWorkspace(workspaceId))
   await context.repositories.documents.save({
-    id: existing?.id ?? LOCAL_RECENT_DOCUMENT_ID,
-    workspaceId: workspace.id,
+    id: existing?.id ?? `local-recent-document:${workspaceId}`,
+    workspaceId,
     name: doc.name,
     content: doc.content,
     docType: doc.docType,
@@ -90,13 +86,14 @@ export async function saveRecentDocument(doc: StoredDocument): Promise<void> {
   })
 }
 
-export async function loadRecentDocument(): Promise<StoredDocument | undefined> {
+/** Load a body only from the explicitly named local-library workspace. */
+export async function loadWorkspaceDocument(workspaceId: string): Promise<StoredDocument | undefined> {
   try {
     const context = await getStorageContext()
-    const { workspace } = await getActiveState(context)
-    if (workspace.storageMode !== 'local-library') return undefined
+    const workspace = await context.repositories.workspaces.get(workspaceId)
+    if (workspace === undefined || workspace.storageMode !== 'local-library') return undefined
 
-    const document = newestDocument(await context.repositories.documents.listByWorkspace(workspace.id))
+    const document = newestDocument(await context.repositories.documents.listByWorkspace(workspaceId))
     if (document === undefined || typeof document.content !== 'string') return undefined
     return {
       name: document.name,
@@ -104,6 +101,24 @@ export async function loadRecentDocument(): Promise<StoredDocument | undefined> 
       docType: document.docType,
       updatedAt: document.updatedAt
     }
+  } catch {
+    return undefined
+  }
+}
+
+/** Compatibility wrapper for the currently active workspace. */
+export async function saveRecentDocument(doc: StoredDocument): Promise<void> {
+  const context = await getStorageContext()
+  const { workspace } = await getActiveState(context)
+  await saveWorkspaceDocument(workspace.id, doc)
+}
+
+/** Compatibility wrapper for the currently active workspace. */
+export async function loadRecentDocument(): Promise<StoredDocument | undefined> {
+  try {
+    const context = await getStorageContext()
+    const { workspace } = await getActiveState(context)
+    return loadWorkspaceDocument(workspace.id)
   } catch {
     return undefined
   }
