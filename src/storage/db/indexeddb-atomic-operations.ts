@@ -8,6 +8,7 @@ import { requestToPromise, transactionDone } from './idb-utils'
 import { migrateV1ToV2 } from './migration-v1-v2'
 import {
   INDEX_WORKSPACE_ID,
+  LEGACY_DOCUMENTS_STORE,
   STORE_DOCUMENT_SNAPSHOTS,
   STORE_PREFERENCES,
   STORE_RULE_PROFILES,
@@ -59,6 +60,34 @@ export function createIndexedDbAtomicOperations(
           requestToPromise(tx.objectStore(STORE_RULE_PROFILES).put(profile)),
           requestToPromise(tx.objectStore(STORE_WORKSPACES).put(workspace))
         ])
+        await done
+      } catch (error) {
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
+    async deletePersistedDocuments(workspaceId) {
+      const hasLegacyDocuments = db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
+      const stores = [
+        STORE_WORKSPACE_DOCUMENTS,
+        ...(hasLegacyDocuments ? [LEGACY_DOCUMENTS_STORE] : [])
+      ]
+      const tx = db.transaction(stores, 'readwrite')
+      const done = transactionDone(tx)
+      const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
+
+      try {
+        if (hasLegacyDocuments) {
+          tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
+        }
+
+        const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
+        documentKeysRequest.onsuccess = () => {
+          for (const key of documentKeysRequest.result) {
+            documentStore.delete(key)
+          }
+        }
+
         await done
       } catch (error) {
         return abortAndRethrow(tx, done, error)
