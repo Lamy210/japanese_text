@@ -81,6 +81,8 @@ bun run build:pages
 2. TypeScript typecheck
 3. Vitest
 4. Vite production build
+5. GitHub Pages production build
+6. Pages 配下の asset / Web Worker path 検証
 
 ## GitHub Pages deployment
 
