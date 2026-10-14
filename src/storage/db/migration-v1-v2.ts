@@ -1,4 +1,4 @@
-import { createDefaultConfig, migrateConfig, validateAppConfig } from '../../core/config/validate'
+import { migrateConfig, validateAppConfig } from '../../core/config/validate'
 import { createDefaultWorkspaceState } from '../../core/workspace/defaults'
 import type { DocumentType } from '../../core/types'
 import type { ProjectedStorageState } from '../compat/app-config-projection'
@@ -63,40 +63,75 @@ async function readMigrationStatus(db: IDBDatabase): Promise<unknown> {
   return value
 }
 
+async function writeMigrationStatus(db: IDBDatabase, value: unknown): Promise<void> {
+  const tx = db.transaction(STORE_META, 'readwrite')
+  const done = transactionDone(tx)
+  tx.objectStore(STORE_META).put(value, META_V1_MIGRATION_STATUS)
+  await done
+}
+
 function isCompleteStatus(value: unknown): value is MigrationStatusComplete {
   return isRecord(value) && value.state === 'complete' && typeof value.migratedAt === 'number'
+}
+
+async function recordFailedStatusBestEffort(
+  db: IDBDatabase,
+  timestamp: number,
+  message: string
+): Promise<void> {
+  try {
+    await writeMigrationStatus(db, { state: 'failed', message, failedAt: timestamp })
+  } catch {
+    // The migration result still reports failure even if metadata itself cannot be persisted.
+  }
 }
 
 export async function migrateV1ToV2(
   db: IDBDatabase,
   now: () => number = Date.now
 ): Promise<MigrationResult> {
-  if (isCompleteStatus(await readMigrationStatus(db))) {
+  let existingStatus: unknown
+  try {
+    existingStatus = await readMigrationStatus(db)
+  } catch (error) {
+    return {
+      state: 'failed',
+      warning: `Could not read migration status: ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+
+  if (isCompleteStatus(existingStatus)) {
     return { state: 'not-needed' }
+  }
+
+  const timestamp = now()
+  try {
+    await writeMigrationStatus(db, { state: 'pending' })
+  } catch (error) {
+    return {
+      state: 'failed',
+      warning: `Could not mark migration pending: ${error instanceof Error ? error.message : String(error)}`
+    }
   }
 
   const hasLegacySettings = db.objectStoreNames.contains(LEGACY_SETTINGS_STORE)
   const hasLegacyDocuments = db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
-  const targetStores = [
+  const transactionStores = [
     STORE_META,
     STORE_WORKSPACES,
     STORE_PREFERENCES,
     STORE_RULE_PROFILES,
-    STORE_WORKSPACE_DOCUMENTS
-  ]
-  const transactionStores = [
-    ...targetStores,
+    STORE_WORKSPACE_DOCUMENTS,
     ...(hasLegacySettings ? [LEGACY_SETTINGS_STORE] : []),
     ...(hasLegacyDocuments ? [LEGACY_DOCUMENTS_STORE] : [])
   ]
 
-  const timestamp = now()
-  const tx = db.transaction(transactionStores, 'readwrite')
-  const done = transactionDone(tx)
-
+  let tx: IDBTransaction | undefined
+  let done: Promise<void> | undefined
   try {
-    const meta = tx.objectStore(STORE_META)
-    const statusRequest = meta.get(META_V1_MIGRATION_STATUS)
+    tx = db.transaction(transactionStores, 'readwrite')
+    done = transactionDone(tx)
+
     const configRequest = hasLegacySettings
       ? tx.objectStore(LEGACY_SETTINGS_STORE).get('app-config')
       : undefined
@@ -104,16 +139,10 @@ export async function migrateV1ToV2(
       ? tx.objectStore(LEGACY_DOCUMENTS_STORE).get('recent')
       : undefined
 
-    const [status, rawConfig, rawDocument] = await Promise.all([
-      requestToPromise(statusRequest),
+    const [rawConfig, rawDocument] = await Promise.all([
       configRequest === undefined ? Promise.resolve(undefined) : requestToPromise(configRequest),
       documentRequest === undefined ? Promise.resolve(undefined) : requestToPromise(documentRequest)
     ])
-
-    if (isCompleteStatus(status)) {
-      await done
-      return { state: 'not-needed' }
-    }
 
     const legacyDocument = parseLegacyDocument(rawDocument)
     const hasAnyLegacyStore = hasLegacySettings || hasLegacyDocuments
@@ -156,6 +185,7 @@ export async function migrateV1ToV2(
       })
     }
 
+    const meta = tx.objectStore(STORE_META)
     meta.put(2, META_STORAGE_SCHEMA_VERSION)
     meta.put({ state: 'complete', migratedAt: timestamp }, META_V1_MIGRATION_STATUS)
     await done
@@ -169,27 +199,23 @@ export async function migrateV1ToV2(
     }
     return { state: 'migrated' }
   } catch (error) {
-    try {
-      tx.abort()
-    } catch {
-      // The transaction may already be aborted/finished.
+    if (tx !== undefined) {
+      try {
+        tx.abort()
+      } catch {
+        // The transaction may already be aborted/finished.
+      }
     }
-    try {
-      await done
-    } catch {
-      // Return the normalized migration failure below.
+    if (done !== undefined) {
+      try {
+        await done
+      } catch {
+        // Expected when the migration transaction aborts.
+      }
     }
-    return {
-      state: 'failed',
-      warning: error instanceof Error ? error.message : String(error)
-    }
-  }
-}
 
-/**
- * Used by compatibility recovery callers that need a validated private config
- * even when no durable storage can be initialized.
- */
-export function createPrivateFallbackConfig() {
-  return createDefaultConfig()
+    const message = error instanceof Error ? error.message : String(error)
+    await recordFailedStatusBestEffort(db, timestamp, message)
+    return { state: 'failed', warning: message }
+  }
 }
