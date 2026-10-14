@@ -41,6 +41,15 @@ async function readLegacyRecent(db: IDBDatabase): Promise<unknown> {
   return value
 }
 
+function migratedState(createdAt = 100) {
+  const state = createDefaultWorkspaceState(createdAt)
+  state.workspace.id = MIGRATED_WORKSPACE_ID
+  state.workspace.activeRuleProfileId = 'profile-migrated'
+  state.workspace.storageMode = 'local-library'
+  state.profile.id = 'profile-migrated'
+  return state
+}
+
 describe('legacy recent privacy scrub scope', () => {
   it('does not delete migrated legacy recent data when a different workspace becomes private', async () => {
     const factory = new IDBFactory()
@@ -72,11 +81,7 @@ describe('legacy recent privacy scrub scope', () => {
     try {
       const repositories = createIndexedDbRepositories(db)
       const atomic = createIndexedDbAtomicOperations(db, () => 900)
-      const migrated = createDefaultWorkspaceState(100)
-      migrated.workspace.id = MIGRATED_WORKSPACE_ID
-      migrated.workspace.activeRuleProfileId = 'profile-migrated'
-      migrated.workspace.storageMode = 'local-library'
-      migrated.profile.id = 'profile-migrated'
+      const migrated = migratedState()
       await repositories.preferences.save(migrated.preferences)
       await atomic.createWorkspaceAndActivate(migrated.workspace, migrated.profile)
 
@@ -113,6 +118,52 @@ describe('legacy recent privacy scrub scope', () => {
       await atomic.deletePersistedDocuments(MIGRATED_WORKSPACE_ID)
 
       expect(await readLegacyRecent(db)).toBeUndefined()
+    } finally {
+      db.close()
+    }
+  })
+
+  it('deletes legacy recent data when a non-active migrated workspace is deleted', async () => {
+    const factory = new IDBFactory()
+    await createLegacyDatabase(factory)
+    const db = await openDatabase(factory)
+    try {
+      const repositories = createIndexedDbRepositories(db)
+      const atomic = createIndexedDbAtomicOperations(db, () => 900)
+      const migrated = migratedState()
+      await repositories.preferences.save(migrated.preferences)
+      await atomic.createWorkspaceAndActivate(migrated.workspace, migrated.profile)
+
+      await atomic.deleteWorkspaceCascade(MIGRATED_WORKSPACE_ID)
+
+      expect(await readLegacyRecent(db)).toBeUndefined()
+    } finally {
+      db.close()
+    }
+  })
+
+  it('deletes legacy recent data when an active migrated workspace is deleted and a successor is selected', async () => {
+    const factory = new IDBFactory()
+    await createLegacyDatabase(factory)
+    const db = await openDatabase(factory)
+    try {
+      const repositories = createIndexedDbRepositories(db)
+      const atomic = createIndexedDbAtomicOperations(db, () => 900)
+      const migrated = migratedState()
+      const successor = createDefaultWorkspaceState(200)
+      successor.workspace.id = 'workspace-successor'
+      successor.workspace.activeRuleProfileId = 'profile-successor'
+      successor.profile.id = 'profile-successor'
+      await repositories.preferences.save(migrated.preferences)
+      await atomic.createWorkspaceAndActivate(migrated.workspace, migrated.profile)
+      await repositories.profiles.save(successor.profile)
+      await repositories.workspaces.save(successor.workspace)
+      await repositories.selection.setActiveWorkspaceId(MIGRATED_WORKSPACE_ID)
+
+      await atomic.deleteWorkspaceAndSelectNext(MIGRATED_WORKSPACE_ID, successor.workspace.id)
+
+      expect(await readLegacyRecent(db)).toBeUndefined()
+      await expect(repositories.selection.getActiveWorkspaceId()).resolves.toBe(successor.workspace.id)
     } finally {
       db.close()
     }
