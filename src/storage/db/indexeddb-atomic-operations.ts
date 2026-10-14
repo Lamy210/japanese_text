@@ -6,7 +6,7 @@ import {
 } from '../../core/workspace/validate'
 import type { AtomicOperationsPort } from '../repositories/ports'
 import { requestToPromise, transactionDone } from './idb-utils'
-import { migrateV1ToV2 } from './migration-v1-v2'
+import { MIGRATED_WORKSPACE_ID, migrateV1ToV2 } from './migration-v1-v2'
 import {
   INDEX_WORKSPACE_ID,
   LEGACY_DOCUMENTS_STORE,
@@ -92,11 +92,12 @@ export function createIndexedDbAtomicOperations(
     },
 
     async deletePersistedDocuments(workspaceId) {
-      const hasLegacyDocuments = db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
+      const shouldDeleteLegacyDocument =
+        workspaceId === MIGRATED_WORKSPACE_ID && db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
       const stores = [
         STORE_WORKSPACE_DOCUMENTS,
         STORE_DOCUMENT_SNAPSHOTS,
-        ...(hasLegacyDocuments ? [LEGACY_DOCUMENTS_STORE] : [])
+        ...(shouldDeleteLegacyDocument ? [LEGACY_DOCUMENTS_STORE] : [])
       ]
       const tx = db.transaction(stores, 'readwrite')
       const done = transactionDone(tx)
@@ -104,7 +105,7 @@ export function createIndexedDbAtomicOperations(
       const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
 
       try {
-        if (hasLegacyDocuments) {
+        if (shouldDeleteLegacyDocument) {
           tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
         }
 
@@ -292,12 +293,13 @@ export function createIndexedDbAtomicOperations(
     },
 
     async makeWorkspacePrivate(workspaceId) {
-      const hasLegacyDocuments = db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
+      const shouldDeleteLegacyDocument =
+        workspaceId === MIGRATED_WORKSPACE_ID && db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
       const stores = [
         STORE_WORKSPACES,
         STORE_WORKSPACE_DOCUMENTS,
         STORE_DOCUMENT_SNAPSHOTS,
-        ...(hasLegacyDocuments ? [LEGACY_DOCUMENTS_STORE] : [])
+        ...(shouldDeleteLegacyDocument ? [LEGACY_DOCUMENTS_STORE] : [])
       ]
       const tx = db.transaction(stores, 'readwrite')
       const done = transactionDone(tx)
@@ -325,7 +327,7 @@ export function createIndexedDbAtomicOperations(
           }
 
           workspaceStore.put({ ...workspace, storageMode: 'private-session', updatedAt: now() })
-          if (hasLegacyDocuments) tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
+          if (shouldDeleteLegacyDocument) tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
 
           const documentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
           documentKeysRequest.onsuccess = () => {
