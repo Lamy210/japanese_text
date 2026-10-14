@@ -18,8 +18,10 @@
 - `local-library` は明示 user gesture / opt-in でのみ有効化する。
 - `file-backed` は domain model 上の予約値のまま。Phase 2B UI では選択させない。
 - `Workspace.storageMode` を canonical source とし、Settings と Workspace UI に別々の privacy state を持たせない。
-- `AppConfig.privacy` は worker / import / legacy compatibility のため残すが、通常 UI から独立 mutation しない。
-- DB name/version は Phase 2A の `japanese-writing-toolkit` / v2 を維持する。Phase 2B のためだけに DB version を上げない。
+- `AppConfig.privacy` は worker / export / legacy compatibility のため残すが、通常 config save/import から `Workspace.storageMode` を変更しない。
+- config import に `{autoSave:true, privacyMode:false}` が含まれていても Local Library を自動有効化しない。明示 Workspace action のみが storage mode を変更できる。
+- v1→v2 migration だけは旧ユーザーの既存保存意図を復元するため、legacy `AppConfig.privacy` → storage mode mapping を維持する。
+- DB name/version は Phase 2A の `japanese-writing-toolkit` / v2 を維持する。
 - active Workspace ID は `meta/active-workspace-id` に保存する。
 - Private Session document は IndexedDB / localStorage / sessionStorage に保存しない。module-memory のみ。
 - origin usage/quota は「このアプリの正確な容量」と表示しない。
@@ -37,10 +39,11 @@
 1. **StorageContext 分裂:** durable / Memory fallback のどちらでも legacy `storage.ts` と WorkspaceService が同一 context を共有する。
 2. **Active selection repair:** missing/corrupt/deleted active ID、0 Workspace、migration直後を安全に修復し、`workspaces[0]` 依存を残さない。
 3. **Autosave switch race:** debounce 後に Workspace を切り替えても old document が new Workspace に保存されない。保存先 `workspaceId` は schedule 時点で固定する。
-4. **Storage-mode transition:** Local→Private は timer cancel + mode change + document/snapshot scrub、Private→Local は mode change + 初回本文保存を partial commit にしない。
-5. **Workspace deletion:** 最後の1件を削除せず、active削除時は successor selection + cascade deletionを同一 transaction で確定する。
-6. **Private Session loss:** A→B→A の切替で同一タブ内の本文を復元し、IndexedDBには本文が存在しない。
-7. **StorageManager failure:** `estimate` / `persisted` / `persist` が未対応・throw・rejectしても app を停止せず、origin-level estimate としてだけ表示する。
+4. **Config privacy backdoor:** regular `saveConfig()` / config import が storage mode を変更せず、explicit Workspace actionだけが Local Library opt-in を成立させる。
+5. **Storage-mode transition:** Local→Private は timer cancel + mode change + document/snapshot scrub、Private→Local は mode change + 初回本文保存を partial commit にしない。
+6. **Workspace deletion:** 最後の1件を削除せず、active削除時は successor selection + cascade deletionを同一 transaction で確定する。
+7. **Private Session loss:** A→B→A の切替で同一タブ内の本文を復元し、IndexedDBには本文が存在しない。
+8. **StorageManager failure:** `estimate` / `persisted` / `persist` が未対応・throw・rejectしても app を停止せず、origin-level estimate としてだけ表示する。
 
 ---
 
@@ -71,6 +74,7 @@
 - `src/storage/repositories/indexeddb.ts`
 - `src/storage/db/schema.ts`
 - `src/storage/db/indexeddb-atomic-operations.ts`
+- `src/storage/compat/app-config-projection.ts`
 - `src/storage/bootstrap.ts`
 - `src/storage/storage.ts`
 - `src/state/app-state.ts`
@@ -87,16 +91,7 @@
 
 ### Task 1: Shared Storage Runtime + Active Workspace Selection Port
 
-**Files:**
-- Create: `src/storage/runtime.ts`
-- Modify: `src/storage/repositories/ports.ts`
-- Modify: `src/storage/repositories/memory.ts`
-- Modify: `src/storage/repositories/indexeddb.ts`
-- Modify: `src/storage/db/schema.ts`
-- Modify: `src/storage/bootstrap.ts`
-- Modify: `src/storage/storage.ts`
-- Test: `tests/storage/workspace-selection.test.ts`
-- Test: `tests/storage/storage-facade.test.ts`
+**Files:** `src/storage/runtime.ts`, repository ports/adapters, `schema.ts`, `bootstrap.ts`, `storage.ts`, `tests/storage/workspace-selection.test.ts`, `tests/storage/storage-facade.test.ts`。
 
 **Interfaces:**
 
@@ -108,81 +103,24 @@ interface WorkspaceSelectionRepository {
   setActiveWorkspaceId(workspaceId: string): Promise<void>
 }
 
-interface StorageRepositories {
-  workspaces: WorkspaceRepository
-  preferences: PreferencesRepository
-  profiles: RuleProfileRepository
-  documents: DocumentRepository
-  selection: WorkspaceSelectionRepository
-}
-
 function getStorageContext(): Promise<StorageContext>
 function resetStorageRuntimeForTests(): void
 ```
 
-- [ ] **Step 1: Write failing tests**
-
-Memory + IndexedDB selection contract:
-
-```ts
-expect(await repositories.selection.getActiveWorkspaceId()).toBeUndefined()
-await repositories.selection.setActiveWorkspaceId('ws-a')
-expect(await repositories.selection.getActiveWorkspaceId()).toBe('ws-a')
-```
-
-Add a Memory fallback regression proving `storage.ts` and another `getStorageContext()` consumer see the same mutated Workspace rather than separately seeded state.
-
-- [ ] **Step 2: Run RED**
-
-```bash
-bun run test -- tests/storage/workspace-selection.test.ts tests/storage/storage-facade.test.ts
-```
-
-- [ ] **Step 3: Implement selection repositories + singleton runtime**
-
-`runtime.ts` owns the only module-level context promise. `storage.ts` consumes it. Memory selection is in-memory; IndexedDB selection uses `STORE_META`.
-
-- [ ] **Step 4: Verify GREEN**
-
-```bash
-bun run test -- tests/storage/workspace-selection.test.ts tests/storage/storage-facade.test.ts
-bun run lint
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/storage tests/storage/workspace-selection.test.ts tests/storage/storage-facade.test.ts
-git commit -m "feat: add shared storage runtime and workspace selection"
-```
+- [ ] Write RED tests for Memory/IndexedDB selection save/read and a Memory fallback regression proving `storage.ts` and another runtime consumer see the same mutated context.
+- [ ] Run `bun run test -- tests/storage/workspace-selection.test.ts tests/storage/storage-facade.test.ts` and confirm RED.
+- [ ] Implement one module-level context promise in `runtime.ts`; remove the private context singleton from `storage.ts`.
+- [ ] IndexedDB selection uses `STORE_META`; Memory selection stays in-memory.
+- [ ] Run focused tests + `bun run lint` and confirm GREEN.
+- [ ] Commit `feat: add shared storage runtime and workspace selection`.
 
 ---
 
 ### Task 2: Active Selection Resolver + Atomic Zero-Workspace Repair
 
-**Files:**
-- Create: `src/workspace/workspace-service.ts` (resolver/bootstrap slice)
-- Modify: `src/storage/repositories/ports.ts`
-- Modify: `src/storage/repositories/memory.ts`
-- Modify: `src/storage/db/indexeddb-atomic-operations.ts`
-- Modify: `src/storage/storage.ts`
-- Test: `tests/storage/workspace-selection.test.ts`
-- Test: `tests/workspace/workspace-service.test.ts`
+**Files:** `src/workspace/workspace-service.ts`, `ports.ts`, Memory/IndexedDB atomic adapters, `storage.ts`, selection/service tests。
 
-**Initial service types:**
-
-```ts
-interface WorkspaceContext {
-  workspace: Workspace
-  profile: RuleProfile
-  preferences: GlobalPreferences
-  config: AppConfig
-}
-
-function createWorkspaceService(deps: WorkspaceServiceDependencies): WorkspaceService
-```
-
-**Atomic repair/create primitive:**
+**Atomic primitive:**
 
 ```ts
 createWorkspaceAndActivate(
@@ -191,68 +129,22 @@ createWorkspaceAndActivate(
 ): Promise<void>
 ```
 
-Active resolution order:
+Resolution order: valid selected ID → stable sort by `createdAt,id` → repair first valid → if zero Workspace, atomically create default private Workspace/profile/selection。
 
-1. read active ID;
-2. use it only if referenced Workspace exists and validates;
-3. otherwise stable-sort Workspace by `createdAt`, then `id`;
-4. repair to first valid Workspace;
-5. if zero Workspace, atomically create default private Workspace + default profile + active ID.
-
-- [ ] **Step 1: Write failing tests**
-
-Cover valid active ID not-first, missing ID repair, deleted target repair, deterministic tie-break, zero-workspace atomic recovery, and private compatibility config.
-
-Add failure injection for zero-workspace recovery and assert it never leaves only profile/workspace/selection partially committed.
-
-- [ ] **Step 2: Run RED**
-
-```bash
-bun run test -- tests/workspace/workspace-service.test.ts tests/storage/workspace-selection.test.ts
-```
-
-- [ ] **Step 3: Implement atomic create-and-activate**
-
-IndexedDB uses one transaction over `ruleProfiles`, `workspaces`, `meta`. Memory validates/clones all state then swaps maps/selection together.
-
-- [ ] **Step 4: Remove `workspaces[0]` active semantics from `storage.ts`**
-
-All active config/document compatibility reads resolve via the selection repository/service helper.
-
-- [ ] **Step 5: Verify GREEN + migration regression**
-
-```bash
-bun run test -- tests/workspace/workspace-service.test.ts tests/storage/storage-facade.test.ts tests/storage/migration-v1-v2.test.ts
-bun run lint
-```
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/workspace src/storage tests/workspace tests/storage
-git commit -m "feat: resolve and repair active workspace selection"
-```
+- [ ] RED tests: valid not-first active ID, missing ID, deleted target, tie-breaker, zero-workspace recovery, atomic failure injection, private compatibility config.
+- [ ] Run service/selection tests and confirm RED.
+- [ ] Implement IndexedDB create-and-activate as one transaction over `ruleProfiles/workspaces/meta`; Memory validates/clones then swaps state together.
+- [ ] Remove every `workspaces[0]` active assumption from `storage.ts`.
+- [ ] Run service + storage façade + migration tests and lint.
+- [ ] Commit `feat: resolve and repair active workspace selection`.
 
 ---
 
 ### Task 3: SessionDocumentStore + Workspace Create / List / Rename
 
-**Files:**
-- Create: `src/workspace/session-document-store.ts`
-- Modify: `src/workspace/workspace-service.ts`
-- Test: `tests/workspace/session-document-store.test.ts`
-- Test: `tests/workspace/workspace-service.test.ts`
-
-**Session API:**
+**Files:** `src/workspace/session-document-store.ts`, `workspace-service.ts`, session/service tests。
 
 ```ts
-interface SessionDocument {
-  name: string
-  content: string
-  docType: DocumentType
-  updatedAt: number
-}
-
 interface SessionDocumentStore {
   get(workspaceId: string): SessionDocument | undefined
   set(workspaceId: string, document: SessionDocument): void
@@ -261,135 +153,42 @@ interface SessionDocumentStore {
 }
 ```
 
-**Service operations:**
-
-```ts
-list(): Promise<WorkspaceSummary[]>
-create(input: { name: string }): Promise<WorkspaceContext>
-rename(workspaceId: string, name: string): Promise<Workspace>
-```
-
-- [ ] **Step 1: Write failing SessionDocumentStore tests**
-
-Workspace isolation, defensive clone, delete isolation, clear, and zero Web Storage/IndexedDB dependency.
-
-- [ ] **Step 2: Write failing create/rename tests**
-
-Create clones the active profile under a new profile ID, creates a private Workspace with snapshots disabled/20, and reuses Task 2 `createWorkspaceAndActivate()`.
-
-Rename validation: trim, nonempty, <=80 Unicode code points, no control chars, duplicate display names allowed, identity fields unchanged.
-
-Use injected `now()` / ID generator for deterministic tests.
-
-- [ ] **Step 3: Run RED**
-
-```bash
-bun run test -- tests/workspace/session-document-store.test.ts tests/workspace/workspace-service.test.ts
-```
-
-- [ ] **Step 4: Implement minimal service methods**
-
-No profile ownership/deletion policy is added. Create uses deep clones so Workspace rule edits cannot mutate the source profile by reference.
-
-- [ ] **Step 5: Verify GREEN**
-
-```bash
-bun run test -- tests/workspace/session-document-store.test.ts tests/workspace/workspace-service.test.ts tests/storage/memory-repositories.test.ts
-bun run lint
-```
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/workspace tests/workspace
-git commit -m "feat: add workspace creation and session documents"
-```
+- [ ] RED tests: workspace isolation, defensive clone, delete isolation, clear, no Web Storage dependency.
+- [ ] RED create tests: independent workspace/profile IDs, deep-cloned active profile, private mode, snapshots disabled/20, atomic activation via Task 2 primitive.
+- [ ] RED rename tests: trim, nonempty, <=80 Unicode code points, control-char rejection, duplicate display names allowed, identity unchanged.
+- [ ] Implement with injected clock/ID generator for deterministic testing.
+- [ ] Run focused tests + Memory repository regression + lint.
+- [ ] Commit `feat: add workspace creation and session documents`.
 
 ---
 
 ### Task 4: Explicit Workspace Document Save + Safe Switching
 
-**Files:**
-- Modify: `src/storage/storage.ts`
-- Modify: `src/workspace/workspace-service.ts`
-- Modify: `src/state/actions.ts`
-- Modify: `src/components/EditorPane.tsx`
-- Test: `tests/workspace/workspace-switch.test.ts`
-- Test: `tests/storage/storage-facade.test.ts`
-- Test: `tests/storage/privacy-timer.test.ts`
-
-**Storage API:**
+**Files:** `storage.ts`, `workspace-service.ts`, `state/actions.ts`, `EditorPane.tsx`, switch/storage/privacy-timer tests。
 
 ```ts
 saveWorkspaceDocument(workspaceId: string, doc: StoredDocument): Promise<void>
 loadWorkspaceDocument(workspaceId: string): Promise<StoredDocument | undefined>
-```
 
-**Switch API:**
-
-```ts
-switchTo(
-  targetWorkspaceId: string,
-  currentDocument: SessionDocument
-): Promise<WorkspaceSwitchResult>
-```
-
-- [ ] **Step 1: Write the switch-race RED tests**
-
-Scenario: schedule save for Local Workspace A → switch active ID to B before timer fires → execute timer → assert A receives body and B receives nothing.
-
-Also cover Private A→B→A memory restore, no private IDB body, Local flush failure preserving old active ID, and target-local document isolation.
-
-- [ ] **Step 2: Run RED**
-
-```bash
-bun run test -- tests/workspace/workspace-switch.test.ts tests/storage/privacy-timer.test.ts
-```
-
-- [ ] **Step 3: Implement explicit save/load**
-
-`saveWorkspaceDocument()` validates the target Workspace and writes only when that Workspace is `local-library`.
-
-- [ ] **Step 4: Make debounced save destination mandatory**
-
-```ts
 persistDocumentDebounced(workspaceId: string): void
 cancelPendingDocumentSave(): void
 flushDocumentForWorkspace(workspaceId: string): Promise<void>
 ```
 
-`workspaceId` is never optional. `EditorPane` gets current active ID from state; if not ready, it does not schedule persistence. Timer callback never re-resolves active Workspace to choose a destination.
-
-- [ ] **Step 5: Implement switch ordering**
-
-Old Local: cancel timer + explicit flush before selection update. Old Private: save to SessionDocumentStore. Then change selection and load target context/body.
-
-- [ ] **Step 6: Verify GREEN**
-
-```bash
-bun run test -- tests/workspace/workspace-switch.test.ts tests/storage/storage-facade.test.ts tests/storage/privacy-timer.test.ts
-bun run lint
-```
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add src/storage/storage.ts src/workspace src/state/actions.ts src/components/EditorPane.tsx tests/workspace tests/storage
-git commit -m "feat: switch workspaces with explicit document routing"
-```
+- [ ] RED race test: schedule Local A save → active becomes B → timer executes → body belongs only to A.
+- [ ] RED tests: Private A→B→A restores memory body; Private body absent from IDB; Local flush failure leaves active ID unchanged; target Local loads only its own body.
+- [ ] Run switch/privacy tests and confirm RED.
+- [ ] Implement explicit save/load; `saveWorkspaceDocument` writes only when the specified Workspace is Local Library.
+- [ ] Make `workspaceId` mandatory at debounce schedule time. `EditorPane` reads active ID before scheduling; no callback-time active lookup.
+- [ ] Switch ordering: route old body/flush → only then mutate active ID → load target context/body.
+- [ ] Run focused tests + lint.
+- [ ] Commit `feat: switch workspaces with explicit document routing`.
 
 ---
 
 ### Task 5: Atomic Workspace Delete + Successor Selection
 
-**Files:**
-- Modify: `src/storage/repositories/ports.ts`
-- Modify: `src/storage/repositories/memory.ts`
-- Modify: `src/storage/db/indexeddb-atomic-operations.ts`
-- Modify: `src/workspace/workspace-service.ts`
-- Test: `tests/workspace/workspace-delete.test.ts`
-
-**Atomic API:**
+**Files:** atomic ports/adapters, `workspace-service.ts`, `tests/workspace/workspace-delete.test.ts`。
 
 ```ts
 deleteWorkspaceAndSelectNext(
@@ -398,49 +197,29 @@ deleteWorkspaceAndSelectNext(
 ): Promise<void>
 ```
 
-- [ ] **Step 1: Write failing tests**
-
-Cover last Workspace rejection, stable active successor, atomic removal of documents/snapshots/workspace+document suppressions/Workspace + active-ID update, profile retention, session entry removal after durable success only, and non-active delete preserving active ID.
-
-- [ ] **Step 2: Run RED**
-
-```bash
-bun run test -- tests/workspace/workspace-delete.test.ts
-```
-
-- [ ] **Step 3: Implement browser-safe atomic deletion**
-
-Include `meta` in active-delete transaction. Reuse/refactor cascade cursor logic; dependent writes stay in active request callbacks.
-
-- [ ] **Step 4: Verify GREEN + Phase 2A regressions**
-
-```bash
-bun run test -- tests/workspace/workspace-delete.test.ts tests/storage/privacy-deletion-atomic.test.ts tests/storage/memory-repositories.test.ts
-bun run lint
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/storage src/workspace tests/workspace tests/storage
-git commit -m "feat: delete workspaces with atomic successor selection"
-```
+- [ ] RED tests: last Workspace rejected; deterministic active successor; docs/snapshots/workspace+document suppressions/Workspace removed + active ID changed atomically; profile retained; session entry deleted only after durable success; non-active delete preserves active ID.
+- [ ] Implement browser-safe transaction including `meta`; dependent cursor work remains in active request callbacks.
+- [ ] Run delete + Phase 2A privacy/cascade regressions + lint.
+- [ ] Commit `feat: delete workspaces with atomic successor selection`.
 
 ---
 
-### Task 6: Canonical Storage Mode Transition
+### Task 6: Canonical Config Persistence + Atomic Storage Mode Transitions
 
-**Files:**
-- Modify: `src/storage/repositories/ports.ts`
-- Modify: `src/storage/repositories/memory.ts`
-- Modify: `src/storage/db/indexeddb-atomic-operations.ts`
-- Modify: `src/workspace/workspace-service.ts`
-- Modify: `src/state/actions.ts`
-- Test: `tests/workspace/storage-mode-transition.test.ts`
-- Test: `tests/storage/privacy-timer.test.ts`
-- Test: `tests/storage/privacy-deletion-atomic.test.ts`
+**Files:** `app-config-projection.ts`, `storage.ts`, atomic ports/adapters, `workspace-service.ts`, `state/actions.ts`, projection/facade/privacy/storage-mode tests。
 
-**Atomic APIs:**
+**Config projection split:**
+
+```ts
+// migration/import compatibility parser can understand legacy privacy,
+// but ordinary persistence preserves current Workspace.storageMode.
+splitAppConfigForMigration(config, current, now): ProjectedStorageState
+splitAppConfigPreservingStorageMode(config, current, now): ProjectedStorageState
+```
+
+Naming may differ, but call sites must make intent explicit: v1 migration may map legacy privacy; normal `saveConfig()` must preserve the active Workspace mode.
+
+**Atomic transition APIs:**
 
 ```ts
 enableLocalLibrary(
@@ -451,51 +230,20 @@ enableLocalLibrary(
 makeWorkspacePrivate(workspaceId: string): Promise<void>
 ```
 
-`enableLocalLibrary` prevents a partial state where mode says Local Library but the first user-confirmed body was not persisted. `makeWorkspacePrivate` prevents a partial state where mode/body disagree.
-
-- [ ] **Step 1: Write Local→Private RED tests**
-
-Queued autosave cancelled first; editor/session body retained; target persisted document/snapshot gone; unrelated Workspace untouched; compatibility config private; failure injection leaves both policy/data in pre-operation state.
-
-- [ ] **Step 2: Write Private→Local RED tests**
-
-Memory fallback rejects. Durable context atomically sets mode local + persists current document to same Workspace; compatibility config local. Failure injection leaves Workspace private and no new body.
-
-- [ ] **Step 3: Run RED**
-
-```bash
-bun run test -- tests/workspace/storage-mode-transition.test.ts tests/storage/privacy-timer.test.ts tests/storage/privacy-deletion-atomic.test.ts
-```
-
-- [ ] **Step 4: Implement transitions**
-
-Both operations validate Workspace/document before opening the transaction. Phase 2B service only accepts private/local; reserved `file-backed` is rejected.
-
-Legacy `documents/recent` scrub remains scoped to the retained migration compatibility rule and must not erase another Workspace’s unrelated v2 body.
-
-- [ ] **Step 5: Verify GREEN**
-
-```bash
-bun run test -- tests/workspace/storage-mode-transition.test.ts tests/storage/privacy-timer.test.ts tests/storage/privacy-deletion-atomic.test.ts tests/storage/app-config-projection.test.ts
-bun run lint
-```
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/storage src/workspace src/state/actions.ts tests/workspace tests/storage
-git commit -m "feat: make workspace storage mode canonical"
-```
+- [ ] RED backdoor tests: private Workspace + `saveConfig()` containing `{autoSave:true, privacyMode:false}` remains private; config import with Local flags does not enable Local Library; v1 migration still maps old Local intent correctly.
+- [ ] RED Local→Private: queued autosave cancelled first; editor/session body retained; persisted body/snapshot removed; unrelated Workspace untouched; transaction failure leaves pre-operation policy/data intact.
+- [ ] RED Private→Local: Memory fallback rejects; durable transaction atomically changes mode + saves first body; transaction failure leaves Workspace private and body absent.
+- [ ] Run storage-mode + projection + façade + migration + privacy tests and confirm RED.
+- [ ] Implement ordinary config persistence using the preserve-mode projection. Explicit Workspace service actions are the only regular path that changes storage mode.
+- [ ] Implement both atomic transitions with validation before transaction creation. `file-backed` remains rejected in Phase 2B actions.
+- [ ] Run focused suite + lint and confirm GREEN.
+- [ ] Commit `feat: make workspace storage mode canonical`.
 
 ---
 
 ### Task 7: Storage Capability Service
 
-**Files:**
-- Create: `src/workspace/storage-capability.ts`
-- Test: `tests/workspace/storage-capability.test.ts`
-
-**Interfaces:**
+**Files:** `src/workspace/storage-capability.ts`, capability tests。
 
 ```ts
 interface StorageCapability {
@@ -507,176 +255,59 @@ interface StorageCapability {
   persistenceRequestSupported: boolean
   error?: string
 }
-
-interface StorageCapabilityService {
-  inspect(durableBackend: boolean): Promise<StorageCapability>
-  requestPersistence(durableBackend: boolean): Promise<StorageCapability>
-}
 ```
 
-- [ ] **Step 1: Write failing tests**
-
-All APIs supported, estimate-only, missing persisted/persist, each method throw/reject, durable=false, persist denied, zero/undefined quota.
-
-- [ ] **Step 2: Run RED**
-
-```bash
-bun run test -- tests/workspace/storage-capability.test.ts
-```
-
-- [ ] **Step 3: Implement injected StorageManager adapter**
-
-No startup `persist()` call. Request is user-triggered only. Helpers use `origin` / `推定` wording and never app-exclusive quota wording.
-
-- [ ] **Step 4: Verify GREEN**
-
-```bash
-bun run test -- tests/workspace/storage-capability.test.ts
-bun run lint
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/workspace/storage-capability.ts tests/workspace/storage-capability.test.ts
-git commit -m "feat: inspect browser storage capability"
-```
+- [ ] RED cases: all supported, estimate-only, missing methods, each API throw/reject, durable=false, persist denied, zero/undefined quota.
+- [ ] Implement against injected minimal `StorageManagerLike`; never call `persist()` at startup.
+- [ ] Ensure UI-facing helpers use `origin` / `推定` wording.
+- [ ] Run capability tests + lint.
+- [ ] Commit `feat: inspect browser storage capability`.
 
 ---
 
 ### Task 8: Workspace State Controller + App Bootstrap
 
-**Files:**
-- Create: `src/state/workspace-controller.ts`
-- Modify: `src/state/app-state.ts`
-- Modify: `src/app/App.tsx`
-- Modify: `src/state/actions.ts`
-- Test: `tests/workspace/workspace-regression.test.ts`
+**Files:** `src/state/workspace-controller.ts`, `app-state.ts`, `App.tsx`, `state/actions.ts`, workspace regression tests。
 
-**State additions:**
+State adds Workspace summaries, active ID, readiness, manager state, capability, mutation state. Add `resetDiagnosticsForDocumentContext()` to clear selected diagnostic + stale tier results before relint.
 
-```ts
-workspaceReady: Accessor<boolean>
-workspaces: Accessor<WorkspaceSummary[]>
-activeWorkspaceId: Accessor<string | null>
-workspaceManagerOpen: Accessor<boolean>
-storageCapability: Accessor<StorageCapability | null>
-```
-
-Add `resetDiagnosticsForDocumentContext()` to clear stale selected diagnostic/tier results before relint.
-
-- [ ] **Step 1: Write controller RED tests**
-
-Boot resolves active Workspace/config; `storageAvailable` follows `context.durable` rather than presence of global IndexedDB; open/migration fallback reports Memory mode; private A→B→A restores text; local boot restores body; switch clears stale diagnostics.
-
-Inject lint/toast callbacks rather than creating a real Worker in unit tests.
-
-- [ ] **Step 2: Run RED**
-
-```bash
-bun run test -- tests/workspace/workspace-regression.test.ts
-```
-
-- [ ] **Step 3: Implement controller and simplify App bootstrap**
-
-`App.tsx` stops independently guessing active config/document via `loadConfig()` + `loadRecentDocument()`. Workspace-aware bootstrap returns one coherent active context.
-
-- [ ] **Step 4: Verify GREEN**
-
-```bash
-bun run test -- tests/workspace/workspace-regression.test.ts tests/storage/storage-facade.test.ts
-bun run lint
-bun run build
-```
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/state src/app tests/workspace
-git commit -m "feat: bootstrap workspace-aware application state"
-```
+- [ ] RED controller tests: boot active context/config; `storageAvailable` follows `context.durable` rather than mere IndexedDB global; open/migration fallback shows Memory mode; Private A→B→A restores body; Local boot restores body; switch clears stale diagnostics/config context.
+- [ ] Inject lint/toast callbacks in unit tests; do not construct real Worker.
+- [ ] Implement one Workspace-aware bootstrap. `App.tsx` stops independently calling `loadConfig()` + `loadRecentDocument()` based on privacy flags.
+- [ ] Run regression + storage façade tests, lint, normal build.
+- [ ] Commit `feat: bootstrap workspace-aware application state`.
 
 ---
 
 ### Task 9: Header Switcher / Manage Dialog / Settings Integration
 
-**Files:**
-- Create: `src/components/WorkspaceSwitcher.tsx`
-- Create: `src/components/WorkspaceManageDialog.tsx`
-- Modify: `src/components/Header.tsx`
-- Modify: `src/components/SettingsDialog.tsx`
-- Modify: `src/components/StatusBar.tsx`
-- Modify: `src/app/App.tsx`
-- Modify: `src/styles/global.css`
-- Modify: `src/state/workspace-controller.ts`
-- Test: `tests/workspace/workspace-regression.test.ts`
+**Files:** `WorkspaceSwitcher.tsx`, `WorkspaceManageDialog.tsx`, Header/Settings/StatusBar/App/styles/controller, workspace regression tests。
 
-**UI decision:** use native `<select>` for Workspace selection plus compact Create / Manage controls. This preserves the approved Header switcher while avoiding a custom ARIA menu/focus implementation in Phase 2B.
+**UI implementation:** native `<select>` for Workspace selection plus compact Create / Manage controls. This keeps the approved Header Workspace Switcher while avoiding custom menu keyboard/focus risk.
 
-- [ ] **Step 1: Add UI-facing controller RED tests**
-
-Selecting current ID is no-op; create activates new private Workspace; rename failure does not optimistically mutate list; last delete rejected; Local Library disabled in Memory fallback; Local→Private preserves editor body; persistence denial is nonfatal/best-effort state.
-
-- [ ] **Step 2: Run RED**
-
-```bash
-bun run test -- tests/workspace/workspace-regression.test.ts
-```
-
-- [ ] **Step 3: Implement Header switcher**
-
-Accessible label `ワークスペース`; current workspace visible; controls disabled during mutation; keyboard reachable; responsive header remains usable.
-
-- [ ] **Step 4: Implement Manage dialog**
-
-Sections: rename; Private/Local mode; explicit Local opt-in; Durable/Memory status; persistence state; `origin全体の推定使用量 / 推定上限`; user-triggered persistence request; delete confirmation.
-
-Never expose `file-backed` in Phase 2B.
-
-- [ ] **Step 5: Replace Settings privacy controls**
-
-No direct `appState.updateConfig(draft.privacy=...)`. General settings show current Workspace storage mode and route to the same controller transition path (or open Manage dialog).
-
-- [ ] **Step 6: Update StatusBar**
-
-Use `🔒 Private Session` terminology; Memory fallback warning stays separate.
-
-- [ ] **Step 7: Verify**
-
-```bash
-bun run test -- tests/workspace/workspace-regression.test.ts
-bun run lint
-bun run build
-bun run build:pages
-```
-
-- [ ] **Step 8: Commit**
-
-```bash
-git add src/components src/state src/app src/styles tests/workspace
-git commit -m "feat: add workspace and privacy management UI"
-```
+- [ ] RED UI-facing controller tests: current selection no-op, create activates private Workspace, rename failure no optimistic mutation, last delete rejected, Local disabled in Memory fallback, Local→Private preserves editor memory, persistence denial nonfatal.
+- [ ] Implement Header switcher with accessible `ワークスペース` label and mutation-disabled controls.
+- [ ] Implement Manage dialog: rename; Private/Local; explicit Local opt-in; Durable/Memory; persistence status; `origin全体の推定使用量 / 推定上限`; user-triggered persistence request; delete confirmation.
+- [ ] Replace Settings direct privacy mutation. Settings must invoke the same Workspace controller transition or open Manage dialog.
+- [ ] Update StatusBar wording to `🔒 Private Session`; Memory warning stays separate.
+- [ ] Run regression tests, lint, normal build, Pages build.
+- [ ] Commit `feat: add workspace and privacy management UI`.
 
 ---
 
 ### Task 10: Full Regression / Adversarial Review / CI Gate
 
-**Files:**
-- Test: `tests/workspace/workspace-regression.test.ts`
-- Modify product/tests only for reproduced findings.
-
-- [ ] **Step 1: Add final cross-boundary scenarios**
-
-1. Private A/B distinct bodies survive A→B→A only in memory; IDB body stores stay empty.
-2. Local A queued autosave + switch B never writes A body into B.
-3. Local A + snapshot → Private retains editor memory but removes A persisted body/snapshot; B untouched.
-4. A/B/C active B delete chooses deterministic successor, cascades data, retains profile.
-5. Single A delete rejected with no state changes.
-6. meta points to missing Workspace → boot repair.
-7. Memory fallback shares one runtime context across façade/service; Local disabled.
-8. StorageManager unsupported/rejected methods do not block Workspace use.
-
-- [ ] **Step 2: Run full verification**
+- [ ] Add cross-boundary tests:
+  1. Private A/B distinct bodies survive A→B→A in memory only.
+  2. Local A queued autosave never lands in B.
+  3. Local A + snapshot → Private removes A persisted data but retains current editor memory; B untouched.
+  4. A/B/C active B delete picks deterministic successor, cascades data, retains profile.
+  5. Single A delete rejected without mutation.
+  6. missing active meta repaired on boot.
+  7. Memory fallback shares one runtime context and refuses Local.
+  8. config import/normal save cannot bypass explicit Local opt-in.
+  9. StorageManager unsupported/rejected methods do not block Workspace usage.
+- [ ] Run full verification:
 
 ```bash
 bun ci
@@ -688,25 +319,12 @@ grep -q '/japanese_text/assets/' dist/index.html
 grep -R -q '/japanese_text/assets/analysis.worker-' dist/assets
 ```
 
-Report exact current test counts from output; do not reuse Phase 2A’s 180 count.
-
-- [ ] **Step 3: Spec checklist review**
-
-Verify Header switcher/no sidebar, meta active ID, no `workspaces[0]` active assumption, memory-only Private bodies, explicit-workspace Local save, atomic active delete, atomic storage transitions, compatibility-only AppConfig privacy, nonfatal StorageManager, origin-level quota wording, no profile auto-delete, no backend/network/LLM path.
-
-- [ ] **Step 4: Code review with false-positive assessment**
-
-For every finding: reproduce/invariant → severity → false-positive check → alternative fix comparison for transaction/state issues → regression test → focused test → full verification.
-
-Specific probes: IDB lifetime after `await`; duplicate context creation; stale autosave timer; selection update before failed flush; stale config/profile after switch; session cache removal before durable delete commit; unsupported StorageManager; keyboard/focus behavior.
-
-- [ ] **Step 5: Update PR #4 implementation summary**
-
-Include architecture, meaningful tests, review findings/fixes, exact verified head SHA/CI run, and deferred work.
-
-- [ ] **Step 6: Merge gate**
-
-PR head equals verified SHA, mergeable, no unresolved review threads, latest CI green. After squash merge, verify main CI and GitHub Pages deployment before claiming Phase 2B complete.
+- [ ] Report exact current test counts; do not reuse Phase 2A’s 180 count.
+- [ ] Review spec checklist: Header/no sidebar, meta selection, no `workspaces[0]`, memory-only Private, explicit Local routing, no config privacy backdoor, atomic delete/transitions, nonfatal StorageManager, origin wording, no profile delete, no backend/network/LLM.
+- [ ] For every review finding: reproduce/invariant → severity → false-positive check → alternative fix for transaction/state issues → regression test → focused test → full verification.
+- [ ] Probe specifically: IDB lifetime after `await`, duplicate context creation, stale autosave timer, selection update before failed flush, stale config/profile after switch, session cache deletion before durable commit, unsupported StorageManager, keyboard/focus behavior.
+- [ ] Update PR #4 with implementation summary, tests, review fixes, exact verified head SHA/run ID, deferred work.
+- [ ] Merge only when head SHA equals verified SHA, mergeable, no unresolved review threads, latest CI green. After squash merge verify main CI + Pages deployment before claiming completion.
 
 ---
 
@@ -716,11 +334,12 @@ Phase 2B is complete only when evidence demonstrates:
 
 - Workspace create/switch/rename/delete works through service/controller.
 - active Workspace no longer depends on repository list order and repairs safely.
-- private bodies stay memory-only but survive same-tab Workspace switching.
-- Local documents are routed strictly by explicit Workspace ID.
-- autosave cannot cross Workspace boundaries.
+- private bodies stay memory-only but survive same-tab switching.
+- Local documents are routed strictly by explicit Workspace ID; autosave cannot cross Workspace boundaries.
+- normal config save/import cannot enable Local Library; only explicit Workspace action can.
+- v1 migration still respects legacy save intent.
 - Local Library cannot be enabled in Memory fallback.
-- Private→Local and Local→Private transitions do not partial-commit policy/data mismatches.
+- Private→Local and Local→Private do not partial-commit policy/data mismatches.
 - Local→Private cancels queued autosave and deletes persisted body/snapshot while keeping current editor memory.
 - deleting active Workspace atomically selects successor; last Workspace cannot be deleted.
 - Settings/Manage UI share one storage-mode transition path.
