@@ -27,6 +27,12 @@ interface MigrationStatusComplete {
   migratedAt: number
 }
 
+interface LegacyValues {
+  hasAnyLegacyStore: boolean
+  rawConfig: unknown
+  rawDocument: unknown
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -55,12 +61,35 @@ function migratedDefaults(timestamp: number): ProjectedStorageState {
   return state
 }
 
+function isCompleteStatus(value: unknown): value is MigrationStatusComplete {
+  return isRecord(value) && value.state === 'complete' && typeof value.migratedAt === 'number'
+}
+
 async function readMigrationStatus(db: IDBDatabase): Promise<unknown> {
   const tx = db.transaction(STORE_META, 'readonly')
   const done = transactionDone(tx)
   const value = await requestToPromise(tx.objectStore(STORE_META).get(META_V1_MIGRATION_STATUS))
   await done
   return value
+}
+
+async function markMigrationPendingUnlessComplete(db: IDBDatabase): Promise<'complete' | 'pending'> {
+  const tx = db.transaction(STORE_META, 'readwrite')
+  const done = transactionDone(tx)
+  const store = tx.objectStore(STORE_META)
+  const request = store.get(META_V1_MIGRATION_STATUS)
+  let outcome: 'complete' | 'pending' = 'pending'
+
+  request.onsuccess = () => {
+    if (isCompleteStatus(request.result)) {
+      outcome = 'complete'
+      return
+    }
+    store.put({ state: 'pending' }, META_V1_MIGRATION_STATUS)
+  }
+
+  await done
+  return outcome
 }
 
 async function writeMigrationStatus(db: IDBDatabase, value: unknown): Promise<void> {
@@ -70,8 +99,33 @@ async function writeMigrationStatus(db: IDBDatabase, value: unknown): Promise<vo
   await done
 }
 
-function isCompleteStatus(value: unknown): value is MigrationStatusComplete {
-  return isRecord(value) && value.state === 'complete' && typeof value.migratedAt === 'number'
+async function readLegacyValues(db: IDBDatabase): Promise<LegacyValues> {
+  const hasLegacySettings = db.objectStoreNames.contains(LEGACY_SETTINGS_STORE)
+  const hasLegacyDocuments = db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
+  const stores = [
+    ...(hasLegacySettings ? [LEGACY_SETTINGS_STORE] : []),
+    ...(hasLegacyDocuments ? [LEGACY_DOCUMENTS_STORE] : [])
+  ]
+
+  if (stores.length === 0) {
+    return { hasAnyLegacyStore: false, rawConfig: undefined, rawDocument: undefined }
+  }
+
+  const tx = db.transaction(stores, 'readonly')
+  const done = transactionDone(tx)
+  const configRequest = hasLegacySettings
+    ? tx.objectStore(LEGACY_SETTINGS_STORE).get('app-config')
+    : undefined
+  const documentRequest = hasLegacyDocuments
+    ? tx.objectStore(LEGACY_DOCUMENTS_STORE).get('recent')
+    : undefined
+
+  const [rawConfig, rawDocument] = await Promise.all([
+    configRequest === undefined ? Promise.resolve(undefined) : requestToPromise(configRequest),
+    documentRequest === undefined ? Promise.resolve(undefined) : requestToPromise(documentRequest)
+  ])
+  await done
+  return { hasAnyLegacyStore: true, rawConfig, rawDocument }
 }
 
 async function recordFailedStatusBestEffort(
@@ -100,13 +154,13 @@ export async function migrateV1ToV2(
     }
   }
 
-  if (isCompleteStatus(existingStatus)) {
-    return { state: 'not-needed' }
-  }
+  if (isCompleteStatus(existingStatus)) return { state: 'not-needed' }
 
   const timestamp = now()
   try {
-    await writeMigrationStatus(db, { state: 'pending' })
+    if ((await markMigrationPendingUnlessComplete(db)) === 'complete') {
+      return { state: 'not-needed' }
+    }
   } catch (error) {
     return {
       state: 'failed',
@@ -114,91 +168,82 @@ export async function migrateV1ToV2(
     }
   }
 
-  const hasLegacySettings = db.objectStoreNames.contains(LEGACY_SETTINGS_STORE)
-  const hasLegacyDocuments = db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
-  const transactionStores = [
-    STORE_META,
-    STORE_WORKSPACES,
-    STORE_PREFERENCES,
-    STORE_RULE_PROFILES,
-    STORE_WORKSPACE_DOCUMENTS,
-    ...(hasLegacySettings ? [LEGACY_SETTINGS_STORE] : []),
-    ...(hasLegacyDocuments ? [LEGACY_DOCUMENTS_STORE] : [])
-  ]
+  let legacyValues: LegacyValues
+  try {
+    legacyValues = await readLegacyValues(db)
+  } catch (error) {
+    const message = `Could not read legacy storage: ${error instanceof Error ? error.message : String(error)}`
+    await recordFailedStatusBestEffort(db, timestamp, message)
+    return { state: 'failed', warning: message }
+  }
+
+  const legacyDocument = parseLegacyDocument(legacyValues.rawDocument)
+  let state: ProjectedStorageState
+  let warning: string | undefined
+  let configIsValid = false
+
+  if (!legacyValues.hasAnyLegacyStore) {
+    state = createDefaultWorkspaceState(timestamp)
+  } else if (legacyValues.rawConfig === undefined) {
+    state = migratedDefaults(timestamp)
+    warning = legacyDocument === undefined
+      ? 'Legacy configuration was missing; private defaults were used.'
+      : 'Legacy configuration was missing; the document was recovered in memory only.'
+  } else {
+    try {
+      const validatedConfig = validateAppConfig(migrateConfig(legacyValues.rawConfig))
+      state = splitAppConfig(validatedConfig, migratedDefaults(timestamp), timestamp)
+      configIsValid = true
+    } catch (error) {
+      state = migratedDefaults(timestamp)
+      warning = `Legacy configuration could not be migrated: ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
 
   let tx: IDBTransaction | undefined
   let done: Promise<void> | undefined
-  try {
-    tx = db.transaction(transactionStores, 'readwrite')
-    done = transactionDone(tx)
+  let skippedBecauseComplete = false
 
+  try {
+    tx = db.transaction(
+      [STORE_META, STORE_WORKSPACES, STORE_PREFERENCES, STORE_RULE_PROFILES, STORE_WORKSPACE_DOCUMENTS],
+      'readwrite'
+    )
+    done = transactionDone(tx)
     const metaStore = tx.objectStore(STORE_META)
     const statusRequest = metaStore.get(META_V1_MIGRATION_STATUS)
-    const configRequest = hasLegacySettings
-      ? tx.objectStore(LEGACY_SETTINGS_STORE).get('app-config')
-      : undefined
-    const documentRequest = hasLegacyDocuments
-      ? tx.objectStore(LEGACY_DOCUMENTS_STORE).get('recent')
-      : undefined
 
-    const [transactionStatus, rawConfig, rawDocument] = await Promise.all([
-      requestToPromise(statusRequest),
-      configRequest === undefined ? Promise.resolve(undefined) : requestToPromise(configRequest),
-      documentRequest === undefined ? Promise.resolve(undefined) : requestToPromise(documentRequest)
-    ])
-
-    // Another tab may have completed migration after our initial status check and
-    // pending marker write. Re-check while holding the same multi-store transaction
-    // that would perform target writes so completion can never be overwritten.
-    if (isCompleteStatus(transactionStatus)) {
-      await done
-      return { state: 'not-needed' }
-    }
-
-    const legacyDocument = parseLegacyDocument(rawDocument)
-    const hasAnyLegacyStore = hasLegacySettings || hasLegacyDocuments
-    let state: ProjectedStorageState
-    let warning: string | undefined
-    let configIsValid = false
-
-    if (!hasAnyLegacyStore) {
-      state = createDefaultWorkspaceState(timestamp)
-    } else if (rawConfig === undefined) {
-      state = migratedDefaults(timestamp)
-      warning = legacyDocument === undefined
-        ? 'Legacy configuration was missing; private defaults were used.'
-        : 'Legacy configuration was missing; the document was recovered in memory only.'
-    } else {
-      try {
-        const validatedConfig = validateAppConfig(migrateConfig(rawConfig))
-        state = splitAppConfig(validatedConfig, migratedDefaults(timestamp), timestamp)
-        configIsValid = true
-      } catch (error) {
-        state = migratedDefaults(timestamp)
-        warning = `Legacy configuration could not be migrated: ${error instanceof Error ? error.message : String(error)}`
+    // IndexedDB transactions are only active in their creation task and request event handlers.
+    // Queue all target writes from the status callback rather than awaiting a request and then writing.
+    statusRequest.onsuccess = () => {
+      if (isCompleteStatus(statusRequest.result)) {
+        skippedBecauseComplete = true
+        return
       }
+
+      tx!.objectStore(STORE_WORKSPACES).put(state.workspace)
+      tx!.objectStore(STORE_PREFERENCES).put(state.preferences, 'global')
+      tx!.objectStore(STORE_RULE_PROFILES).put(state.profile)
+
+      if (configIsValid && state.workspace.storageMode === 'local-library' && legacyDocument !== undefined) {
+        tx!.objectStore(STORE_WORKSPACE_DOCUMENTS).put({
+          id: MIGRATED_DOCUMENT_ID,
+          workspaceId: state.workspace.id,
+          name: legacyDocument.name,
+          docType: legacyDocument.docType,
+          content: legacyDocument.content,
+          sourceKind: 'local',
+          createdAt: legacyDocument.updatedAt,
+          updatedAt: legacyDocument.updatedAt
+        })
+      }
+
+      metaStore.put(2, META_STORAGE_SCHEMA_VERSION)
+      metaStore.put({ state: 'complete', migratedAt: timestamp }, META_V1_MIGRATION_STATUS)
     }
 
-    tx.objectStore(STORE_WORKSPACES).put(state.workspace)
-    tx.objectStore(STORE_PREFERENCES).put(state.preferences, 'global')
-    tx.objectStore(STORE_RULE_PROFILES).put(state.profile)
-
-    if (configIsValid && state.workspace.storageMode === 'local-library' && legacyDocument !== undefined) {
-      tx.objectStore(STORE_WORKSPACE_DOCUMENTS).put({
-        id: MIGRATED_DOCUMENT_ID,
-        workspaceId: state.workspace.id,
-        name: legacyDocument.name,
-        docType: legacyDocument.docType,
-        content: legacyDocument.content,
-        sourceKind: 'local',
-        createdAt: legacyDocument.updatedAt,
-        updatedAt: legacyDocument.updatedAt
-      })
-    }
-
-    metaStore.put(2, META_STORAGE_SCHEMA_VERSION)
-    metaStore.put({ state: 'complete', migratedAt: timestamp }, META_V1_MIGRATION_STATUS)
     await done
+    if (skippedBecauseComplete) return { state: 'not-needed' }
 
     if (warning !== undefined) {
       return {
