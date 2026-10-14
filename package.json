@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.4.3",
   "description": "日本語文章をコードのように静的解析する、ブラウザ完結型 Linter / Formatter",
   "scripts": {
     "dev": "vite --port 3000 --host --strictPort 2>&1 | tee dev.log",
     "build": "vite build",
+    "build:pages": "vite build --base=/japanese_text/",
     "preview": "vite preview --port 3000 --host",
     "lint": "tsc --noEmit",
     "test": "vitest run",
