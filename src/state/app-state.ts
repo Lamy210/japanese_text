@@ -30,17 +30,11 @@ export interface TierResult {
 export type AnalysisStatus = 'idle' | 'linting' | 'error' | 'off'
 export type WorkerStatus = 'starting' | 'ok' | 'error'
 
-// ----------------------------------------------------------------
-// Document state
-// ----------------------------------------------------------------
 const [documentText, setDocumentText] = createSignal<string>(WELCOME_DOCUMENT)
 const [documentName, setDocumentName] = createSignal<string>('welcome.md')
 const [docType, setDocType] = createSignal<DocumentType>('markdown')
 const [revision, setRevision] = createSignal<number>(0)
 
-// ----------------------------------------------------------------
-// Diagnostics state
-// ----------------------------------------------------------------
 const [tierResults, setTierResults] = createStore<Record<RuleTier, TierResult | undefined>>({
   fast: undefined,
   deep: undefined,
@@ -55,9 +49,7 @@ const derived = createRoot(() => {
     const merged: Diagnostic[] = []
     for (const tier of ['fast', 'deep', 'idle'] as const) {
       const result = tierResults[tier]
-      if (result !== undefined && result.revision === rev) {
-        merged.push(...result.diagnostics)
-      }
+      if (result !== undefined && result.revision === rev) merged.push(...result.diagnostics)
     }
     return merged.sort((a, b) => a.start - b.start || a.end - b.end || a.ruleId.localeCompare(b.ruleId))
   })
@@ -109,9 +101,6 @@ const derived = createRoot(() => {
 })
 const { diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings } = derived
 
-// ----------------------------------------------------------------
-// Config state
-// ----------------------------------------------------------------
 const [config, setConfigState] = createStore<AppConfig>(createDefaultConfig())
 const [configLoaded, setConfigLoaded] = createSignal(false)
 
@@ -119,9 +108,6 @@ function setConfig(next: AppConfig): void {
   setConfigState({ ...next })
 }
 
-// ----------------------------------------------------------------
-// Workspace / storage state
-// ----------------------------------------------------------------
 const [workspaceSummaries, setWorkspaceSummaries] = createSignal<WorkspaceSummary[]>([])
 const [activeWorkspaceId, setActiveWorkspaceId] = createSignal<string | undefined>(undefined)
 const [workspaceReady, setWorkspaceReady] = createSignal(false)
@@ -129,27 +115,18 @@ const [workspaceManagerOpen, setWorkspaceManagerOpen] = createSignal(false)
 const [workspaceMutationPending, setWorkspaceMutationPending] = createSignal(false)
 const [storageCapability, setStorageCapability] = createSignal<StorageCapability | undefined>(undefined)
 
-// ----------------------------------------------------------------
-// Analysis / Worker state
-// ----------------------------------------------------------------
 const [analysisStatus, setAnalysisStatus] = createSignal<AnalysisStatus>('idle')
 const [workerStatus, setWorkerStatus] = createSignal<WorkerStatus>('starting')
 const [workerErrorMessage, setWorkerErrorMessage] = createSignal<string | null>(null)
 const [segmenterAvailable, setSegmenterAvailable] = createSignal<boolean>(true)
 const [storageAvailable, setStorageAvailable] = createSignal<boolean>(true)
 
-// ----------------------------------------------------------------
-// UI state
-// ----------------------------------------------------------------
 const [settingsOpen, setSettingsOpen] = createSignal(false)
 const [panelOpen, setPanelOpen] = createSignal(true)
 const [settingsTab, setSettingsTab] = createSignal<'rules' | 'ngwords' | 'terminology' | 'citation' | 'general'>(
   'rules'
 )
 
-// ----------------------------------------------------------------
-// Toasts
-// ----------------------------------------------------------------
 export interface Toast {
   id: number
   kind: 'info' | 'success' | 'error' | 'warning'
@@ -167,7 +144,6 @@ function pushToast(kind: Toast['kind'], message: string): void {
 }
 
 export const appState = {
-  // document
   documentText,
   documentName,
   docType,
@@ -183,7 +159,6 @@ export const appState = {
     setRevision((r) => r + 1)
   },
 
-  // diagnostics
   diagnostics,
   filteredDiagnostics,
   diagnosticCounts,
@@ -202,7 +177,6 @@ export const appState = {
     setTierResults({ fast: undefined, deep: undefined, idle: undefined })
   },
 
-  // config
   config,
   configLoaded,
   setConfigLoaded,
@@ -231,7 +205,6 @@ export const appState = {
     })
   },
 
-  // ng words / terminology helpers
   addNgWord: (entry: NgWordEntry): void => {
     appState.updateConfig((d) => {
       d.ngWords.push(entry)
@@ -258,9 +231,10 @@ export const appState = {
     })
   },
 
-  // workspace/storage
   workspaceSummaries,
-  setWorkspaceSummaries: (values: WorkspaceSummary[]): void => setWorkspaceSummaries(structuredClone(values)),
+  setWorkspaceSummaries: (values: WorkspaceSummary[]): void => {
+    setWorkspaceSummaries(structuredClone(values))
+  },
   activeWorkspaceId,
   setActiveWorkspaceId,
   workspaceReady,
@@ -272,7 +246,6 @@ export const appState = {
   storageCapability,
   setStorageCapability,
 
-  // analysis
   analysisStatus,
   setAnalysisStatus,
   workerStatus,
@@ -284,7 +257,6 @@ export const appState = {
   storageAvailable,
   setStorageAvailable,
 
-  // ui
   settingsOpen,
   setSettingsOpen,
   panelOpen,
@@ -292,7 +264,6 @@ export const appState = {
   settingsTab,
   setSettingsTab,
 
-  // toasts
   toasts,
   pushToast
 }
