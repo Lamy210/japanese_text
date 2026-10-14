@@ -71,4 +71,6 @@ export interface AtomicOperationsPort {
   deletePersistedDocuments(workspaceId: string): Promise<void>
   deleteWorkspaceCascade(workspaceId: string): Promise<void>
   deleteWorkspaceAndSelectNext(workspaceId: string, nextWorkspaceId: string): Promise<void>
+  enableLocalLibrary(workspaceId: string, document: StoredWorkspaceDocument): Promise<void>
+  makeWorkspacePrivate(workspaceId: string): Promise<void>
 }
