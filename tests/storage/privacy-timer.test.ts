@@ -13,7 +13,7 @@ describe('legacy privacy settings compatibility', () => {
     const actions = await import('../../src/state/actions')
 
     expect(appState.workspaceManagerOpen()).toBe(false)
-    const before = structuredClone(appState.config.privacy)
+    const before = JSON.parse(JSON.stringify(appState.config.privacy)) as { autoSave: boolean; privacyMode: boolean }
 
     appState.updateConfig((draft) => {
       draft.privacy = { autoSave: true, privacyMode: false }
