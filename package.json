@@ -33,6 +33,7 @@
     "textlint-rule-sentence-length": "^5.2.1"
   },
   "devDependencies": {
+    "fake-indexeddb": "6.2.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vite-plugin-solid": "^2.11.14",
