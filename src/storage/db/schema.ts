@@ -12,6 +12,8 @@ export const STORE_WORKSPACE_DOCUMENTS = 'workspaceDocuments'
 export const STORE_DOCUMENT_SNAPSHOTS = 'documentSnapshots'
 export const STORE_SUPPRESSIONS = 'suppressions'
 
+export const META_ACTIVE_WORKSPACE_ID = 'active-workspace-id'
+
 export const INDEX_WORKSPACE_ID = 'workspaceId'
 export const INDEX_UPDATED_AT = 'updatedAt'
 export const INDEX_DOCUMENT_ID = 'documentId'
