@@ -343,16 +343,17 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
         if (!durableBackend) throw new Error('Local Library requires durable browser storage')
         if (currentDocument === undefined) throw new Error('Current document is required when enabling Local Library')
 
-        await atomic.enableLocalLibrary(workspaceId, {
+        const document = {
           id: `local-recent-document:${workspaceId}`,
           workspaceId,
           name: currentDocument.name,
           content: currentDocument.content,
           docType: currentDocument.docType,
-          sourceKind: 'local',
+          sourceKind: 'local' as const,
           createdAt: currentDocument.updatedAt,
           updatedAt: currentDocument.updatedAt
-        })
+        }
+        await atomic.enableLocalLibrary(workspaceId, [document], document.id)
         sessionDocuments.delete(workspaceId)
       } else {
         if (currentDocument === undefined) {
