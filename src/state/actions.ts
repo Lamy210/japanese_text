@@ -10,8 +10,8 @@ import { applyFixesTransaction, applyReplacement, jumpToPosition } from '../edit
 import { lintController } from './lint-controller'
 import { appState } from './app-state'
 import {
+  getStorageContext,
   saveConfig as persistConfig,
-  saveRecentDocument,
   saveWorkspaceDocument,
   isStorageAvailable,
   type StoredDocument
@@ -208,6 +208,17 @@ export function persistConfigDebounced(): void {
 
 let documentSaveTimer: ReturnType<typeof setTimeout> | null = null
 
+export interface DocumentPersistenceSnapshot {
+  workspaceId: string
+  documentId: string
+  name: string
+  content: string
+  docType: DocumentType
+  sourceKind: 'local' | 'file'
+  createdAt: number
+  updatedAt: number
+}
+
 export function cancelPendingDocumentPersistence(): void {
   if (documentSaveTimer !== null) {
     clearTimeout(documentSaveTimer)
@@ -215,6 +226,41 @@ export function cancelPendingDocumentPersistence(): void {
   }
 }
 
+async function persistCapturedDocument(snapshot: DocumentPersistenceSnapshot): Promise<void> {
+  const context = await getStorageContext()
+  const workspace = await context.repositories.workspaces.get(snapshot.workspaceId)
+  if (workspace === undefined || workspace.storageMode !== 'local-library') return
+
+  const existing = await context.repositories.documents.get(snapshot.documentId)
+  if (existing === undefined || existing.workspaceId !== snapshot.workspaceId) return
+
+  await context.repositories.documents.save({
+    id: snapshot.documentId,
+    workspaceId: snapshot.workspaceId,
+    name: snapshot.name,
+    content: snapshot.content,
+    docType: snapshot.docType,
+    sourceKind: snapshot.sourceKind,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.updatedAt
+  })
+}
+
+/**
+ * Debounced product autosave. Destination and body are captured at schedule time;
+ * the callback never re-resolves current Workspace/Document selection or editor state.
+ */
+export function persistDocumentDebounced(snapshot: DocumentPersistenceSnapshot): void {
+  if (!isStorageAvailable()) return
+  cancelPendingDocumentPersistence()
+  const captured = structuredClone(snapshot)
+  documentSaveTimer = setTimeout(() => {
+    documentSaveTimer = null
+    persistCapturedDocument(captured).catch(() => undefined)
+  }, 800)
+}
+
+/** Phase 2B compatibility path. Active product code must use persistDocumentDebounced(). */
 export function persistWorkspaceDocumentDebounced(workspaceId: string, document: StoredDocument): void {
   if (!isStorageAvailable()) return
   cancelPendingDocumentPersistence()
@@ -223,22 +269,6 @@ export function persistWorkspaceDocumentDebounced(workspaceId: string, document:
   documentSaveTimer = setTimeout(() => {
     documentSaveTimer = null
     saveWorkspaceDocument(capturedWorkspaceId, capturedDocument).catch(() => undefined)
-  }, 800)
-}
-
-/** Legacy path retained for compatibility; EditorPane uses explicit workspace routing. */
-export function persistDocumentDebounced(): void {
-  if (!isStorageAvailable()) return
-  if (appState.config.privacy.privacyMode || !appState.config.privacy.autoSave) return
-  cancelPendingDocumentPersistence()
-  documentSaveTimer = setTimeout(() => {
-    documentSaveTimer = null
-    saveRecentDocument({
-      name: appState.documentName(),
-      content: appState.documentText(),
-      docType: appState.docType(),
-      updatedAt: Date.now()
-    }).catch(() => undefined)
   }, 800)
 }
 
