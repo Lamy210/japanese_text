@@ -56,6 +56,26 @@ async function localHarness() {
   return { actions, appState, context, workspace, first, second }
 }
 
+async function settleDetachedPersistence(): Promise<void> {
+  vi.useRealTimers()
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+async function waitForDocumentContent(
+  context: Awaited<ReturnType<typeof import('../../src/storage/storage')['getStorageContext']>>,
+  documentId: string,
+  expectedContent: string
+): Promise<void> {
+  vi.useRealTimers()
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const document = await context.repositories.documents.get(documentId)
+    if (document?.content === expectedContent) return
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
 afterEach(() => {
   vi.useRealTimers()
   Reflect.deleteProperty(globalThis, 'indexedDB')
@@ -83,6 +103,7 @@ describe('explicit document autosave', () => {
     await context.repositories.documentSelection.setActiveDocumentId(workspace.id, second.id)
 
     await vi.advanceTimersByTimeAsync(800)
+    await waitForDocumentContent(context, first.id, 'A captured')
 
     await expect(context.repositories.documents.get(first.id)).resolves.toMatchObject({
       id: first.id,
@@ -122,6 +143,7 @@ describe('explicit document autosave', () => {
     })
 
     await vi.advanceTimersByTimeAsync(800)
+    await waitForDocumentContent(context, first.id, 'A2')
 
     await expect(context.repositories.documents.get(first.id)).resolves.toMatchObject({
       content: 'A2',
@@ -146,6 +168,7 @@ describe('explicit document autosave', () => {
     actions.cancelPendingDocumentPersistence()
 
     await vi.advanceTimersByTimeAsync(800)
+    await settleDetachedPersistence()
 
     await expect(context.repositories.documents.get(first.id)).resolves.toMatchObject({ content: 'A0' })
   })
@@ -174,6 +197,7 @@ describe('explicit document autosave', () => {
     })
 
     await vi.advanceTimersByTimeAsync(800)
+    await settleDetachedPersistence()
 
     await expect(context.repositories.documents.listByWorkspace(workspace.id)).resolves.toEqual([])
   })
@@ -195,6 +219,7 @@ describe('explicit document autosave', () => {
     await context.atomic.deleteDocumentAndSelectNext(workspace.id, first.id, second.id)
 
     await vi.advanceTimersByTimeAsync(800)
+    await settleDetachedPersistence()
 
     await expect(context.repositories.documents.get(first.id)).resolves.toBeUndefined()
     await expect(context.repositories.documents.get(second.id)).resolves.toMatchObject({ content: 'B0' })
