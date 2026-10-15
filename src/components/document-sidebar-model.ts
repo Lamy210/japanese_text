@@ -23,6 +23,20 @@ export function isDocumentRowActive(summary: DocumentSummary, activeDocumentId: 
   return summary.id === activeDocumentId
 }
 
+export function documentSidebarDefaultOpen(width: number): boolean {
+  return width >= 1280
+}
+
+export function reconcileAuxiliaryPanelsForWidth(
+  width: number,
+  current: AuxiliaryPanelsState
+): AuxiliaryPanelsState {
+  if (width < 1024 && current.documentsOpen && current.diagnosticsOpen) {
+    return { documentsOpen: false, diagnosticsOpen: true }
+  }
+  return current
+}
+
 export function nextAuxiliaryPanels(input: AuxiliaryPanelsTransition): AuxiliaryPanelsState {
   const opening = input.target === 'documents' ? !input.documentsOpen : !input.diagnosticsOpen
   if (!opening) {
