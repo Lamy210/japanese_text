@@ -175,7 +175,6 @@ export function createWorkspaceController(
       return
     }
     if (active.workspace.storageMode === 'local-library') {
-      cancelPendingDocumentPersistence()
       await saveLocalDocument(await context(), active.workspace.id, document)
     }
   }
@@ -241,6 +240,7 @@ export function createWorkspaceController(
 
     async createWorkspace(name: string): Promise<void> {
       await runMutation(async () => {
+        cancelPendingDocumentPersistence()
         await persistCurrentWorkspaceConfig()
         await routeCurrentDocument()
         const workspaceService = await service()
