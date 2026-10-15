@@ -2,49 +2,8 @@ import { For, Show, createEffect, createMemo, createSignal, onMount } from 'soli
 import type { DocumentSummary } from '../document/types'
 import { appState } from '../state/app-state'
 import { documentController } from '../state/workspace-runtime'
+import { filterDocumentSummaries, isDocumentRowActive } from './document-sidebar-model'
 import './DocumentSidebar.css'
-
-export interface AuxiliaryPanelsState {
-  documentsOpen: boolean
-  diagnosticsOpen: boolean
-}
-
-export interface AuxiliaryPanelsTransition extends AuxiliaryPanelsState {
-  width: number
-  target: 'documents' | 'diagnostics'
-}
-
-export function filterDocumentSummaries(
-  summaries: readonly DocumentSummary[],
-  rawFilter: string
-): DocumentSummary[] {
-  const filter = rawFilter.trim().toLocaleLowerCase()
-  if (filter.length === 0) return [...summaries]
-  return summaries.filter((summary) => summary.name.toLocaleLowerCase().includes(filter))
-}
-
-export function isDocumentRowActive(summary: DocumentSummary, activeDocumentId: string | undefined): boolean {
-  return summary.id === activeDocumentId
-}
-
-export function nextAuxiliaryPanels(input: AuxiliaryPanelsTransition): AuxiliaryPanelsState {
-  const opening = input.target === 'documents' ? !input.documentsOpen : !input.diagnosticsOpen
-  if (!opening) {
-    return input.target === 'documents'
-      ? { documentsOpen: false, diagnosticsOpen: input.diagnosticsOpen }
-      : { documentsOpen: input.documentsOpen, diagnosticsOpen: false }
-  }
-
-  if (input.width < 1024) {
-    return input.target === 'documents'
-      ? { documentsOpen: true, diagnosticsOpen: false }
-      : { documentsOpen: false, diagnosticsOpen: true }
-  }
-
-  return input.target === 'documents'
-    ? { documentsOpen: true, diagnosticsOpen: input.diagnosticsOpen }
-    : { documentsOpen: input.documentsOpen, diagnosticsOpen: true }
-}
 
 function viewportWidth(): number {
   return typeof window === 'undefined' ? 1280 : window.innerWidth
