@@ -17,7 +17,7 @@ import {
 import { BUILTIN_PRESETS, PRESET_LABELS } from '../core/config/presets'
 import type { PresetId } from '../core/config/schema'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
-import { nextAuxiliaryPanels } from './DocumentSidebar'
+import { nextAuxiliaryPanels } from './document-sidebar-model'
 
 const SEVERITY_ICON: Record<string, string> = { error: '✕', warning: '!', info: 'i' }
 
