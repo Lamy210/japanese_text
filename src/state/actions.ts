@@ -71,27 +71,23 @@ export async function formatDocumentAction(): Promise<void> {
   )
 }
 
-const TEXT_EXTENSIONS = ['.txt', '.md', '.markdown', '.mdown', '.mkd']
-
-function normalizeLineEndings(text: string): string {
-  return text.replace(/\r\n?/g, '\n')
-}
-
+/**
+ * Header/Open compatibility action. The actual import semantics live in
+ * DocumentController so Open participates in document flush, active selection,
+ * Private Session isolation, and Local Library persistence rules.
+ *
+ * Dynamic import avoids a static actions <-> workspace-runtime cycle because
+ * workspace-runtime injects cancelPendingDocumentPersistence from this module.
+ */
 export async function openDocumentFile(file: File): Promise<void> {
-  const lower = file.name.toLowerCase()
-  const isText = file.type.startsWith('text/') || TEXT_EXTENSIONS.some((ext) => lower.endsWith(ext))
-  if (!isText) {
-    appState.pushToast('error', `対応していないファイル形式です: ${file.name} (.txt / .md / .markdown を指定してください)`)
-    return
-  }
   try {
-    const raw = await file.text()
-    const docType: DocumentType = lower.endsWith('.txt') ? 'text' : 'markdown'
-    appState.setDocument(normalizeLineEndings(raw), file.name, docType)
-    lintController.relintAll()
-    appState.pushToast('success', `${file.name} を開きました。`)
+    const { documentController } = await import('./workspace-runtime')
+    await documentController.importFile(file)
   } catch (error) {
-    appState.pushToast('error', `ファイルの読み込みに失敗しました: ${error instanceof Error ? error.message : String(error)}`)
+    appState.pushToast(
+      'error',
+      `ファイルの読み込みに失敗しました: ${error instanceof Error ? error.message : String(error)}`
+    )
   }
 }
 
