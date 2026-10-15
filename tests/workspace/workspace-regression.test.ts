@@ -72,12 +72,17 @@ describe('workspace-aware application bootstrap', () => {
       durableBackend: true
     })
     const active = await service.getActive()
-    await service.setStorageMode(active.workspace.id, 'local-library', {
+    const document = {
+      id: `local-recent-document:${active.workspace.id}`,
+      workspaceId: active.workspace.id,
       name: 'saved.md',
       content: '# Restored',
-      docType: 'markdown',
+      docType: 'markdown' as const,
+      sourceKind: 'local' as const,
+      createdAt: 400,
       updatedAt: 400
-    })
+    }
+    await service.enableLocalLibrary(active.workspace.id, [document], document.id)
     const { appState, controller } = await loadControllerHarness(context)
 
     await controller.bootstrap()
