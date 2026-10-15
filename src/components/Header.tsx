@@ -1,7 +1,7 @@
 /**
  * Header — 仕様書 §9.1 Desktop Header
  *
- * 配置: App Name / Workspace / Open / Export / Lint / Format / Preset / Settings / Theme
+ * 配置: App Name / Workspace / Documents / Open / Export / Lint / Format / Preset / Settings / Theme
  */
 
 import { Show } from 'solid-js'
@@ -17,8 +17,13 @@ import {
 import { BUILTIN_PRESETS, PRESET_LABELS } from '../core/config/presets'
 import type { PresetId } from '../core/config/schema'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
+import { nextAuxiliaryPanels } from './DocumentSidebar'
 
 const SEVERITY_ICON: Record<string, string> = { error: '✕', warning: '!', info: 'i' }
+
+function viewportWidth(): number {
+  return typeof window === 'undefined' ? 1280 : window.innerWidth
+}
 
 export function Header() {
   let fileInput: HTMLInputElement | undefined
@@ -32,6 +37,17 @@ export function Header() {
     const file = input.files?.[0]
     if (file !== undefined) void openDocumentFile(file)
     input.value = ''
+  }
+
+  const toggleAuxiliaryPanel = (target: 'documents' | 'diagnostics'): void => {
+    const next = nextAuxiliaryPanels({
+      width: viewportWidth(),
+      target,
+      documentsOpen: appState.documentSidebarOpen(),
+      diagnosticsOpen: appState.panelOpen()
+    })
+    appState.setDocumentSidebarOpen(next.documentsOpen)
+    appState.setPanelOpen(next.diagnosticsOpen)
   }
 
   const counts = () => appState.diagnosticCounts()
@@ -50,6 +66,17 @@ export function Header() {
 
       <div class="header-actions">
         <WorkspaceSwitcher />
+        <button
+          id="documents-toggle"
+          type="button"
+          class="btn"
+          onClick={() => toggleAuxiliaryPanel('documents')}
+          title="ドキュメント一覧の表示切替"
+          aria-controls="document-sidebar"
+          aria-expanded={appState.documentSidebarOpen()}
+        >
+          Documents
+        </button>
         <input
           ref={fileInput}
           type="file"
@@ -126,7 +153,7 @@ export function Header() {
         <button
           type="button"
           class="btn btn-panel-toggle"
-          onClick={() => appState.setPanelOpen(!appState.panelOpen())}
+          onClick={() => toggleAuxiliaryPanel('diagnostics')}
           title="診断パネルの表示切替"
           aria-expanded={appState.panelOpen()}
         >
