@@ -2,11 +2,6 @@ import type { AppConfig } from '../core/config/schema'
 import type { StorageContext } from '../storage/bootstrap'
 import { getStorageContext } from '../storage/runtime'
 import {
-  createSessionDocumentStore,
-  type SessionDocument,
-  type SessionDocumentStore
-} from '../workspace/session-document-store'
-import {
   createStorageCapabilityService,
   type StorageCapability,
   type StorageCapabilityService,
@@ -56,22 +51,6 @@ function resolveBrowserStorageManager(explicit?: StorageManagerLike): StorageMan
   }
 }
 
-function newestDocument<T extends { updatedAt: number }>(documents: T[]): T | undefined {
-  return documents.reduce<T | undefined>(
-    (current, candidate) => current === undefined || candidate.updatedAt > current.updatedAt ? candidate : current,
-    undefined
-  )
-}
-
-function currentEditorDocument(now: () => number): SessionDocument {
-  return {
-    name: appState.documentName(),
-    content: appState.documentText(),
-    docType: appState.docType(),
-    updatedAt: now()
-  }
-}
-
 function currentConfig(): AppConfig {
   return JSON.parse(JSON.stringify(appState.config)) as AppConfig
 }
@@ -84,7 +63,6 @@ export function createWorkspaceController(
   const toast = dependencies.toast ?? appState.pushToast
   const cancelPendingDocumentPersistence = dependencies.cancelPendingDocumentPersistence ?? (() => undefined)
   const now = dependencies.now ?? Date.now
-  const sessionDocuments: SessionDocumentStore = createSessionDocumentStore()
   const runtime = dependencies.runtime ?? createApplicationRuntime({ getContext: getContextDependency, now })
 
   let capabilityService: StorageCapabilityService | undefined
@@ -114,24 +92,6 @@ export function createWorkspaceController(
     const loaded = appState.loadConfigFrom(active.config)
     if (!loaded.ok) throw new Error(loaded.error ?? 'Workspace config could not be loaded')
     appState.setActiveWorkspaceId(active.workspace.id)
-  }
-
-  async function saveLocalDocument(
-    storageContext: StorageContext,
-    workspaceId: string,
-    document: SessionDocument
-  ): Promise<void> {
-    const existing = newestDocument(await storageContext.repositories.documents.listByWorkspace(workspaceId))
-    await storageContext.repositories.documents.save({
-      id: existing?.id ?? `local-recent-document:${workspaceId}`,
-      workspaceId,
-      name: document.name,
-      content: document.content,
-      docType: document.docType,
-      sourceKind: 'local',
-      createdAt: existing?.createdAt ?? document.updatedAt,
-      updatedAt: document.updatedAt
-    })
   }
 
   async function persistCurrentWorkspaceConfig(): Promise<void> {
@@ -258,37 +218,40 @@ export function createWorkspaceController(
       await runMutation(async () => {
         const workspaceId = appState.activeWorkspaceId()
         if (workspaceId === undefined) throw new Error('Active workspace is missing')
-        const current = currentEditorDocument(now)
+
         cancelPendingDocumentPersistence()
+        await documents().flushActiveDocument()
         await persistCurrentWorkspaceConfig()
 
         const workspaceService = await service()
         const active = await workspaceService.getActive()
+        if (active.workspace.id !== workspaceId) {
+          throw new Error(`Active workspace changed during storage transition: ${workspaceId}`)
+        }
+        if (active.workspace.storageMode === mode) return
+
+        const documentService = await runtime.getDocumentService()
+        const snapshot = await documentService.snapshotWorkspace(active.workspace)
         let updated: WorkspaceContext
+
         if (mode === 'local-library') {
-          if (active.workspace.storageMode === 'local-library') return
-          const document = {
-            id: `local-recent-document:${workspaceId}`,
+          updated = await workspaceService.enableLocalLibrary(
             workspaceId,
-            name: current.name,
-            content: current.content,
-            docType: current.docType,
-            sourceKind: 'local' as const,
-            createdAt: current.updatedAt,
-            updatedAt: current.updatedAt
-          }
-          updated = await workspaceService.enableLocalLibrary(workspaceId, [document], document.id)
-          sessionDocuments.delete(workspaceId)
+            snapshot.documents,
+            snapshot.activeDocumentId
+          )
+          // Session bodies remain canonical until the durable atomic transition succeeds.
+          runtime.getSessionDocumentLibrary().deleteWorkspace(workspaceId)
         } else {
-          if (active.workspace.storageMode === 'private-session') return
-          await saveLocalDocument(await context(), workspaceId, current)
+          // Read the complete Local snapshot before the atomic scrub. Publish to memory
+          // only after scrub success so a failed transition cannot expose split state.
           updated = await workspaceService.makePrivate(workspaceId)
-          sessionDocuments.set(workspaceId, current)
+          runtime.getSessionDocumentLibrary().replaceWorkspace(workspaceId, snapshot)
         }
 
         applyContext(updated)
+        await documents().bootstrapForWorkspace(updated.workspace)
         appState.setWorkspaceSummaries(await workspaceService.list())
-        relint()
       })
     },
 
