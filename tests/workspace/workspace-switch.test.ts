@@ -1,38 +1,10 @@
 import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
-import type { AppConfig } from '../../src/core/config/schema'
-import type { GlobalPreferences, RuleProfile, Workspace } from '../../src/core/workspace/types'
 import type { DocumentType } from '../../src/core/types'
+import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
 import { createMemoryStorageContext } from '../../src/storage/repositories/memory'
-import type { AtomicOperationsPort, StorageRepositories } from '../../src/storage/repositories/ports'
-import { createSessionDocumentStore, type SessionDocument } from '../../src/workspace/session-document-store'
-
-interface WorkspaceContext {
-  workspace: Workspace
-  profile: RuleProfile
-  preferences: GlobalPreferences
-  config: AppConfig
-}
-
-interface WorkspaceSwitchResult {
-  context: WorkspaceContext
-  document?: SessionDocument
-  warning?: string
-}
-
-interface SwitchService {
-  switchTo(targetWorkspaceId: string, currentDocument: SessionDocument): Promise<WorkspaceSwitchResult>
-}
-
-interface WorkspaceServiceModule {
-  createWorkspaceService(deps: {
-    repositories: StorageRepositories
-    atomic: AtomicOperationsPort
-    now?: () => number
-    sessionDocuments?: ReturnType<typeof createSessionDocumentStore>
-  }): SwitchService
-}
+import type { StorageRepositories } from '../../src/storage/repositories/ports'
+import { createWorkspaceService } from '../../src/workspace/workspace-service'
 
 interface StoredDocument {
   name: string
@@ -44,10 +16,6 @@ interface StoredDocument {
 interface ExplicitPersistenceActions {
   persistWorkspaceDocumentDebounced(workspaceId: string, document: StoredDocument): void
   cancelPendingDocumentPersistence(): void
-}
-
-async function loadServiceModule(): Promise<WorkspaceServiceModule> {
-  return vi.importActual<WorkspaceServiceModule>('../../src/workspace/workspace-service')
 }
 
 async function saveWorkspace(
@@ -81,78 +49,65 @@ async function seedTwoWorkspaces(
   return { memory, a, b }
 }
 
-function doc(name: string, content: string, updatedAt: number): SessionDocument {
-  return { name, content, docType: name.endsWith('.txt') ? 'text' : 'markdown', updatedAt }
-}
-
 afterEach(() => {
   vi.useRealTimers()
   Reflect.deleteProperty(globalThis, 'indexedDB')
   vi.resetModules()
 })
 
-describe('Workspace switching', () => {
-  it('keeps private-session documents in memory across A -> B -> A without persistence', async () => {
-    const module = await loadServiceModule()
+describe('WorkspaceService switching boundary', () => {
+  it('switches workspace context without persisting private document bodies', async () => {
     const { memory } = await seedTwoWorkspaces()
-    const sessionDocuments = createSessionDocumentStore()
-    const service = module.createWorkspaceService({
+    const service = createWorkspaceService({
       repositories: memory.repositories,
-      atomic: memory.atomicOperations,
-      sessionDocuments
+      atomic: memory.atomicOperations
     })
-    expect(typeof service.switchTo).toBe('function')
-    if (typeof service.switchTo !== 'function') return
 
-    const toB = await service.switchTo('workspace-b', doc('a.md', 'private A', 10))
-    expect(toB.context.workspace.id).toBe('workspace-b')
-    expect(toB.document).toBeUndefined()
-    expect(await memory.repositories.documents.listByWorkspace('workspace-a')).toEqual([])
-
-    const backToA = await service.switchTo('workspace-a', doc('b.md', 'private B', 20))
-    expect(backToA.document).toEqual(doc('a.md', 'private A', 10))
-    expect(await memory.repositories.documents.listByWorkspace('workspace-b')).toEqual([])
+    const toB = await service.switchTo('workspace-b')
+    expect(toB.workspace.id).toBe('workspace-b')
+    await expect(memory.repositories.selection.getActiveWorkspaceId()).resolves.toBe('workspace-b')
+    await expect(memory.repositories.documents.listByWorkspace('workspace-a')).resolves.toEqual([])
+    await expect(memory.repositories.documents.listByWorkspace('workspace-b')).resolves.toEqual([])
   })
 
-  it('does not move active selection when flushing the current local-library document fails', async () => {
-    const module = await loadServiceModule()
+  it('does not flush documents itself before moving workspace selection', async () => {
     const { memory } = await seedTwoWorkspaces('local-library', 'private-session')
     memory.repositories.documents.save = async () => {
-      throw new Error('forced save failure')
+      throw new Error('WorkspaceService must not save documents during switch')
     }
-    const service = module.createWorkspaceService({
+    const service = createWorkspaceService({
       repositories: memory.repositories,
-      atomic: memory.atomicOperations,
-      sessionDocuments: createSessionDocumentStore()
+      atomic: memory.atomicOperations
     })
-    expect(typeof service.switchTo).toBe('function')
-    if (typeof service.switchTo !== 'function') return
 
-    await expect(service.switchTo('workspace-b', doc('a.md', 'unsaved A', 10))).rejects.toThrow('forced save failure')
-    await expect(memory.repositories.selection.getActiveWorkspaceId()).resolves.toBe('workspace-a')
+    await expect(service.switchTo('workspace-b')).resolves.toMatchObject({
+      workspace: { id: 'workspace-b' }
+    })
+    await expect(memory.repositories.selection.getActiveWorkspaceId()).resolves.toBe('workspace-b')
   })
 
-  it('loads only the target local-library workspace document', async () => {
-    const module = await loadServiceModule()
+  it('does not load a Local Library document into the workspace context result', async () => {
     const { memory } = await seedTwoWorkspaces('private-session', 'local-library')
     await memory.repositories.documents.save({
-      id: 'doc-a', workspaceId: 'workspace-a', name: 'a.md', content: 'wrong A', docType: 'markdown',
-      sourceKind: 'local', createdAt: 1, updatedAt: 50
+      id: 'doc-b',
+      workspaceId: 'workspace-b',
+      name: 'b.md',
+      content: 'target B',
+      docType: 'markdown',
+      sourceKind: 'local',
+      createdAt: 1,
+      updatedAt: 40
     })
-    await memory.repositories.documents.save({
-      id: 'doc-b', workspaceId: 'workspace-b', name: 'b.md', content: 'target B', docType: 'markdown',
-      sourceKind: 'local', createdAt: 1, updatedAt: 40
-    })
-    const service = module.createWorkspaceService({
+    const service = createWorkspaceService({
       repositories: memory.repositories,
-      atomic: memory.atomicOperations,
-      sessionDocuments: createSessionDocumentStore()
+      atomic: memory.atomicOperations
     })
-    expect(typeof service.switchTo).toBe('function')
-    if (typeof service.switchTo !== 'function') return
 
-    const result = await service.switchTo('workspace-b', doc('a.md', 'private current A', 60))
-    expect(result.document?.content).toBe('target B')
+    const result = await service.switchTo('workspace-b')
+
+    expect(result.workspace.id).toBe('workspace-b')
+    expect('document' in result).toBe(false)
+    await expect(memory.repositories.documents.get('doc-b')).resolves.toMatchObject({ content: 'target B' })
   })
 })
 
