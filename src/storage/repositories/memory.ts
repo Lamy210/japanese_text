@@ -35,6 +35,7 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
   let workspaces = new Map<string, Workspace>()
   let profiles = new Map<string, RuleProfile>()
   let documents = new Map<string, StoredWorkspaceDocument>()
+  let documentSelections = new Map<string, string>()
   let preferences: GlobalPreferences | undefined
   let activeWorkspaceId: string | undefined
 
@@ -62,6 +63,21 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       async setActiveWorkspaceId(workspaceId) {
         if (workspaceId.length === 0) throw new Error('workspaceId must not be empty')
         activeWorkspaceId = workspaceId
+      }
+    },
+    documentSelection: {
+      async getActiveDocumentId(workspaceId) {
+        if (workspaceId.length === 0) throw new Error('workspaceId must not be empty')
+        return documentSelections.get(workspaceId)
+      },
+      async setActiveDocumentId(workspaceId, documentId) {
+        if (workspaceId.length === 0) throw new Error('workspaceId must not be empty')
+        if (documentId.length === 0) throw new Error('documentId must not be empty')
+        documentSelections.set(workspaceId, documentId)
+      },
+      async deleteActiveDocumentId(workspaceId) {
+        if (workspaceId.length === 0) throw new Error('workspaceId must not be empty')
+        documentSelections.delete(workspaceId)
       }
     },
     preferences: {
