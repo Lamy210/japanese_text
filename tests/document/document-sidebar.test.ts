@@ -4,7 +4,7 @@ import {
   filterDocumentSummaries,
   isDocumentRowActive,
   nextAuxiliaryPanels
-} from '../../src/components/DocumentSidebar'
+} from '../../src/components/document-sidebar-model'
 
 function summary(id: string, name: string, updatedAt: number): DocumentSummary {
   return {
