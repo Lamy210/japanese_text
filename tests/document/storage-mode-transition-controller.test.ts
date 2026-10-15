@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StoredWorkspaceDocument } from '../../src/core/workspace/types'
-import { createStorageContext, type StorageContext } from '../../src/storage/bootstrap'
+import { createStorageContext } from '../../src/storage/bootstrap'
 import { createApplicationRuntime, type ApplicationRuntime } from '../../src/state/application-runtime'
 
 function storedDocument(
@@ -23,7 +23,7 @@ function storedDocument(
   }
 }
 
-async function harness(context: StorageContext, runtime: ApplicationRuntime, now = 1000) {
+async function harness(runtime: ApplicationRuntime, now = 1000) {
   vi.resetModules()
   const [{ appState }, workspaceModule, documentModule] = await Promise.all([
     import('../../src/state/app-state'),
@@ -60,7 +60,7 @@ describe('multi-document storage mode transitions', () => {
   it('moves every Private Session document and the active ID into Local Library atomically', async () => {
     const context = await createStorageContext({ factory: new IDBFactory(), now: () => 1000 })
     const runtime = createApplicationRuntime({ getContext: async () => context, now: () => 1000 })
-    const { appState, controller, documentController } = await harness(context, runtime)
+    const { appState, controller, documentController } = await harness(runtime)
     await controller.bootstrap()
     const workspaceId = appState.activeWorkspaceId()!
     const firstId = appState.activeDocumentId()!
@@ -101,7 +101,7 @@ describe('multi-document storage mode transitions', () => {
     const third = storedDocument(workspace.id, 'local-c', 'C', 30, 30)
     await context.atomic.enableLocalLibrary(workspace.id, [first, second, third], second.id)
 
-    const { appState, controller } = await harness(context, runtime)
+    const { appState, controller } = await harness(runtime)
     await controller.bootstrap()
     expect(appState.activeDocumentId()).toBe(second.id)
     appState.setDocument('B latest editor', second.name, second.docType)
@@ -126,7 +126,7 @@ describe('multi-document storage mode transitions', () => {
   it('passes the complete Private library to the atomic enable operation and keeps memory on failure', async () => {
     const context = await createStorageContext({ factory: new IDBFactory(), now: () => 1000 })
     const runtime = createApplicationRuntime({ getContext: async () => context, now: () => 1000 })
-    const { appState, controller, documentController } = await harness(context, runtime)
+    const { appState, controller, documentController } = await harness(runtime)
     await controller.bootstrap()
     const workspaceId = appState.activeWorkspaceId()!
 
@@ -166,7 +166,7 @@ describe('multi-document storage mode transitions', () => {
     const second = storedDocument(workspace.id, 'local-b', 'B', 20, 20)
     const third = storedDocument(workspace.id, 'local-c', 'C', 30, 30)
     await context.atomic.enableLocalLibrary(workspace.id, [first, second, third], second.id)
-    const { appState, controller } = await harness(context, runtime)
+    const { appState, controller } = await harness(runtime)
     await controller.bootstrap()
     appState.setDocument('B latest', second.name, second.docType)
 
