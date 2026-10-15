@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { DocumentSummary } from '../../src/document/types'
 import {
+  documentSidebarDefaultOpen,
   filterDocumentSummaries,
   isDocumentRowActive,
-  nextAuxiliaryPanels
+  nextAuxiliaryPanels,
+  reconcileAuxiliaryPanelsForWidth
 } from '../../src/components/document-sidebar-model'
 
 function summary(id: string, name: string, updatedAt: number): DocumentSummary {
@@ -55,5 +57,19 @@ describe('DocumentSidebar pure state model', () => {
       .toEqual({ documentsOpen: true, diagnosticsOpen: true })
     expect(nextAuxiliaryPanels({ width: 900, target: 'documents', documentsOpen: true, diagnosticsOpen: false }))
       .toEqual({ documentsOpen: false, diagnosticsOpen: false })
+  })
+
+  it('defaults the Sidebar open only on wide desktop without forcing later user toggles closed', () => {
+    expect(documentSidebarDefaultOpen(1279)).toBe(false)
+    expect(documentSidebarDefaultOpen(1280)).toBe(true)
+  })
+
+  it('reconciles an existing dual-panel state after resizing below 1024px', () => {
+    expect(reconcileAuxiliaryPanelsForWidth(900, { documentsOpen: true, diagnosticsOpen: true }))
+      .toEqual({ documentsOpen: false, diagnosticsOpen: true })
+    expect(reconcileAuxiliaryPanelsForWidth(900, { documentsOpen: true, diagnosticsOpen: false }))
+      .toEqual({ documentsOpen: true, diagnosticsOpen: false })
+    expect(reconcileAuxiliaryPanelsForWidth(1200, { documentsOpen: true, diagnosticsOpen: true }))
+      .toEqual({ documentsOpen: true, diagnosticsOpen: true })
   })
 })
