@@ -96,7 +96,6 @@ export function createWorkspaceController(
       repositories: storageContext.repositories,
       atomic: storageContext.atomic,
       durableBackend: storageContext.durable,
-      sessionDocuments,
       now
     }))
     return servicePromise
@@ -229,13 +228,13 @@ export function createWorkspaceController(
       await runMutation(async () => {
         cancelPendingDocumentPersistence()
         await persistCurrentWorkspaceConfig()
+        await routeCurrentDocument()
         const workspaceService = await service()
-        const result = await workspaceService.switchTo(workspaceId, currentEditorDocument(now))
-        applyContext(result.context)
-        applyDocument(result.document)
+        const target = await workspaceService.switchTo(workspaceId)
+        applyContext(target)
+        applyDocument(await loadDocument(await context(), target))
         appState.setWorkspaceSummaries(await workspaceService.list())
         appState.resetDiagnosticsForDocumentContext()
-        if (result.warning !== undefined) toast('warning', result.warning)
         relint()
       })
     },
@@ -267,6 +266,7 @@ export function createWorkspaceController(
         const previousActiveId = appState.activeWorkspaceId()
         const workspaceService = await service()
         const result = await workspaceService.delete(workspaceId)
+        sessionDocuments.delete(workspaceId)
         applyContext(result.active)
         appState.setWorkspaceSummaries(await workspaceService.list())
 
@@ -287,7 +287,29 @@ export function createWorkspaceController(
         await persistCurrentWorkspaceConfig()
 
         const workspaceService = await service()
-        const updated = await workspaceService.setStorageMode(workspaceId, mode, current)
+        const active = await workspaceService.getActive()
+        let updated: WorkspaceContext
+        if (mode === 'local-library') {
+          if (active.workspace.storageMode === 'local-library') return
+          const document = {
+            id: `local-recent-document:${workspaceId}`,
+            workspaceId,
+            name: current.name,
+            content: current.content,
+            docType: current.docType,
+            sourceKind: 'local' as const,
+            createdAt: current.updatedAt,
+            updatedAt: current.updatedAt
+          }
+          updated = await workspaceService.enableLocalLibrary(workspaceId, [document], document.id)
+          sessionDocuments.delete(workspaceId)
+        } else {
+          if (active.workspace.storageMode === 'private-session') return
+          await saveLocalDocument(await context(), workspaceId, current)
+          updated = await workspaceService.makePrivate(workspaceId)
+          sessionDocuments.set(workspaceId, current)
+        }
+
         applyContext(updated)
         appState.setWorkspaceSummaries(await workspaceService.list())
         relint()
