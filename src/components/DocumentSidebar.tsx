@@ -116,7 +116,7 @@ export function DocumentSidebar() {
         aria-label="Documentsを閉じる"
         onClick={closeSidebar}
       />
-      <nav class="document-sidebar" aria-label="Documents">
+      <nav id="document-sidebar" class="document-sidebar" aria-label="Documents">
         <div class="document-sidebar-header">
           <div class="document-sidebar-title-row">
             <h2 class="document-sidebar-title">Documents</h2>
