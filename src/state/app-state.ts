@@ -16,6 +16,7 @@ import {
 } from '../core/config/schema'
 import { createDefaultConfig, validateAppConfig } from '../core/config/validate'
 import { getPreset } from '../core/config/presets'
+import type { DocumentSummary } from '../document/types'
 import type { WorkspaceSummary } from '../workspace/workspace-service'
 import type { StorageCapability } from '../workspace/storage-capability'
 import { WELCOME_DOCUMENT } from './welcome-document'
@@ -34,6 +35,12 @@ const [documentText, setDocumentText] = createSignal<string>(WELCOME_DOCUMENT)
 const [documentName, setDocumentName] = createSignal<string>('welcome.md')
 const [docType, setDocType] = createSignal<DocumentType>('markdown')
 const [revision, setRevision] = createSignal<number>(0)
+const [documentSummaries, setDocumentSummaries] = createSignal<DocumentSummary[]>([])
+const [activeDocumentId, setActiveDocumentId] = createSignal<string | undefined>(undefined)
+const [documentLibraryReady, setDocumentLibraryReady] = createSignal(false)
+const [documentMutationPending, setDocumentMutationPending] = createSignal(false)
+const [documentSidebarOpen, setDocumentSidebarOpen] = createSignal(true)
+const [documentFilter, setDocumentFilter] = createSignal('')
 
 const [tierResults, setTierResults] = createStore<Record<RuleTier, TierResult | undefined>>({
   fast: undefined,
@@ -158,6 +165,20 @@ export const appState = {
     setDocumentText(text)
     setRevision((r) => r + 1)
   },
+  documentSummaries,
+  setDocumentSummaries: (values: DocumentSummary[]): void => {
+    setDocumentSummaries(structuredClone(values))
+  },
+  activeDocumentId,
+  setActiveDocumentId,
+  documentLibraryReady,
+  setDocumentLibraryReady,
+  documentMutationPending,
+  setDocumentMutationPending,
+  documentSidebarOpen,
+  setDocumentSidebarOpen,
+  documentFilter,
+  setDocumentFilter,
 
   diagnostics,
   filteredDiagnostics,
