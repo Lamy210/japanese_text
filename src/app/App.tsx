@@ -4,6 +4,7 @@
 
 import { onMount, createEffect, Show } from 'solid-js'
 import { Header } from '../components/Header'
+import { DocumentSidebar } from '../components/DocumentSidebar'
 import { EditorPane } from '../components/EditorPane'
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel'
 import { StatusBar } from '../components/StatusBar'
@@ -45,6 +46,9 @@ export function App() {
     <div class="app-shell">
       <Header />
       <main class="app-main">
+        <Show when={appState.documentSidebarOpen()}>
+          <DocumentSidebar />
+        </Show>
         <EditorPane />
         <Show when={appState.panelOpen()}>
           <DiagnosticsPanel />
