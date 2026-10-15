@@ -1,10 +1,10 @@
 # Phase 2C-A Implementation Plan Clarifications
 
-この文書は `2026-10-15-phase2c-document-library-implementation.md` の self-review で見つかった曖昧箇所を解消する normative clarification である。実装時は本書の定義を優先する。
+この文書は `2026-10-15-phase2c-document-library-implementation.md` の self-review で見つかった曖昧箇所を解消する normative clarification である。実装時は本書とimplementation planを同時に読み、同名interfaceについては本書の定義を優先する。
 
 ## 1. WorkspaceService storage-mode API を確定する
 
-Task 5 の「or exposes ...」という選択肢表現は廃止し、以下を唯一の contract とする。
+以下を唯一の contract とする。
 
 ```ts
 interface WorkspaceService {
@@ -13,7 +13,7 @@ interface WorkspaceService {
   saveConfig(workspaceId: string, config: AppConfig): Promise<WorkspaceContext>
   create(input: { name: string }): Promise<WorkspaceContext>
   rename(workspaceId: string, name: string): Promise<Workspace>
-  switchTo(targetWorkspaceId: string): Promise<WorkspaceContext>
+  switchTo(targetWorkspaceId: string): Promise<WorkspaceSwitchResult>
   delete(workspaceId: string): Promise<WorkspaceDeleteResult>
 
   enableLocalLibrary(
@@ -22,18 +22,20 @@ interface WorkspaceService {
     activeDocumentId: string
   ): Promise<WorkspaceContext>
 
-  makeWorkspacePrivate(workspaceId: string): Promise<WorkspaceContext>
+  makePrivate(workspaceId: string): Promise<WorkspaceContext>
 }
 ```
 
+- `WorkspaceSwitchResult` は Workspace context + optional warning のみを持ち、document bodyを持たない。
 - `switchTo()` は document body を受け取らない。
-- `enableLocalLibrary()` / `makeWorkspacePrivate()` は policy + atomic operation の呼び出しだけを担当する。
+- `enableLocalLibrary()` / `makePrivate()` は policy validation + atomic operation 呼び出しだけを担当する。
+- `makePrivate()` の下位では既存 `AtomicOperationsPort.makeWorkspacePrivate(workspaceId)` を呼ぶ。service名とatomic名を混同しない。
 - session library へのflush/snapshot/commitは controller / DocumentService orchestration が担当する。
 - Phase 2B の `setStorageMode(workspaceId, mode, currentDocument)` は削除する。overloadを残さない。
 
 ## 2. Review Focus #5 の担当Task
 
-Private data leak compatibility regressionは **Task 12** が担当する。Task 11ではない。
+Private data leak compatibility regressionは **Task 12** が担当する。
 
 必須test対象:
 
@@ -110,7 +112,7 @@ Local -> Private:
 1. cancel pending autosave
 2. current active Local document explicit flush
 3. `DocumentService.snapshotWorkspace(workspace)` で temporary snapshot取得
-4. `WorkspaceService.makeWorkspacePrivate(workspaceId)`
+4. `WorkspaceService.makePrivate(workspaceId)`
 5. success後のみ `SessionDocumentLibraryStore.replaceWorkspace()`
 
 途中failureではcanonical sourceを切り替えない。
