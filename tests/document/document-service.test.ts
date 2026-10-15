@@ -25,14 +25,15 @@ function stored(
   workspaceId: string,
   updatedAt = 1000,
   createdAt = 1000,
-  content: string | undefined = id
+  content?: string
 ): StoredWorkspaceDocument {
+  const resolvedContent = arguments.length >= 5 ? content : id
   return {
     id,
     workspaceId,
     name: `${id}.md`,
     docType: 'markdown',
-    ...(content === undefined ? {} : { content }),
+    ...(resolvedContent === undefined ? {} : { content: resolvedContent }),
     sourceKind: 'local',
     createdAt,
     updatedAt
