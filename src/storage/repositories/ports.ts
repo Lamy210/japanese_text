@@ -18,6 +18,12 @@ export interface WorkspaceSelectionRepository {
   setActiveWorkspaceId(workspaceId: string): Promise<void>
 }
 
+export interface DocumentSelectionRepository {
+  getActiveDocumentId(workspaceId: string): Promise<string | undefined>
+  setActiveDocumentId(workspaceId: string, documentId: string): Promise<void>
+  deleteActiveDocumentId(workspaceId: string): Promise<void>
+}
+
 export interface PreferencesRepository {
   get(): Promise<GlobalPreferences | undefined>
   save(value: GlobalPreferences): Promise<void>
@@ -40,6 +46,7 @@ export interface DocumentRepository {
 export interface StorageRepositories {
   workspaces: WorkspaceRepository
   selection: WorkspaceSelectionRepository
+  documentSelection: DocumentSelectionRepository
   preferences: PreferencesRepository
   profiles: RuleProfileRepository
   documents: DocumentRepository
