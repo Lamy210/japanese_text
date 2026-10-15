@@ -36,23 +36,6 @@ interface WorkspaceServiceModule {
   }): StorageModeService
 }
 
-type TransitionAtomic = AtomicOperationsPort & {
-  enableLocalLibrary(
-    workspaceId: string,
-    document: {
-      id: string
-      workspaceId: string
-      name: string
-      content?: string
-      docType: 'markdown' | 'text'
-      sourceKind: 'local' | 'file'
-      createdAt: number
-      updatedAt: number
-    }
-  ): Promise<void>
-  makeWorkspacePrivate(workspaceId: string): Promise<void>
-}
-
 function sessionDoc(content = 'current body'): SessionDocument {
   return { name: 'draft.md', content, docType: 'markdown', updatedAt: 500 }
 }
@@ -127,29 +110,29 @@ describe('atomic storage mode operations', () => {
     const db = await openDatabase(new IDBFactory())
     try {
       const repositories = createIndexedDbRepositories(db)
-      const atomic = createIndexedDbAtomicOperations(db, () => 600) as TransitionAtomic
-      expect(typeof atomic.enableLocalLibrary).toBe('function')
-      if (typeof atomic.enableLocalLibrary !== 'function') return
+      const atomic = createIndexedDbAtomicOperations(db, () => 600)
 
       const state = createDefaultWorkspaceState(100)
       await repositories.preferences.save(state.preferences)
       await atomic.createWorkspaceAndActivate(state.workspace, state.profile)
-
-      await atomic.enableLocalLibrary(state.workspace.id, {
+      const document = {
         id: `local-recent-document:${state.workspace.id}`,
         workspaceId: state.workspace.id,
         name: 'draft.md',
         content: 'first body',
-        docType: 'markdown',
-        sourceKind: 'local',
+        docType: 'markdown' as const,
+        sourceKind: 'local' as const,
         createdAt: 500,
         updatedAt: 500
-      })
+      }
+
+      await atomic.enableLocalLibrary(state.workspace.id, [document], document.id)
 
       expect((await repositories.workspaces.get(state.workspace.id))?.storageMode).toBe('local-library')
       await expect(repositories.documents.listByWorkspace(state.workspace.id)).resolves.toEqual([
         expect.objectContaining({ content: 'first body' })
       ])
+      await expect(repositories.documentSelection.getActiveDocumentId(state.workspace.id)).resolves.toBe(document.id)
     } finally {
       db.close()
     }
@@ -159,9 +142,7 @@ describe('atomic storage mode operations', () => {
     const db = await openDatabase(new IDBFactory())
     try {
       const repositories = createIndexedDbRepositories(db)
-      const atomic = createIndexedDbAtomicOperations(db, () => 900) as TransitionAtomic
-      expect(typeof atomic.makeWorkspacePrivate).toBe('function')
-      if (typeof atomic.makeWorkspacePrivate !== 'function') return
+      const atomic = createIndexedDbAtomicOperations(db, () => 900)
 
       const a = createDefaultWorkspaceState(100)
       a.workspace.id = 'workspace-a'
@@ -184,6 +165,8 @@ describe('atomic storage mode operations', () => {
         id: 'doc-b', workspaceId: 'workspace-b', name: 'b.md', content: 'B', docType: 'markdown',
         sourceKind: 'local', createdAt: 1, updatedAt: 1
       })
+      await repositories.documentSelection.setActiveDocumentId('workspace-a', 'doc-a')
+      await repositories.documentSelection.setActiveDocumentId('workspace-b', 'doc-b')
       const tx = db.transaction(STORE_DOCUMENT_SNAPSHOTS, 'readwrite')
       const done = transactionDone(tx)
       tx.objectStore(STORE_DOCUMENT_SNAPSHOTS).put({
@@ -198,7 +181,9 @@ describe('atomic storage mode operations', () => {
 
       expect((await repositories.workspaces.get('workspace-a'))?.storageMode).toBe('private-session')
       await expect(repositories.documents.listByWorkspace('workspace-a')).resolves.toEqual([])
+      await expect(repositories.documentSelection.getActiveDocumentId('workspace-a')).resolves.toBeUndefined()
       await expect(repositories.documents.listByWorkspace('workspace-b')).resolves.toHaveLength(1)
+      await expect(repositories.documentSelection.getActiveDocumentId('workspace-b')).resolves.toBe('doc-b')
       expect(await rawGet(db, STORE_DOCUMENT_SNAPSHOTS, 'snapshot-a')).toBeUndefined()
       expect(await rawGet(db, STORE_DOCUMENT_SNAPSHOTS, 'snapshot-b')).toBeDefined()
     } finally {
@@ -245,7 +230,7 @@ describe('WorkspaceService storage policy', () => {
       async makeWorkspacePrivate() {
         throw new Error('forced transition failure')
       }
-    } as AtomicOperationsPort
+    }
     const service = module.createWorkspaceService({
       repositories: memory.repositories,
       atomic: failingAtomic,
