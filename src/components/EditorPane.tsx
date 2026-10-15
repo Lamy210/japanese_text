@@ -10,7 +10,7 @@ import { createEditorExtensions, toCodeMirrorDiagnostics, lineNumbersCompartment
 import { setEditorView } from '../editor/editor-adapter'
 import { appState } from '../state/app-state'
 import { lintController } from '../state/lint-controller'
-import { formatDocumentAction, persistWorkspaceDocumentDebounced } from '../state/actions'
+import { formatDocumentAction, persistDocumentDebounced } from '../state/actions'
 
 export function EditorPane() {
   let container: HTMLDivElement | undefined
@@ -29,13 +29,21 @@ export function EditorPane() {
             lintController.scheduleLint()
 
             const workspaceId = appState.activeWorkspaceId()
-            if (workspaceId !== undefined) {
-              persistWorkspaceDocumentDebounced(workspaceId, {
-                name: appState.documentName(),
-                content: text,
-                docType: appState.docType(),
-                updatedAt: Date.now()
-              })
+            const documentId = appState.activeDocumentId()
+            if (workspaceId !== undefined && documentId !== undefined) {
+              const summary = appState.documentSummaries().find((value) => value.id === documentId)
+              if (summary !== undefined && summary.workspaceId === workspaceId) {
+                persistDocumentDebounced({
+                  workspaceId,
+                  documentId,
+                  name: appState.documentName(),
+                  content: text,
+                  docType: appState.docType(),
+                  sourceKind: summary.sourceKind,
+                  createdAt: summary.createdAt,
+                  updatedAt: Date.now()
+                })
+              }
             }
           },
           onFormatShortcut: () => {
