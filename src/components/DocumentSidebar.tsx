@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js'
+import { For, Show, createEffect, createMemo, createSignal } from 'solid-js'
 import type { DocumentSummary } from '../document/types'
 import { appState } from '../state/app-state'
 import { documentController } from '../state/workspace-runtime'
@@ -59,12 +59,6 @@ export function DocumentSidebar() {
 
   createEffect(() => {
     if (deleteConfirmOpen()) queueMicrotask(() => cancelDeleteButton?.focus())
-  })
-
-  onMount(() => {
-    if (viewportWidth() < 1280 && appState.documentSidebarOpen()) {
-      appState.setDocumentSidebarOpen(false)
-    }
   })
 
   return (
