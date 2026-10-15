@@ -1,29 +1,39 @@
-<?xml version="1.0" encoding="utf-8"?>
-<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 30 30" style="enable-background:new 0 0 30 30;" xml:space="preserve">
-<defs>
-  <style type="text/css">
-    .st194{fill:#2D2D2D;stroke:#FFFFFF;stroke-width:0.6317;stroke-miterlimit:10;}
-    .st23{fill:#FFFFFF;}
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Japanese Writing Toolkit</title>
+  <desc id="desc">A Japanese hiragana A with a fountain pen nib and proofreading check mark.</desc>
 
-    .z-breathe {
-      animation: breathe 2.5s ease-in-out infinite;
-    }
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="#0E4A39"/>
 
-    @keyframes breathe {
-      0%, 100% { opacity: 0.7; }
-      50% { opacity: 1; }
-    }
-  </style>
-</defs>
-
-<g>
-  <path class="st194" d="M24.51,28.51H5.49c-2.21,0-4-1.79-4-4V5.49c0-2.21,1.79-4,4-4h19.03c2.21,0,4,1.79,4,4v19.03
-    C28.51,26.72,26.72,28.51,24.51,28.51z"/>
-  <g class="z-breathe">
-    <path class="st23" d="M15.47,7.1l-1.3,1.85c-0.2,0.29-0.54,0.47-0.9,0.47h-7.1V7.09C6.16,7.1,15.47,7.1,15.47,7.1z"/>
-    <polygon class="st23" points="24.3,7.1 13.14,22.91 5.7,22.91 16.86,7.1"/>
-    <path class="st23" d="M14.53,22.91l1.31-1.86c0.2-0.29,0.54-0.47,0.9-0.47h7.09v2.33H14.53z"/>
+  <g transform="translate(73.429 721.697) scale(0.676606 -0.676606)">
+    <path d="M749 548 627 577C626 562 622 537 618 517H600C551 517 499 510 451 499L458 590C581 595 715 607 813 625L812 741C702 715 594 702 472 697L482 752C486 767 490 785 496 805L366 808C367 791 365 767 364 748L358 694H318C257 694 169 702 134 708L137 592C184 590 262 586 314 586H346C342 545 339 503 337 460C197 394 91 260 91 131C91 30 153 -14 226 -14C279 -14 332 2 381 26L394 -15L509 20C501 44 493 69 486 94C562 157 642 262 696 398C765 371 800 318 800 258C800 160 722 62 529 41L595 -64C841 -27 924 110 924 252C924 368 847 459 731 497ZM585 415C551 334 507 274 458 225C451 275 447 329 447 390V393C486 405 532 414 585 415ZM355 141C319 120 283 108 255 108C223 108 209 125 209 157C209 214 259 290 334 341C336 272 344 203 355 141Z" fill="#F8FBF9"/>
   </g>
-</g>
+
+  <!-- Fountain pen nib -->
+  <g transform="translate(718 282) rotate(24 116 210)">
+    <rect x="72" y="0" width="138" height="145" rx="34" fill="#39E59E"/>
+    <rect x="66" y="130" width="150" height="34" rx="17" fill="#39E59E"/>
+    <path d="M54 181
+             Q54 165 70 165
+             H212
+             Q228 165 228 181
+             L213 364
+             Q211 385 192 397
+             L139 433
+             L88 395
+             Q69 382 67 362 Z"
+          fill="#39E59E"/>
+    <circle cx="140" cy="264" r="26" fill="#0E4A39"/>
+    <path d="M140 289 L139 390" stroke="#0E4A39" stroke-width="18" stroke-linecap="round"/>
+  </g>
+
+  <!-- Proofreading / Safe Fix check underline -->
+  <path d="M224 807
+           C350 795 454 820 565 883
+           L687 747"
+        fill="none"
+        stroke="#39E59E"
+        stroke-width="58"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
 </svg>
