@@ -13,11 +13,12 @@ import {
   type StorageManagerLike
 } from '../workspace/storage-capability'
 import {
-  createWorkspaceService,
   type WorkspaceContext,
   type WorkspaceService
 } from '../workspace/workspace-service'
 import { appState, type Toast } from './app-state'
+import { createApplicationRuntime } from './application-runtime'
+import { createDocumentController, type DocumentController } from './document-controller'
 import { WELCOME_DOCUMENT } from './welcome-document'
 
 export interface WorkspaceControllerDependencies {
@@ -81,24 +82,29 @@ export function createWorkspaceController(
   const cancelPendingDocumentPersistence = dependencies.cancelPendingDocumentPersistence ?? (() => undefined)
   const now = dependencies.now ?? Date.now
   const sessionDocuments: SessionDocumentStore = createSessionDocumentStore()
+  const runtime = createApplicationRuntime({ getContext: getContextDependency, now })
 
-  let contextPromise: Promise<StorageContext> | undefined
-  let servicePromise: Promise<WorkspaceService> | undefined
   let capabilityService: StorageCapabilityService | undefined
+  let documentController: DocumentController | undefined
 
-  async function context(): Promise<StorageContext> {
-    contextPromise ??= getContextDependency()
-    return contextPromise
+  function context(): Promise<StorageContext> {
+    return runtime.getStorageContext()
   }
 
-  async function service(): Promise<WorkspaceService> {
-    servicePromise ??= context().then((storageContext) => createWorkspaceService({
-      repositories: storageContext.repositories,
-      atomic: storageContext.atomic,
-      durableBackend: storageContext.durable,
+  function service(): Promise<WorkspaceService> {
+    return runtime.getWorkspaceService()
+  }
+
+  function documents(): DocumentController {
+    documentController ??= createDocumentController({
+      getDocumentService: runtime.getDocumentService,
+      getWorkspaceService: runtime.getWorkspaceService,
+      relint,
+      toast,
+      cancelPendingDocumentPersistence,
       now
-    }))
-    return servicePromise
+    })
+    return documentController
   }
 
   function applyContext(active: WorkspaceContext): void {
@@ -130,16 +136,6 @@ export function createWorkspaceController(
       docType: document.docType,
       updatedAt: document.updatedAt
     }
-  }
-
-  async function loadBootDocument(
-    storageContext: StorageContext,
-    active: WorkspaceContext
-  ): Promise<SessionDocument | undefined> {
-    if (storageContext.migration.recoveredDocument !== undefined && active.workspace.storageMode === 'private-session') {
-      return structuredClone(storageContext.migration.recoveredDocument)
-    }
-    return loadDocument(storageContext, active)
   }
 
   async function saveLocalDocument(
@@ -211,13 +207,25 @@ export function createWorkspaceController(
       const active = await workspaceService.getActive()
       applyContext(active)
       appState.setWorkspaceSummaries(await workspaceService.list())
-      applyDocument(await loadBootDocument(storageContext, active))
-      appState.resetDiagnosticsForDocumentContext()
+
+      const recoveredDocument = storageContext.migration.recoveredDocument
+      if (
+        recoveredDocument !== undefined &&
+        active.workspace.storageMode === 'private-session' &&
+        runtime.getSessionDocumentLibrary().list(active.workspace.id).length === 0
+      ) {
+        await (await runtime.getDocumentService()).create(active.workspace, {
+          name: recoveredDocument.name,
+          content: recoveredDocument.content,
+          docType: recoveredDocument.docType
+        })
+      }
+
+      await documents().bootstrapForWorkspace(active.workspace)
       appState.setConfigLoaded(true)
       appState.setWorkspaceReady(true)
 
       if (storageContext.migration.warning !== undefined) toast('warning', storageContext.migration.warning)
-      relint()
     },
 
     refresh,
