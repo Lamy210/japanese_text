@@ -113,7 +113,7 @@ describe('Phase 2B final review regressions', () => {
     })
   })
 
-  it('repairs a missing target profile before committing workspace selection', async () => {
+  it('repairs a missing target profile before committing workspace selection and reports the recovery', async () => {
     const memory = createMemoryStorageContext(() => 1000)
     const a = createDefaultWorkspaceState(100)
     await memory.repositories.preferences.save(a.preferences)
@@ -135,8 +135,9 @@ describe('Phase 2B final review regressions', () => {
 
     const result = await service.switchTo('workspace-broken')
 
-    expect(result.workspace.id).toBe('workspace-broken')
-    expect(result.profile.id).toBe('missing-profile')
+    expect(result.context.workspace.id).toBe('workspace-broken')
+    expect(result.context.profile.id).toBe('missing-profile')
+    expect(result.warning).toContain('recovered')
     await expect(repositories.selection.getActiveWorkspaceId()).resolves.toBe('workspace-broken')
     await expect(repositories.profiles.get('missing-profile')).resolves.toBeDefined()
   })
