@@ -17,12 +17,15 @@ import {
   type WorkspaceService
 } from '../workspace/workspace-service'
 import { appState, type Toast } from './app-state'
-import { createApplicationRuntime } from './application-runtime'
+import {
+  createApplicationRuntime,
+  type ApplicationRuntime
+} from './application-runtime'
 import { createDocumentController, type DocumentController } from './document-controller'
-import { WELCOME_DOCUMENT } from './welcome-document'
 
 export interface WorkspaceControllerDependencies {
   getContext?: () => Promise<StorageContext>
+  runtime?: ApplicationRuntime
   relint?: () => void
   toast?: (kind: Toast['kind'], message: string) => void
   storageManager?: StorageManagerLike
@@ -82,7 +85,7 @@ export function createWorkspaceController(
   const cancelPendingDocumentPersistence = dependencies.cancelPendingDocumentPersistence ?? (() => undefined)
   const now = dependencies.now ?? Date.now
   const sessionDocuments: SessionDocumentStore = createSessionDocumentStore()
-  const runtime = createApplicationRuntime({ getContext: getContextDependency, now })
+  const runtime = dependencies.runtime ?? createApplicationRuntime({ getContext: getContextDependency, now })
 
   let capabilityService: StorageCapabilityService | undefined
   let documentController: DocumentController | undefined
@@ -113,31 +116,6 @@ export function createWorkspaceController(
     appState.setActiveWorkspaceId(active.workspace.id)
   }
 
-  function applyDocument(document: SessionDocument | undefined): void {
-    if (document === undefined) {
-      appState.setDocument(WELCOME_DOCUMENT, 'welcome.md', 'markdown')
-      return
-    }
-    appState.setDocument(document.content, document.name, document.docType)
-  }
-
-  async function loadDocument(
-    storageContext: StorageContext,
-    active: WorkspaceContext
-  ): Promise<SessionDocument | undefined> {
-    if (active.workspace.storageMode === 'private-session') return sessionDocuments.get(active.workspace.id)
-    if (active.workspace.storageMode !== 'local-library') return undefined
-
-    const document = newestDocument(await storageContext.repositories.documents.listByWorkspace(active.workspace.id))
-    if (document === undefined || typeof document.content !== 'string') return undefined
-    return {
-      name: document.name,
-      content: document.content,
-      docType: document.docType,
-      updatedAt: document.updatedAt
-    }
-  }
-
   async function saveLocalDocument(
     storageContext: StorageContext,
     workspaceId: string,
@@ -160,19 +138,6 @@ export function createWorkspaceController(
     const workspaceId = appState.activeWorkspaceId()
     if (workspaceId === undefined) return
     await (await service()).saveConfig(workspaceId, currentConfig())
-  }
-
-  async function routeCurrentDocument(): Promise<void> {
-    const workspaceService = await service()
-    const active = await workspaceService.getActive()
-    const document = currentEditorDocument(now)
-    if (active.workspace.storageMode === 'private-session') {
-      sessionDocuments.set(active.workspace.id, document)
-      return
-    }
-    if (active.workspace.storageMode === 'local-library') {
-      await saveLocalDocument(await context(), active.workspace.id, document)
-    }
   }
 
   async function refresh(): Promise<void> {
@@ -234,30 +199,28 @@ export function createWorkspaceController(
       if (workspaceId === appState.activeWorkspaceId()) return
       await runMutation(async () => {
         cancelPendingDocumentPersistence()
+        await documents().flushActiveDocument()
         await persistCurrentWorkspaceConfig()
-        await routeCurrentDocument()
+
         const workspaceService = await service()
         const target = await workspaceService.switchTo(workspaceId)
         applyContext(target)
-        applyDocument(await loadDocument(await context(), target))
+        await documents().bootstrapForWorkspace(target.workspace)
         appState.setWorkspaceSummaries(await workspaceService.list())
-        appState.resetDiagnosticsForDocumentContext()
-        relint()
       })
     },
 
     async createWorkspace(name: string): Promise<void> {
       await runMutation(async () => {
         cancelPendingDocumentPersistence()
+        await documents().flushActiveDocument()
         await persistCurrentWorkspaceConfig()
-        await routeCurrentDocument()
+
         const workspaceService = await service()
         const created = await workspaceService.create({ name })
         applyContext(created)
-        applyDocument(undefined)
+        await documents().bootstrapForWorkspace(created.workspace)
         appState.setWorkspaceSummaries(await workspaceService.list())
-        appState.resetDiagnosticsForDocumentContext()
-        relint()
       })
     },
 
@@ -272,16 +235,21 @@ export function createWorkspaceController(
     async deleteWorkspace(workspaceId: string): Promise<void> {
       await runMutation(async () => {
         const previousActiveId = appState.activeWorkspaceId()
+        cancelPendingDocumentPersistence()
+        await documents().flushActiveDocument()
+        await persistCurrentWorkspaceConfig()
+
         const workspaceService = await service()
         const result = await workspaceService.delete(workspaceId)
-        sessionDocuments.delete(workspaceId)
+
+        // Private Session state is application memory and must be cleared only after
+        // the durable/atomic Workspace delete succeeds.
+        runtime.getSessionDocumentLibrary().deleteWorkspace(workspaceId)
         applyContext(result.active)
         appState.setWorkspaceSummaries(await workspaceService.list())
 
         if (previousActiveId === workspaceId) {
-          applyDocument(await loadDocument(await context(), result.active))
-          appState.resetDiagnosticsForDocumentContext()
-          relint()
+          await documents().bootstrapForWorkspace(result.active.workspace)
         }
       })
     },
