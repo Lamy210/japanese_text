@@ -9,7 +9,6 @@ import type {
 import type {
   DocumentContext,
   DocumentDeleteResult,
-  DocumentState,
   DocumentSummary,
   EditableDocument,
   RecoveryDocumentState
@@ -184,12 +183,11 @@ export function createDocumentService(dependencies: DocumentServiceDependencies)
     if (stored === undefined) throw new Error(`Document not found in workspace ${workspace.id}: ${documentId}`)
     const converted = toEditable(stored)
     const editableDocuments = documents.map((document) => toEditable(document).document)
+    const mergedWarning = mergeWarnings(warning, converted.warning)
     return {
       document: converted.document,
       summaries: summariesOf(editableDocuments, documentId),
-      ...(mergeWarnings(warning, converted.warning) === undefined
-        ? {}
-        : { warning: mergeWarnings(warning, converted.warning)! })
+      ...(mergedWarning === undefined ? {} : { warning: mergedWarning })
     }
   }
 
