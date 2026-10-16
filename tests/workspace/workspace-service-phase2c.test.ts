@@ -64,9 +64,9 @@ describe('Phase 2C WorkspaceService responsibilities', () => {
     }
     const service = createWorkspaceService({ repositories, atomic: memory.atomicOperations })
 
-    const context = await service.switchTo(b.workspace.id)
+    const result = await service.switchTo(b.workspace.id)
 
-    expect(context.workspace.id).toBe('workspace-b')
+    expect(result.context.workspace.id).toBe('workspace-b')
     await expect(memory.repositories.selection.getActiveWorkspaceId()).resolves.toBe('workspace-b')
   })
 
