@@ -1,5 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AppConfig } from '../../src/core/config/schema'
 
 function installIndexedDb(factory: IDBFactory): void {
   Object.defineProperty(globalThis, 'indexedDB', {
@@ -35,7 +36,7 @@ describe('Private Session durable-storage isolation', () => {
     await expect(context.repositories.documents.listByWorkspace(workspaceId)).resolves.toEqual([])
     await expect(context.repositories.documentSelection.getActiveDocumentId(workspaceId)).resolves.toBeUndefined()
 
-    const importedConfig = structuredClone(appState.config)
+    const importedConfig = JSON.parse(JSON.stringify(appState.config)) as AppConfig
     importedConfig.privacy = { autoSave: true, privacyMode: false }
     await actions.importConfigFile(new File([JSON.stringify(importedConfig)], 'config.json', { type: 'application/json' }))
     expect((await context.repositories.workspaces.get(workspaceId))?.storageMode).toBe('private-session')
