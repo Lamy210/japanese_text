@@ -1,8 +1,13 @@
-import { For, Show, createEffect, createMemo, createSignal } from 'solid-js'
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import type { DocumentSummary } from '../document/types'
 import { appState } from '../state/app-state'
 import { documentController } from '../state/workspace-runtime'
-import { filterDocumentSummaries, isDocumentRowActive } from './document-sidebar-model'
+import {
+  documentDialogKeyboardAction,
+  filterDocumentSummaries,
+  isDocumentRowActive,
+  shouldFocusDocumentSidebarOnMount
+} from './document-sidebar-model'
 import './DocumentSidebar.css'
 
 function viewportWidth(): number {
@@ -13,9 +18,19 @@ function formatDocumentType(summary: DocumentSummary): string {
   return summary.docType === 'text' ? 'TXT' : 'MD'
 }
 
+function backgroundTargets(): HTMLElement[] {
+  if (typeof document === 'undefined') return []
+  return Array.from(document.querySelectorAll<HTMLElement>(
+    '.app-header .header-left, .app-header .header-actions > :not(#documents-toggle), .editor-pane, .diagnostics-panel, .status-bar'
+  ))
+}
+
 export function DocumentSidebar() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = createSignal(false)
+  let newDocumentButton: HTMLButtonElement | undefined
+  let deleteActionButton: HTMLButtonElement | undefined
   let cancelDeleteButton: HTMLButtonElement | undefined
+  let confirmDeleteButton: HTMLButtonElement | undefined
 
   const filtered = createMemo(() =>
     filterDocumentSummaries(appState.documentSummaries(), appState.documentFilter())
@@ -32,6 +47,11 @@ export function DocumentSidebar() {
         document.getElementById('documents-toggle')?.focus()
       })
     }
+  }
+
+  const closeDeleteDialog = (): void => {
+    setDeleteConfirmOpen(false)
+    queueMicrotask(() => deleteActionButton?.focus())
   }
 
   const closeOverlayAfterNavigation = (): void => {
@@ -52,10 +72,52 @@ export function DocumentSidebar() {
   }
 
   const deleteDocument = async (): Promise<void> => {
-    setDeleteConfirmOpen(false)
+    closeDeleteDialog()
     await documentController.deleteActiveDocument()
     closeOverlayAfterNavigation()
   }
+
+  const handleDeleteDialogKeyDown = (event: KeyboardEvent): void => {
+    const currentFocus = document.activeElement === confirmDeleteButton ? 'delete' : 'cancel'
+    const action = documentDialogKeyboardAction(event.key, event.shiftKey, currentFocus)
+    if (action === 'none') return
+
+    event.preventDefault()
+    event.stopPropagation()
+    if (action === 'close') {
+      closeDeleteDialog()
+      return
+    }
+    if (action === 'focus-delete') {
+      confirmDeleteButton?.focus()
+      return
+    }
+    cancelDeleteButton?.focus()
+  }
+
+  onMount(() => {
+    let inertTargets: HTMLElement[] = []
+
+    const reconcileOverlayAccessibility = (): void => {
+      for (const target of inertTargets) target.inert = false
+      inertTargets = []
+
+      if (viewportWidth() >= 1280) return
+      inertTargets = backgroundTargets()
+      for (const target of inertTargets) target.inert = true
+    }
+
+    reconcileOverlayAccessibility()
+    if (shouldFocusDocumentSidebarOnMount(viewportWidth())) {
+      queueMicrotask(() => newDocumentButton?.focus())
+    }
+
+    if (typeof window !== 'undefined') window.addEventListener('resize', reconcileOverlayAccessibility)
+    onCleanup(() => {
+      if (typeof window !== 'undefined') window.removeEventListener('resize', reconcileOverlayAccessibility)
+      for (const target of inertTargets) target.inert = false
+    })
+  })
 
   createEffect(() => {
     if (deleteConfirmOpen()) queueMicrotask(() => cancelDeleteButton?.focus())
@@ -79,6 +141,7 @@ export function DocumentSidebar() {
           </div>
           <div class="document-sidebar-actions">
             <button
+              ref={newDocumentButton}
               type="button"
               class="btn btn-small btn-primary"
               disabled={appState.documentMutationPending() || !appState.documentLibraryReady()}
@@ -95,6 +158,7 @@ export function DocumentSidebar() {
               Rename
             </button>
             <button
+              ref={deleteActionButton}
               type="button"
               class="btn btn-small"
               disabled={appState.activeDocumentId() === undefined || appState.documentMutationPending()}
@@ -151,7 +215,11 @@ export function DocumentSidebar() {
       </nav>
 
       <Show when={deleteConfirmOpen()}>
-        <div class="document-delete-backdrop" role="presentation">
+        <div
+          class="document-delete-backdrop"
+          role="presentation"
+          onKeyDown={handleDeleteDialogKeyDown}
+        >
           <div class="document-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="document-delete-title">
             <h2 id="document-delete-title">ドキュメントを削除しますか？</h2>
             <p>「{activeSummary()?.name ?? 'このドキュメント'}」を削除します。Local Libraryでは保存済み本文も削除されます。</p>
@@ -160,11 +228,16 @@ export function DocumentSidebar() {
                 ref={cancelDeleteButton}
                 type="button"
                 class="btn"
-                onClick={() => setDeleteConfirmOpen(false)}
+                onClick={closeDeleteDialog}
               >
                 Cancel
               </button>
-              <button type="button" class="btn btn-primary" onClick={() => void deleteDocument()}>
+              <button
+                ref={confirmDeleteButton}
+                type="button"
+                class="btn btn-primary"
+                onClick={() => void deleteDocument()}
+              >
                 Delete
               </button>
             </div>
