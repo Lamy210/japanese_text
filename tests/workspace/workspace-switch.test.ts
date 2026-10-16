@@ -64,7 +64,7 @@ describe('WorkspaceService switching boundary', () => {
     })
 
     const toB = await service.switchTo('workspace-b')
-    expect(toB.workspace.id).toBe('workspace-b')
+    expect(toB.context.workspace.id).toBe('workspace-b')
     await expect(memory.repositories.selection.getActiveWorkspaceId()).resolves.toBe('workspace-b')
     await expect(memory.repositories.documents.listByWorkspace('workspace-a')).resolves.toEqual([])
     await expect(memory.repositories.documents.listByWorkspace('workspace-b')).resolves.toEqual([])
@@ -81,7 +81,7 @@ describe('WorkspaceService switching boundary', () => {
     })
 
     await expect(service.switchTo('workspace-b')).resolves.toMatchObject({
-      workspace: { id: 'workspace-b' }
+      context: { workspace: { id: 'workspace-b' } }
     })
     await expect(memory.repositories.selection.getActiveWorkspaceId()).resolves.toBe('workspace-b')
   })
@@ -105,7 +105,7 @@ describe('WorkspaceService switching boundary', () => {
 
     const result = await service.switchTo('workspace-b')
 
-    expect(result.workspace.id).toBe('workspace-b')
+    expect(result.context.workspace.id).toBe('workspace-b')
     expect('document' in result).toBe(false)
     await expect(memory.repositories.documents.get('doc-b')).resolves.toMatchObject({ content: 'target B' })
   })
