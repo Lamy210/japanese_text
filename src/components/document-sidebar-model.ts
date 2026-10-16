@@ -10,6 +10,9 @@ export interface AuxiliaryPanelsTransition extends AuxiliaryPanelsState {
   target: 'documents' | 'diagnostics'
 }
 
+export type DocumentDialogFocus = 'cancel' | 'delete'
+export type DocumentDialogKeyboardResult = 'close' | 'focus-cancel' | 'focus-delete' | 'none'
+
 export function filterDocumentSummaries(
   summaries: readonly DocumentSummary[],
   rawFilter: string
@@ -25,6 +28,24 @@ export function isDocumentRowActive(summary: DocumentSummary, activeDocumentId: 
 
 export function documentSidebarDefaultOpen(width: number): boolean {
   return width >= 1280
+}
+
+export function shouldFocusDocumentSidebarOnMount(width: number): boolean {
+  return width < 1280
+}
+
+export function documentDialogKeyboardAction(
+  key: string,
+  shiftKey: boolean,
+  currentFocus: DocumentDialogFocus
+): DocumentDialogKeyboardResult {
+  if (key === 'Escape') return 'close'
+  if (key !== 'Tab') return 'none'
+
+  if (shiftKey) {
+    return currentFocus === 'cancel' ? 'focus-delete' : 'focus-cancel'
+  }
+  return currentFocus === 'cancel' ? 'focus-delete' : 'focus-cancel'
 }
 
 export function reconcileAuxiliaryPanelsForWidth(
