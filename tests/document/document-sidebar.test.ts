@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { DocumentSummary } from '../../src/document/types'
 import {
+  documentDialogKeyboardAction,
   documentSidebarDefaultOpen,
   filterDocumentSummaries,
   isDocumentRowActive,
   nextAuxiliaryPanels,
-  reconcileAuxiliaryPanelsForWidth
+  reconcileAuxiliaryPanelsForWidth,
+  shouldFocusDocumentSidebarOnMount
 } from '../../src/components/document-sidebar-model'
 
 function summary(id: string, name: string, updatedAt: number): DocumentSummary {
@@ -71,5 +73,21 @@ describe('DocumentSidebar pure state model', () => {
       .toEqual({ documentsOpen: true, diagnosticsOpen: false })
     expect(reconcileAuxiliaryPanelsForWidth(1200, { documentsOpen: true, diagnosticsOpen: true }))
       .toEqual({ documentsOpen: true, diagnosticsOpen: true })
+  })
+
+  it('focuses the first useful Sidebar control when the Sidebar is mounted as an overlay or drawer', () => {
+    expect(shouldFocusDocumentSidebarOnMount(767)).toBe(true)
+    expect(shouldFocusDocumentSidebarOnMount(1024)).toBe(true)
+    expect(shouldFocusDocumentSidebarOnMount(1279)).toBe(true)
+    expect(shouldFocusDocumentSidebarOnMount(1280)).toBe(false)
+  })
+
+  it('closes the Delete dialog on Escape and traps Tab between non-destructive and destructive actions', () => {
+    expect(documentDialogKeyboardAction('Escape', false, 'cancel')).toBe('close')
+    expect(documentDialogKeyboardAction('Tab', false, 'cancel')).toBe('focus-delete')
+    expect(documentDialogKeyboardAction('Tab', false, 'delete')).toBe('focus-cancel')
+    expect(documentDialogKeyboardAction('Tab', true, 'cancel')).toBe('focus-delete')
+    expect(documentDialogKeyboardAction('Tab', true, 'delete')).toBe('focus-cancel')
+    expect(documentDialogKeyboardAction('Enter', false, 'cancel')).toBe('none')
   })
 })
