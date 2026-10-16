@@ -1,7 +1,9 @@
 import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
 import type { StoredWorkspaceDocument } from '../../src/core/workspace/types'
 import { createStorageContext, type StorageContext } from '../../src/storage/bootstrap'
+import { createMemoryStorageContext } from '../../src/storage/repositories/memory'
 import { createApplicationRuntime, type ApplicationRuntime } from '../../src/state/application-runtime'
 
 function storedDocument(
@@ -22,6 +24,14 @@ function storedDocument(
     createdAt,
     updatedAt
   }
+}
+
+function installIndexedDb(factory: IDBFactory): void {
+  Object.defineProperty(globalThis, 'indexedDB', {
+    configurable: true,
+    writable: true,
+    value: factory
+  })
 }
 
 async function loadControllerHarness(context: StorageContext, runtime: ApplicationRuntime, now = 1000) {
@@ -53,6 +63,7 @@ async function loadControllerHarness(context: StorageContext, runtime: Applicati
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   Reflect.deleteProperty(globalThis, 'indexedDB')
   vi.resetModules()
   vi.restoreAllMocks()
@@ -170,5 +181,121 @@ describe('workspace/document integration regressions', () => {
     await expect(controller.deleteWorkspace(workspaceB)).rejects.toThrow('forced delete failure')
     expect(runtime.getSessionDocumentLibrary().get(workspaceB, documentB)).toBeDefined()
     await expect(context.repositories.workspaces.get(workspaceB)).resolves.toBeDefined()
+  })
+
+  it('cancels a stale autosave across document and Workspace navigation before it can overwrite the flushed body', async () => {
+    const factory = new IDBFactory()
+    installIndexedDb(factory)
+    vi.resetModules()
+    const storage = await import('../../src/storage/storage')
+    const { appState } = await import('../../src/state/app-state')
+    const actions = await import('../../src/state/actions')
+    const { workspaceController, documentController } = await import('../../src/state/workspace-runtime')
+    const context = await storage.getStorageContext()
+
+    await workspaceController.bootstrap()
+    await workspaceController.setStorageMode('local-library')
+    const firstId = appState.activeDocumentId()!
+    await documentController.createDocument()
+    const secondId = appState.activeDocumentId()!
+    const summary = appState.documentSummaries().find((value) => value.id === secondId)!
+
+    appState.setDocument('fresh body before navigation', summary.name, summary.docType)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    actions.persistDocumentDebounced({
+      workspaceId: summary.workspaceId,
+      documentId: summary.id,
+      name: summary.name,
+      content: 'stale timer body',
+      docType: summary.docType,
+      sourceKind: summary.sourceKind,
+      createdAt: summary.createdAt,
+      updatedAt: summary.updatedAt + 1
+    })
+
+    await documentController.switchDocument(firstId)
+    await workspaceController.createWorkspace('Workspace B')
+    await vi.advanceTimersByTimeAsync(800)
+    vi.useRealTimers()
+
+    await expect(context.repositories.documents.get(secondId)).resolves.toMatchObject({
+      content: 'fresh body before navigation'
+    })
+    expect(appState.activeWorkspaceId()).not.toBe(summary.workspaceId)
+  })
+
+  it('keeps all three Private documents canonical in memory when Private to Local atomic commit fails', async () => {
+    const memory = createMemoryStorageContext(() => 1000)
+    const state = createDefaultWorkspaceState(100)
+    await memory.repositories.preferences.save(state.preferences)
+    await memory.atomicOperations.createWorkspaceAndActivate(state.workspace, state.profile)
+    const atomic = {
+      ...memory.atomicOperations,
+      async enableLocalLibrary(): Promise<void> {
+        throw new Error('forced Private to Local failure')
+      }
+    }
+    const context: StorageContext = {
+      durable: true,
+      repositories: memory.repositories,
+      atomic,
+      migration: { state: 'not-needed' }
+    }
+    const runtime = createApplicationRuntime({ getContext: async () => context, now: () => 1000 })
+    const { appState, controller, documentController } = await loadControllerHarness(context, runtime)
+    await controller.bootstrap()
+    await documentController.createDocument()
+    await documentController.createDocument()
+    const activeId = appState.activeDocumentId()!
+    const before = runtime.getSessionDocumentLibrary().list(state.workspace.id).map((value) => value.id).sort()
+    expect(before).toHaveLength(3)
+
+    await expect(controller.setStorageMode('local-library')).rejects.toThrow('forced Private to Local failure')
+
+    expect((await memory.repositories.workspaces.get(state.workspace.id))?.storageMode).toBe('private-session')
+    expect(runtime.getSessionDocumentLibrary().list(state.workspace.id).map((value) => value.id).sort()).toEqual(before)
+    expect(runtime.getSessionDocumentLibrary().getActiveDocumentId(state.workspace.id)).toBe(activeId)
+    await expect(memory.repositories.documents.listByWorkspace(state.workspace.id)).resolves.toEqual([])
+    await expect(memory.repositories.documentSelection.getActiveDocumentId(state.workspace.id)).resolves.toBeUndefined()
+  })
+
+  it('keeps all three Local documents canonical in durable storage when Local to Private atomic scrub fails', async () => {
+    const memory = createMemoryStorageContext(() => 1000)
+    const state = createDefaultWorkspaceState(100)
+    await memory.repositories.preferences.save(state.preferences)
+    await memory.atomicOperations.createWorkspaceAndActivate(state.workspace, state.profile)
+    const docs = [
+      storedDocument(state.workspace.id, 'doc-a', 'a.md', 'A', 1, 1),
+      storedDocument(state.workspace.id, 'doc-b', 'b.md', 'B', 2, 2),
+      storedDocument(state.workspace.id, 'doc-c', 'c.md', 'C', 3, 3)
+    ]
+    await memory.atomicOperations.enableLocalLibrary(state.workspace.id, docs, 'doc-b')
+    const atomic = {
+      ...memory.atomicOperations,
+      async makeWorkspacePrivate(): Promise<void> {
+        throw new Error('forced Local to Private failure')
+      }
+    }
+    const context: StorageContext = {
+      durable: true,
+      repositories: memory.repositories,
+      atomic,
+      migration: { state: 'not-needed' }
+    }
+    const runtime = createApplicationRuntime({ getContext: async () => context, now: () => 1000 })
+    const { appState, controller } = await loadControllerHarness(context, runtime)
+    await controller.bootstrap()
+    expect(appState.activeDocumentId()).toBe('doc-b')
+
+    await expect(controller.setStorageMode('private-session')).rejects.toThrow('forced Local to Private failure')
+
+    expect((await memory.repositories.workspaces.get(state.workspace.id))?.storageMode).toBe('local-library')
+    expect((await memory.repositories.documents.listByWorkspace(state.workspace.id)).map((value) => value.id).sort()).toEqual([
+      'doc-a',
+      'doc-b',
+      'doc-c'
+    ])
+    await expect(memory.repositories.documentSelection.getActiveDocumentId(state.workspace.id)).resolves.toBe('doc-b')
+    expect(runtime.getSessionDocumentLibrary().list(state.workspace.id)).toEqual([])
   })
 })
