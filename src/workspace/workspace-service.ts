@@ -30,6 +30,11 @@ export interface WorkspaceSummary {
   updatedAt: number
 }
 
+export interface WorkspaceSwitchResult {
+  context: WorkspaceContext
+  warning?: string
+}
+
 export interface WorkspaceDeleteResult {
   active: WorkspaceContext
   deletedWorkspaceId: string
@@ -49,7 +54,7 @@ export interface WorkspaceService {
   saveConfig(workspaceId: string, config: AppConfig): Promise<WorkspaceContext>
   create(input: { name: string }): Promise<WorkspaceContext>
   rename(workspaceId: string, name: string): Promise<Workspace>
-  switchTo(targetWorkspaceId: string): Promise<WorkspaceContext>
+  switchTo(targetWorkspaceId: string): Promise<WorkspaceSwitchResult>
   delete(workspaceId: string): Promise<WorkspaceDeleteResult>
   enableLocalLibrary(
     workspaceId: string,
@@ -104,8 +109,11 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
     return contextFromProjected({ workspace, profile, preferences })
   }
 
-  async function loadContextRecovering(workspace: Workspace): Promise<WorkspaceContext> {
+  async function loadContextRecovering(
+    workspace: Workspace
+  ): Promise<{ context: WorkspaceContext; warning?: string }> {
     const defaults = createDefaultWorkspaceState(now())
+    let recovered = false
 
     let preferences: GlobalPreferences | undefined
     try {
@@ -116,6 +124,7 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
     if (preferences === undefined) {
       preferences = defaults.preferences
       await repositories.preferences.save(preferences)
+      recovered = true
     }
 
     let profile: RuleProfile | undefined
@@ -134,9 +143,13 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
         updatedAt: timestamp
       }
       await repositories.profiles.save(profile)
+      recovered = true
     }
 
-    return contextFromProjected({ workspace, profile, preferences })
+    return {
+      context: contextFromProjected({ workspace, profile, preferences }),
+      ...(recovered ? { warning: 'Workspace context recovered from missing or invalid persisted state.' } : {})
+    }
   }
 
   async function resolveSelectedWorkspace(): Promise<Workspace | undefined> {
@@ -151,13 +164,13 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
 
   async function getActive(): Promise<WorkspaceContext> {
     const selected = await resolveSelectedWorkspace()
-    if (selected !== undefined) return loadContextRecovering(selected)
+    if (selected !== undefined) return (await loadContextRecovering(selected)).context
 
     const workspaces = (await repositories.workspaces.list()).sort(compareWorkspaceIdentity)
     const repaired = workspaces[0]
     if (repaired !== undefined) {
       await repositories.selection.setActiveWorkspaceId(repaired.id)
-      return loadContextRecovering(repaired)
+      return (await loadContextRecovering(repaired)).context
     }
 
     const defaults = createDefaultWorkspaceState(now())
@@ -230,12 +243,12 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
       return renamed
     },
 
-    async switchTo(targetWorkspaceId): Promise<WorkspaceContext> {
+    async switchTo(targetWorkspaceId): Promise<WorkspaceSwitchResult> {
       const target = await repositories.workspaces.get(targetWorkspaceId)
       if (target === undefined) throw new Error(`Workspace not found: ${targetWorkspaceId}`)
-      const context = await loadContextRecovering(target)
+      const recovered = await loadContextRecovering(target)
       await repositories.selection.setActiveWorkspaceId(target.id)
-      return context
+      return recovered
     },
 
     async delete(workspaceId): Promise<WorkspaceDeleteResult> {
@@ -250,7 +263,7 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
         const successor = workspaces[deleteIndex + 1] ?? workspaces[deleteIndex - 1]
         if (successor === undefined) throw new Error('No successor workspace is available')
         await atomic.deleteWorkspaceAndSelectNext(workspaceId, successor.id)
-        return { active: await loadContextRecovering(successor), deletedWorkspaceId: workspaceId }
+        return { active: (await loadContextRecovering(successor)).context, deletedWorkspaceId: workspaceId }
       }
 
       await atomic.deleteWorkspaceCascade(workspaceId)
