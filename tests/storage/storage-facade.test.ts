@@ -179,8 +179,18 @@ describe('legacy-compatible storage facade', () => {
     })
     const active = await service.getActive()
     const document = { name: 'draft.md', content: '# Draft', docType: 'markdown' as const, updatedAt: 5000 }
+    const initial = {
+      id: `local-recent-document:${active.workspace.id}`,
+      workspaceId: active.workspace.id,
+      name: document.name,
+      content: document.content,
+      docType: document.docType,
+      sourceKind: 'local' as const,
+      createdAt: document.updatedAt,
+      updatedAt: document.updatedAt
+    }
 
-    await service.setStorageMode(active.workspace.id, 'local-library', document)
+    await service.enableLocalLibrary(active.workspace.id, [initial], initial.id)
     await facade.saveRecentDocument(document)
 
     await expect(facade.loadRecentDocument()).resolves.toEqual(document)

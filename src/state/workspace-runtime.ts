@@ -1,15 +1,32 @@
 import { cancelPendingDocumentPersistence } from './actions'
 import { appState } from './app-state'
+import { applicationRuntime } from './application-runtime'
+import { createDocumentController } from './document-controller'
 import { lintController } from './lint-controller'
 import { createWorkspaceController } from './workspace-controller'
 
+const relint = (): void => lintController.relintAll()
+const toast = (kind: Parameters<typeof appState.pushToast>[0], message: string): void => {
+  appState.pushToast(kind, message)
+}
+
 /**
- * Application-wide Workspace controller.
- * A single instance is required so Private Session document memory is shared by
- * bootstrap, header switching, settings, and management actions.
+ * Application-wide Document controller backed by the same ApplicationRuntime as
+ * Workspace orchestration. This keeps Private Session documents and active IDs shared
+ * across bootstrap, Header Open, Sidebar actions, and Workspace navigation.
  */
+export const documentController = createDocumentController({
+  getDocumentService: applicationRuntime.getDocumentService,
+  getWorkspaceService: applicationRuntime.getWorkspaceService,
+  relint,
+  toast,
+  cancelPendingDocumentPersistence
+})
+
+/** Application-wide Workspace controller sharing the same document runtime. */
 export const workspaceController = createWorkspaceController({
-  relint: () => lintController.relintAll(),
-  toast: (kind, message) => appState.pushToast(kind, message),
+  runtime: applicationRuntime,
+  relint,
+  toast,
   cancelPendingDocumentPersistence
 })

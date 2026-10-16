@@ -6,6 +6,7 @@ import {
 } from '../../core/workspace/validate'
 import { requestToPromise, transactionDone } from '../db/idb-utils'
 import {
+  activeDocumentMetaKey,
   INDEX_WORKSPACE_ID,
   META_ACTIVE_WORKSPACE_ID,
   STORE_META,
@@ -59,6 +60,26 @@ export function createIndexedDbRepositories(db: IDBDatabase): StorageRepositorie
         if (workspaceId.length === 0) throw new Error('workspaceId must not be empty')
         const tx = db.transaction(STORE_META, 'readwrite')
         await completeRequest(tx, tx.objectStore(STORE_META).put(workspaceId, META_ACTIVE_WORKSPACE_ID))
+      }
+    },
+
+    documentSelection: {
+      async getActiveDocumentId(workspaceId) {
+        const key = activeDocumentMetaKey(workspaceId)
+        const tx = db.transaction(STORE_META, 'readonly')
+        const raw = await completeRequest(tx, tx.objectStore(STORE_META).get(key))
+        return typeof raw === 'string' && raw.length > 0 ? raw : undefined
+      },
+      async setActiveDocumentId(workspaceId, documentId) {
+        const key = activeDocumentMetaKey(workspaceId)
+        if (documentId.length === 0) throw new Error('documentId must not be empty')
+        const tx = db.transaction(STORE_META, 'readwrite')
+        await completeRequest(tx, tx.objectStore(STORE_META).put(documentId, key))
+      },
+      async deleteActiveDocumentId(workspaceId) {
+        const key = activeDocumentMetaKey(workspaceId)
+        const tx = db.transaction(STORE_META, 'readwrite')
+        await completeRequest(tx, tx.objectStore(STORE_META).delete(key))
       }
     },
 

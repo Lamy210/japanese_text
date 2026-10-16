@@ -13,6 +13,12 @@ export const STORE_DOCUMENT_SNAPSHOTS = 'documentSnapshots'
 export const STORE_SUPPRESSIONS = 'suppressions'
 
 export const META_ACTIVE_WORKSPACE_ID = 'active-workspace-id'
+export const META_ACTIVE_DOCUMENT_PREFIX = 'active-document-id:'
+
+export function activeDocumentMetaKey(workspaceId: string): string {
+  if (workspaceId.length === 0) throw new Error('workspaceId must not be empty')
+  return `${META_ACTIVE_DOCUMENT_PREFIX}${workspaceId}`
+}
 
 export const INDEX_WORKSPACE_ID = 'workspaceId'
 export const INDEX_UPDATED_AT = 'updatedAt'

@@ -2,8 +2,13 @@
  * App — 3領域レイアウト (§9.1 Desktop) + レスポンシブ (§10)
  */
 
-import { onMount, createEffect, Show } from 'solid-js'
+import { onMount, onCleanup, createEffect, Show } from 'solid-js'
 import { Header } from '../components/Header'
+import { DocumentSidebar } from '../components/DocumentSidebar'
+import {
+  documentSidebarDefaultOpen,
+  reconcileAuxiliaryPanelsForWidth
+} from '../components/document-sidebar-model'
 import { EditorPane } from '../components/EditorPane'
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel'
 import { StatusBar } from '../components/StatusBar'
@@ -16,7 +21,22 @@ import { applyTheme, persistConfigDebounced } from '../state/actions'
 import { workspaceController } from '../state/workspace-runtime'
 
 export function App() {
+  let handleResize: (() => void) | undefined
+
   onMount(() => {
+    if (typeof window !== 'undefined') {
+      appState.setDocumentSidebarOpen(documentSidebarDefaultOpen(window.innerWidth))
+      handleResize = () => {
+        const next = reconcileAuxiliaryPanelsForWidth(window.innerWidth, {
+          documentsOpen: appState.documentSidebarOpen(),
+          diagnosticsOpen: appState.panelOpen()
+        })
+        appState.setDocumentSidebarOpen(next.documentsOpen)
+        appState.setPanelOpen(next.diagnosticsOpen)
+      }
+      window.addEventListener('resize', handleResize)
+    }
+
     void workspaceController.bootstrap().catch((error) => {
       appState.setWorkspaceReady(true)
       appState.setConfigLoaded(true)
@@ -26,6 +46,12 @@ export function App() {
       )
       lintController.relintAll()
     })
+  })
+
+  onCleanup(() => {
+    if (typeof window !== 'undefined' && handleResize !== undefined) {
+      window.removeEventListener('resize', handleResize)
+    }
   })
 
   createEffect(() => {
@@ -45,6 +71,9 @@ export function App() {
     <div class="app-shell">
       <Header />
       <main class="app-main">
+        <Show when={appState.documentSidebarOpen()}>
+          <DocumentSidebar />
+        </Show>
         <EditorPane />
         <Show when={appState.panelOpen()}>
           <DiagnosticsPanel />

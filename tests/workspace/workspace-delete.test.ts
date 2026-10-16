@@ -1,8 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
-import type { AppConfig } from '../../src/core/config/schema'
-import type { GlobalPreferences, RuleProfile, Workspace } from '../../src/core/workspace/types'
 import { createIndexedDbAtomicOperations } from '../../src/storage/db/indexeddb-atomic-operations'
 import { requestToPromise, transactionDone } from '../../src/storage/db/idb-utils'
 import { openDatabase } from '../../src/storage/db/open-database'
@@ -14,39 +12,10 @@ import {
 import { createIndexedDbRepositories } from '../../src/storage/repositories/indexeddb'
 import { createMemoryStorageContext } from '../../src/storage/repositories/memory'
 import type { AtomicOperationsPort, StorageRepositories } from '../../src/storage/repositories/ports'
-import { createSessionDocumentStore } from '../../src/workspace/session-document-store'
-
-interface WorkspaceContext {
-  workspace: Workspace
-  profile: RuleProfile
-  preferences: GlobalPreferences
-  config: AppConfig
-}
-
-interface DeleteResult {
-  active: WorkspaceContext
-  deletedWorkspaceId: string
-}
-
-interface DeleteService {
-  delete(workspaceId: string): Promise<DeleteResult>
-}
-
-interface WorkspaceServiceModule {
-  createWorkspaceService(deps: {
-    repositories: StorageRepositories
-    atomic: AtomicOperationsPort
-    now?: () => number
-    sessionDocuments?: ReturnType<typeof createSessionDocumentStore>
-  }): DeleteService
-}
+import { createWorkspaceService } from '../../src/workspace/workspace-service'
 
 type AtomicWithDeleteAndSelect = AtomicOperationsPort & {
   deleteWorkspaceAndSelectNext(workspaceId: string, nextWorkspaceId: string): Promise<void>
-}
-
-async function loadServiceModule(): Promise<WorkspaceServiceModule> {
-  return vi.importActual<WorkspaceServiceModule>('../../src/workspace/workspace-service')
 }
 
 async function addWorkspace(
@@ -85,30 +54,20 @@ async function rawGet(db: IDBDatabase, storeName: string, key: IDBValidKey): Pro
 
 describe('WorkspaceService delete', () => {
   it('refuses to delete the last workspace', async () => {
-    const module = await loadServiceModule()
     const memory = await seedMemory(['workspace-only'])
-    const service = module.createWorkspaceService({ repositories: memory.repositories, atomic: memory.atomicOperations })
-    expect(typeof service.delete).toBe('function')
-    if (typeof service.delete !== 'function') return
+    const service = createWorkspaceService({ repositories: memory.repositories, atomic: memory.atomicOperations })
 
     await expect(service.delete('workspace-only')).rejects.toThrow()
     await expect(memory.repositories.workspaces.get('workspace-only')).resolves.toBeDefined()
   })
 
-  it('deletes the active workspace, chooses the next stable workspace, and clears its session body only after success', async () => {
-    const module = await loadServiceModule()
+  it('deletes the active workspace, chooses the next stable workspace, and retains its profile', async () => {
     const memory = await seedMemory(['workspace-a', 'workspace-b', 'workspace-c'])
     await memory.repositories.selection.setActiveWorkspaceId('workspace-b')
-    const sessionDocuments = createSessionDocumentStore()
-    sessionDocuments.set('workspace-b', { name: 'b.md', content: 'B', docType: 'markdown', updatedAt: 1 })
-    sessionDocuments.set('workspace-c', { name: 'c.md', content: 'C', docType: 'markdown', updatedAt: 1 })
-    const service = module.createWorkspaceService({
+    const service = createWorkspaceService({
       repositories: memory.repositories,
-      atomic: memory.atomicOperations,
-      sessionDocuments
+      atomic: memory.atomicOperations
     })
-    expect(typeof service.delete).toBe('function')
-    if (typeof service.delete !== 'function') return
 
     const result = await service.delete('workspace-b')
 
@@ -117,16 +76,11 @@ describe('WorkspaceService delete', () => {
     await expect(memory.repositories.selection.getActiveWorkspaceId()).resolves.toBe('workspace-c')
     await expect(memory.repositories.workspaces.get('workspace-b')).resolves.toBeUndefined()
     await expect(memory.repositories.profiles.get('profile-workspace-b')).resolves.toBeDefined()
-    expect(sessionDocuments.get('workspace-b')).toBeUndefined()
-    expect(sessionDocuments.get('workspace-c')?.content).toBe('C')
   })
 
   it('deletes a non-active workspace without changing active selection', async () => {
-    const module = await loadServiceModule()
     const memory = await seedMemory(['workspace-a', 'workspace-b'])
-    const service = module.createWorkspaceService({ repositories: memory.repositories, atomic: memory.atomicOperations })
-    expect(typeof service.delete).toBe('function')
-    if (typeof service.delete !== 'function') return
+    const service = createWorkspaceService({ repositories: memory.repositories, atomic: memory.atomicOperations })
 
     const result = await service.delete('workspace-b')
     expect(result.active.workspace.id).toBe('workspace-a')

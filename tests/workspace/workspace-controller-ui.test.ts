@@ -1,5 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
 import { createStorageContext, type StorageContext } from '../../src/storage/bootstrap'
 import type { StorageCapability } from '../../src/workspace/storage-capability'
 
@@ -28,15 +29,16 @@ async function harness(
     import('../../src/state/workspace-controller')
   ])
   const relint = vi.fn()
+  const toast = vi.fn()
   const cancelPendingDocumentPersistence = vi.fn()
   const controller = module.createWorkspaceController({
     getContext: async () => context,
     relint,
-    toast: vi.fn(),
+    toast,
     storageManager,
     cancelPendingDocumentPersistence
   } as never) as unknown as UiWorkspaceController
-  return { appState, controller, relint, cancelPendingDocumentPersistence }
+  return { appState, controller, relint, toast, cancelPendingDocumentPersistence }
 }
 
 afterEach(() => {
@@ -81,6 +83,26 @@ describe('workspace UI controller operations', () => {
     await controller.switchWorkspace(original)
     expect(appState.documentText()).toBe('original private body')
     expect(appState.documentName()).toBe('original.md')
+  })
+
+  it('surfaces a recovery warning after switching to a workspace whose profile had to be rebuilt', async () => {
+    const context = await createStorageContext({ factory: new IDBFactory(), now: () => 225 })
+    const { appState, controller, toast } = await harness(context)
+    await controller.bootstrap()
+
+    const broken = createDefaultWorkspaceState(226).workspace
+    broken.id = 'workspace-broken'
+    broken.name = 'Broken'
+    broken.activeRuleProfileId = 'missing-profile'
+    await context.repositories.workspaces.save(broken)
+    await controller.refresh()
+    toast.mockClear()
+
+    await controller.switchWorkspace(broken.id)
+
+    expect(appState.activeWorkspaceId()).toBe(broken.id)
+    expect(toast).toHaveBeenCalledWith('warning', expect.stringContaining('recovered'))
+    await expect(context.repositories.profiles.get('missing-profile')).resolves.toBeDefined()
   })
 
   it('cancels queued persistence before switching away from a Local Library workspace', async () => {
