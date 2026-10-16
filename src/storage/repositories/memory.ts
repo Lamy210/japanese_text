@@ -171,8 +171,8 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       const document = clone(validateDocumentRecord(documentValue))
       requireLocalWorkspace(workspaces, document.workspaceId)
       const existing = documents.get(document.id)
-      if (existing !== undefined && existing.workspaceId !== document.workspaceId) {
-        throw new Error(`Document ID belongs to another workspace: ${document.id}`)
+      if (existing !== undefined) {
+        throw new Error(`Document already exists: ${document.id}`)
       }
 
       const nextDocuments = cloneMap(documents)
@@ -212,8 +212,8 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
         throw new Error('replacement.workspaceId must match the target workspace')
       }
       const collision = documents.get(replacement.id)
-      if (collision !== undefined && collision.id !== oldDocumentId && collision.workspaceId !== workspaceId) {
-        throw new Error(`Replacement document ID belongs to another workspace: ${replacement.id}`)
+      if (collision !== undefined && collision.id !== oldDocumentId) {
+        throw new Error(`Replacement document already exists: ${replacement.id}`)
       }
 
       const nextDocuments = cloneMap(documents)
