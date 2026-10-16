@@ -526,17 +526,22 @@ export function createIndexedDbAtomicOperations(
         throw new Error('activeDocumentId must reference one of the supplied documents')
       }
 
-      const tx = db.transaction([STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_META], 'readwrite')
+      const tx = db.transaction(
+        [STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_DOCUMENT_SNAPSHOTS, STORE_META],
+        'readwrite'
+      )
       const done = transactionDone(tx)
       const workspaceStore = tx.objectStore(STORE_WORKSPACES)
       const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
+      const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
       const metaStore = tx.objectStore(STORE_META)
       let validationError: Error | undefined
 
       try {
         const workspaceRequest = workspaceStore.get(workspaceId)
+        const targetDocumentKeysRequest = documentStore.index(INDEX_WORKSPACE_ID).getAllKeys(workspaceId)
         const collisionRequests = documents.map((document) => documentStore.get(document.id))
-        let pending = collisionRequests.length + 1
+        let pending = collisionRequests.length + 2
         let valid = true
 
         const completeValidation = () => {
@@ -554,7 +559,18 @@ export function createIndexedDbAtomicOperations(
           }
           try {
             const workspace = validateWorkspaceRecord(raw)
-            if (workspace.storageMode === 'file-backed') throw new Error('file-backed workspace cannot enable Local Library')
+            if (workspace.storageMode === 'file-backed') {
+              throw new Error('file-backed workspace cannot enable Local Library')
+            }
+
+            const staleDocumentIds = targetDocumentKeysRequest.result.filter(
+              (key): key is string => typeof key === 'string'
+            )
+            for (const documentId of staleDocumentIds) {
+              documentStore.delete(documentId)
+              deleteSnapshotsForDocument(snapshotStore, documentId)
+            }
+
             workspaceStore.put({ ...workspace, storageMode: 'local-library', updatedAt: now() })
             for (const document of documents) documentStore.put(document)
             metaStore.put(activeDocumentId, activeDocumentMetaKey(workspaceId))
@@ -565,6 +581,7 @@ export function createIndexedDbAtomicOperations(
         }
 
         workspaceRequest.onsuccess = completeValidation
+        targetDocumentKeysRequest.onsuccess = completeValidation
         for (let index = 0; index < collisionRequests.length; index += 1) {
           const request = collisionRequests[index]!
           const document = documents[index]!
