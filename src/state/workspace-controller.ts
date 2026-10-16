@@ -164,9 +164,10 @@ export function createWorkspaceController(
 
         const workspaceService = await service()
         const target = await workspaceService.switchTo(workspaceId)
-        applyContext(target)
-        await documents().bootstrapForWorkspace(target.workspace)
+        applyContext(target.context)
+        await documents().bootstrapForWorkspace(target.context.workspace)
         appState.setWorkspaceSummaries(await workspaceService.list())
+        if (target.warning !== undefined) toast('warning', target.warning)
       })
     },
 
@@ -202,8 +203,6 @@ export function createWorkspaceController(
         const workspaceService = await service()
         const result = await workspaceService.delete(workspaceId)
 
-        // Private Session state is application memory and must be cleared only after
-        // the durable/atomic Workspace delete succeeds.
         runtime.getSessionDocumentLibrary().deleteWorkspace(workspaceId)
         applyContext(result.active)
         appState.setWorkspaceSummaries(await workspaceService.list())
@@ -240,11 +239,8 @@ export function createWorkspaceController(
             snapshot.documents,
             snapshot.activeDocumentId
           )
-          // Session bodies remain canonical until the durable atomic transition succeeds.
           runtime.getSessionDocumentLibrary().deleteWorkspace(workspaceId)
         } else {
-          // Read the complete Local snapshot before the atomic scrub. Publish to memory
-          // only after scrub success so a failed transition cannot expose split state.
           updated = await workspaceService.makePrivate(workspaceId)
           runtime.getSessionDocumentLibrary().replaceWorkspace(workspaceId, snapshot)
         }
