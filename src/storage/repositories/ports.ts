@@ -3,6 +3,7 @@ import type {
   DocumentSnapshot,
   GlobalPreferences,
   RuleProfile,
+  SnapshotReason,
   StoredWorkspaceDocument,
   Workspace
 } from '../../core/workspace/types'
@@ -78,6 +79,38 @@ export interface AtomicProjectedStorageState {
   profile: RuleProfile
 }
 
+export interface SnapshotCaptureInput {
+  id: string
+  documentId: string
+  content: string
+  reason: SnapshotReason
+  createdAt: number
+  maxSnapshots: number
+}
+
+export interface SnapshotCaptureResult {
+  snapshot?: DocumentSnapshot
+  skippedDuplicate: boolean
+}
+
+export interface RestoreDocumentInput {
+  workspaceId: string
+  documentId: string
+  snapshotId: string
+  currentContent: string
+  restoredUpdatedAt: number
+  beforeRestoreSnapshotId: string
+  beforeRestoreCreatedAt: number
+  maxSnapshots: number
+}
+
+export interface RestoreDocumentResult {
+  document: StoredWorkspaceDocument
+  rollbackSnapshot: DocumentSnapshot
+  createdRollbackSnapshot: boolean
+  noOp: boolean
+}
+
 export interface AtomicOperationsPort {
   migrateV1ToV2(): Promise<MigrationResult>
   saveProjectedState(value: AtomicProjectedStorageState): Promise<void>
@@ -98,4 +131,6 @@ export interface AtomicOperationsPort {
     activeDocumentId: string
   ): Promise<void>
   makeWorkspacePrivate(workspaceId: string): Promise<void>
+  captureSnapshot(input: SnapshotCaptureInput): Promise<SnapshotCaptureResult>
+  restoreDocumentFromSnapshot(input: RestoreDocumentInput): Promise<RestoreDocumentResult>
 }
