@@ -1,5 +1,6 @@
 import {
   validateDocumentRecord,
+  validateDocumentSnapshotRecord,
   validatePreferencesRecord,
   validateRuleProfileRecord,
   validateWorkspaceRecord
@@ -7,8 +8,10 @@ import {
 import { requestToPromise, transactionDone } from '../db/idb-utils'
 import {
   activeDocumentMetaKey,
+  INDEX_DOCUMENT_ID,
   INDEX_WORKSPACE_ID,
   META_ACTIVE_WORKSPACE_ID,
+  STORE_DOCUMENT_SNAPSHOTS,
   STORE_META,
   STORE_PREFERENCES,
   STORE_RULE_PROFILES,
@@ -138,6 +141,24 @@ export function createIndexedDbRepositories(db: IDBDatabase): StorageRepositorie
       async delete(id) {
         const tx = db.transaction(STORE_WORKSPACE_DOCUMENTS, 'readwrite')
         await completeRequest(tx, tx.objectStore(STORE_WORKSPACE_DOCUMENTS).delete(id))
+      }
+    },
+
+    snapshots: {
+      async listByDocument(documentId) {
+        if (documentId.length === 0) throw new Error('documentId must not be empty')
+        const tx = db.transaction(STORE_DOCUMENT_SNAPSHOTS, 'readonly')
+        const store = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
+        const raw = await completeRequest(tx, store.index(INDEX_DOCUMENT_ID).getAll(documentId))
+        return raw
+          .map(validateDocumentSnapshotRecord)
+          .sort((a, b) => b.createdAt - a.createdAt || b.revision - a.revision || a.id.localeCompare(b.id))
+      },
+      async get(id) {
+        if (id.length === 0) throw new Error('snapshot id must not be empty')
+        const tx = db.transaction(STORE_DOCUMENT_SNAPSHOTS, 'readonly')
+        const raw = await completeRequest(tx, tx.objectStore(STORE_DOCUMENT_SNAPSHOTS).get(id))
+        return raw === undefined ? undefined : validateDocumentSnapshotRecord(raw)
       }
     }
   }
