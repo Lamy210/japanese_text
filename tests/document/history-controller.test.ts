@@ -64,7 +64,7 @@ async function harness() {
   const list = vi.fn(async () => [summary()])
   const get = vi.fn(async () => snapshot())
   const capture = vi.fn(async () => ({ snapshot: snapshot('manual'), skippedDuplicate: false }))
-  const restore = vi.fn(async () => ({
+  const restore = vi.fn<SnapshotService['restore']>(async () => ({
     document: { ...current, content: 'old', updatedAt: 50 },
     rollbackSnapshot: snapshot('rollback', current.content),
     noOp: false
