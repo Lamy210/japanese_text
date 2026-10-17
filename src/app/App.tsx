@@ -5,6 +5,7 @@
 import { onMount, onCleanup, createEffect, Show } from 'solid-js'
 import { Header } from '../components/Header'
 import { DocumentSidebar } from '../components/DocumentSidebar'
+import { HistoryPanel } from '../components/HistoryPanel'
 import {
   documentSidebarDefaultOpen,
   reconcileAuxiliaryPanelsForWidth
@@ -82,6 +83,9 @@ export function App() {
       <StatusBar />
       <SettingsDialog />
       <WorkspaceManageDialog />
+      <Show when={appState.historyOpen()}>
+        <HistoryPanel />
+      </Show>
       <Toasts />
     </div>
   )
