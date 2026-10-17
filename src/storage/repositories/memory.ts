@@ -6,11 +6,13 @@
  */
 import {
   validateDocumentRecord,
+  validateDocumentSnapshotRecord,
   validatePreferencesRecord,
   validateRuleProfileRecord,
   validateWorkspaceRecord
 } from '../../core/workspace/validate'
 import type {
+  DocumentSnapshot,
   GlobalPreferences,
   RuleProfile,
   StoredWorkspaceDocument,
@@ -44,6 +46,7 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
   let workspaces = new Map<string, Workspace>()
   let profiles = new Map<string, RuleProfile>()
   let documents = new Map<string, StoredWorkspaceDocument>()
+  let snapshots = new Map<string, DocumentSnapshot>()
   let documentSelections = new Map<string, string>()
   let preferences: GlobalPreferences | undefined
   let activeWorkspaceId: string | undefined
@@ -129,6 +132,20 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       },
       async delete(id) {
         documents.delete(id)
+      }
+    },
+    snapshots: {
+      async listByDocument(documentId) {
+        if (documentId.length === 0) throw new Error('documentId must not be empty')
+        return [...snapshots.values()]
+          .filter((snapshot) => snapshot.documentId === documentId)
+          .map((snapshot) => clone(validateDocumentSnapshotRecord(snapshot)))
+          .sort((a, b) => b.createdAt - a.createdAt || b.revision - a.revision || a.id.localeCompare(b.id))
+      },
+      async get(id) {
+        if (id.length === 0) throw new Error('snapshot id must not be empty')
+        const value = snapshots.get(id)
+        return value === undefined ? undefined : clone(validateDocumentSnapshotRecord(value))
       }
     }
   }
