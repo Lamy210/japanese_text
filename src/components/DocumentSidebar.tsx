@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import type { DocumentSummary } from '../document/types'
 import { appState } from '../state/app-state'
-import { documentController } from '../state/workspace-runtime'
+import { documentController, historyController } from '../state/workspace-runtime'
 import {
   documentDialogKeyboardAction,
   filterDocumentSummaries,
@@ -75,6 +75,15 @@ export function DocumentSidebar() {
     closeDeleteDialog()
     await documentController.deleteActiveDocument()
     closeOverlayAfterNavigation()
+  }
+
+  const openHistory = async (): Promise<void> => {
+    try {
+      await historyController.open()
+      if (viewportWidth() < 1280) appState.setDocumentSidebarOpen(false)
+    } catch (error) {
+      appState.pushToast('error', `履歴を開けませんでした: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   const handleDeleteDialogKeyDown = (event: KeyboardEvent): void => {
@@ -166,6 +175,21 @@ export function DocumentSidebar() {
             >
               Delete
             </button>
+            <button
+              id="history-toggle"
+              type="button"
+              class="btn btn-small"
+              disabled={
+                appState.activeDocumentId() === undefined ||
+                appState.documentMutationPending() ||
+                appState.workspaceMutationPending() ||
+                appState.historyMutationPending()
+              }
+              aria-expanded={appState.historyOpen()}
+              onClick={() => void openHistory()}
+            >
+              History
+            </button>
           </div>
           <label class="document-filter-label">
             <span class="visually-hidden">ドキュメントを絞り込む</span>
@@ -197,7 +221,7 @@ export function DocumentSidebar() {
                         type="button"
                         class={`document-row${active() ? ' active' : ''}`}
                         aria-current={active() ? 'page' : undefined}
-                        disabled={appState.documentMutationPending()}
+                        disabled={appState.documentMutationPending() || appState.historyMutationPending()}
                         onClick={() => {
                           void documentController.switchDocument(summary.id).then(closeOverlayAfterNavigation)
                         }}
