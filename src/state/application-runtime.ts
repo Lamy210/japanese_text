@@ -72,6 +72,7 @@ export function createApplicationRuntime(
           repositories: context.repositories,
           atomic: context.atomic,
           sessionLibrary,
+          sessionSnapshots,
           now
         })
       )
