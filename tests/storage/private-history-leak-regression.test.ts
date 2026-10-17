@@ -115,6 +115,7 @@ describe('history lifecycle privacy boundaries', () => {
     const workspaceId = appState.activeWorkspaceId()!
     const documentId = appState.activeDocumentId()!
     const privateWorkspace = (await (await runtime.getWorkspaceService()).getActive()).workspace
+    expect(privateWorkspace.id).toBe(workspaceId)
     const privateDocument = (await runtime.getDocumentService()).resolveActive(privateWorkspace).then((value) => value.document)
     const resolvedPrivate = await privateDocument
     if (!('id' in resolvedPrivate)) throw new Error('expected private document')
