@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'vitest'
 import 'fake-indexeddb/auto'
 import { createIndexedDbRepositories } from '../../src/storage/repositories/indexeddb'
-import { openWorkspaceDatabase } from '../../src/storage/db/open-database'
+import { openDatabase } from '../../src/storage/db/open-database'
 import { validateDocumentSnapshotRecord } from '../../src/core/workspace/validate'
 
 describe('snapshot repository', () => {
@@ -39,7 +39,7 @@ describe('snapshot repository', () => {
   })
 
   test('lists one document in deterministic newest-first order and validates reads', async () => {
-    const db = await openWorkspaceDatabase()
+    const db = await openDatabase(indexedDB)
     const tx = db.transaction('documentSnapshots', 'readwrite')
     const store = tx.objectStore('documentSnapshots')
     store.put({ id: 's1', documentId: 'd1', revision: 1, content: 'one', reason: 'manual', createdAt: 10 })
