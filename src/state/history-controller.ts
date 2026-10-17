@@ -28,6 +28,12 @@ interface BoundContext {
   document: EditableDocument
 }
 
+interface CapturedIdentity {
+  workspaceId: string
+  documentId: string
+  document: EditableDocument
+}
+
 export function createHistoryController(dependencies: HistoryControllerDependencies): HistoryController {
   const relint = dependencies.relint ?? (() => undefined)
   const toast = dependencies.toast ?? appState.pushToast
@@ -37,7 +43,7 @@ export function createHistoryController(dependencies: HistoryControllerDependenc
     return appState.activeWorkspaceId() === workspaceId && appState.activeDocumentId() === documentId
   }
 
-  async function boundContext(): Promise<BoundContext> {
+  function captureIdentity(): CapturedIdentity {
     const workspaceId = appState.activeWorkspaceId()
     const documentId = appState.activeDocumentId()
     if (workspaceId === undefined || documentId === undefined) {
@@ -47,11 +53,16 @@ export function createHistoryController(dependencies: HistoryControllerDependenc
     if (document.id !== documentId || document.workspaceId !== workspaceId) {
       throw new Error('History request is stale before it starts')
     }
+    return { workspaceId, documentId, document }
+  }
+
+  async function boundContext(): Promise<BoundContext> {
+    const captured = captureIdentity()
     const context = await (await dependencies.getWorkspaceService()).getActive()
-    if (context.workspace.id !== workspaceId || !identityMatches(workspaceId, documentId)) {
+    if (context.workspace.id !== captured.workspaceId || !identityMatches(captured.workspaceId, captured.documentId)) {
       throw new Error('History request became stale while resolving the active workspace')
     }
-    return { workspaceId, documentId, workspace: context.workspace, document }
+    return { ...captured, workspace: context.workspace }
   }
 
   const controller: HistoryController = {
@@ -72,11 +83,15 @@ export function createHistoryController(dependencies: HistoryControllerDependenc
     },
 
     async refresh(): Promise<void> {
-      const binding = await boundContext()
+      const captured = captureIdentity()
       appState.setHistoryLoading(true)
       try {
-        const entries = await (await dependencies.getSnapshotService()).list(binding.workspace, binding.documentId)
-        if (!identityMatches(binding.workspaceId, binding.documentId)) return
+        const context = await (await dependencies.getWorkspaceService()).getActive()
+        if (context.workspace.id !== captured.workspaceId || !identityMatches(captured.workspaceId, captured.documentId)) {
+          return
+        }
+        const entries = await (await dependencies.getSnapshotService()).list(context.workspace, captured.documentId)
+        if (!identityMatches(captured.workspaceId, captured.documentId)) return
         appState.setHistoryEntries(entries)
         const selected = appState.selectedHistorySnapshot()
         if (selected !== undefined && !entries.some((entry) => entry.id === selected.id)) {
@@ -89,9 +104,9 @@ export function createHistoryController(dependencies: HistoryControllerDependenc
 
     async saveManualSnapshot(): Promise<void> {
       if (appState.historyMutationPending()) throw new Error('A history mutation is already pending')
-      const binding = await boundContext()
       appState.setHistoryMutationPending(true)
       try {
+        const binding = await boundContext()
         await (await dependencies.getSnapshotService()).capture(binding.workspace, binding.document, 'manual')
         if (!identityMatches(binding.workspaceId, binding.documentId)) {
           throw new Error('History request became stale after snapshot capture')
@@ -116,10 +131,10 @@ export function createHistoryController(dependencies: HistoryControllerDependenc
 
     async restoreSnapshot(snapshotId: string): Promise<void> {
       if (appState.historyMutationPending()) throw new Error('A history mutation is already pending')
-      const binding = await boundContext()
       appState.setHistoryMutationPending(true)
-      cancelPendingDocumentPersistence()
       try {
+        const binding = await boundContext()
+        cancelPendingDocumentPersistence()
         const result = await (await dependencies.getSnapshotService()).restore(
           binding.workspace,
           binding.document,
