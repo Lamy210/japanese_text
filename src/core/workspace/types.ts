@@ -58,12 +58,14 @@ export interface StoredWorkspaceDocument {
   updatedAt: number
 }
 
+export type SnapshotReason = 'autosave' | 'manual' | 'before-format' | 'before-import' | 'before-restore'
+
 export interface DocumentSnapshot {
   id: string
   documentId: string
   revision: number
   content: string
-  reason: 'autosave' | 'manual' | 'before-format' | 'before-import'
+  reason: SnapshotReason
   createdAt: number
 }
 
