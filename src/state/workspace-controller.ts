@@ -1,4 +1,5 @@
 import type { AppConfig } from '../core/config/schema'
+import type { SnapshotPolicy } from '../core/workspace/types'
 import type { StorageContext } from '../storage/bootstrap'
 import { getStorageContext } from '../storage/runtime'
 import {
@@ -36,6 +37,7 @@ export interface WorkspaceController {
   renameWorkspace(workspaceId: string, name: string): Promise<void>
   deleteWorkspace(workspaceId: string): Promise<void>
   setStorageMode(mode: 'private-session' | 'local-library'): Promise<void>
+  setSnapshotPolicy(policy: SnapshotPolicy): Promise<void>
   requestPersistence(): Promise<StorageCapability>
   getService(): Promise<WorkspaceService>
   getContext(): Promise<StorageContext>
@@ -247,6 +249,16 @@ export function createWorkspaceController(
 
         applyContext(updated)
         await documents().bootstrapForWorkspace(updated.workspace)
+        appState.setWorkspaceSummaries(await workspaceService.list())
+      })
+    },
+
+    async setSnapshotPolicy(policy: SnapshotPolicy): Promise<void> {
+      await runMutation(async () => {
+        const workspaceId = appState.activeWorkspaceId()
+        if (workspaceId === undefined) throw new Error('Active workspace is missing')
+        const workspaceService = await service()
+        await workspaceService.updateSnapshotPolicy(workspaceId, policy)
         appState.setWorkspaceSummaries(await workspaceService.list())
       })
     },
