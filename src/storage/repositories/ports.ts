@@ -1,5 +1,6 @@
 import type { DocumentType } from '../../core/types'
 import type {
+  DocumentSnapshot,
   GlobalPreferences,
   RuleProfile,
   StoredWorkspaceDocument,
@@ -43,6 +44,11 @@ export interface DocumentRepository {
   delete(id: string): Promise<void>
 }
 
+export interface SnapshotRepository {
+  listByDocument(documentId: string): Promise<DocumentSnapshot[]>
+  get(id: string): Promise<DocumentSnapshot | undefined>
+}
+
 export interface StorageRepositories {
   workspaces: WorkspaceRepository
   selection: WorkspaceSelectionRepository
@@ -50,6 +56,7 @@ export interface StorageRepositories {
   preferences: PreferencesRepository
   profiles: RuleProfileRepository
   documents: DocumentRepository
+  snapshots: SnapshotRepository
 }
 
 export interface RecoveredDocument {
