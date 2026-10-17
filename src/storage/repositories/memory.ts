@@ -70,6 +70,18 @@ function pruneSnapshots(
   }
 }
 
+function withoutDocumentSnapshots(
+  source: Map<string, DocumentSnapshot>,
+  documentIds: Iterable<string>
+): Map<string, DocumentSnapshot> {
+  const ids = new Set(documentIds)
+  const next = cloneMap(source)
+  for (const [snapshotId, snapshot] of next) {
+    if (ids.has(snapshot.documentId)) next.delete(snapshotId)
+  }
+  return next
+}
+
 export interface MemoryStorageContext {
   repositories: StorageRepositories
   atomicOperations: AtomicOperationsPort
@@ -244,11 +256,13 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
 
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, [documentId])
       nextDocuments.delete(documentId)
       nextSelections.set(workspaceId, nextDocumentId)
 
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
     },
     async replaceLastDocument(workspaceId, oldDocumentId, replacementValue) {
       requireLocalWorkspace(workspaces, workspaceId)
@@ -267,34 +281,48 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
 
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, [oldDocumentId])
       nextDocuments.delete(oldDocumentId)
       nextDocuments.set(replacement.id, replacement)
       nextSelections.set(workspaceId, replacement.id)
 
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
     },
     async deletePersistedDocuments(workspaceId) {
       const nextDocuments = cloneMap(documents)
+      const removedDocumentIds = new Set<string>()
       for (const [id, document] of nextDocuments) {
-        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+        if (document.workspaceId === workspaceId) {
+          removedDocumentIds.add(id)
+          nextDocuments.delete(id)
+        }
       }
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
       documents = nextDocuments
+      snapshots = nextSnapshots
     },
     async deleteWorkspaceCascade(workspaceId) {
       const nextWorkspaces = cloneMap(workspaces)
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const removedDocumentIds = new Set<string>()
 
       nextWorkspaces.delete(workspaceId)
       nextSelections.delete(workspaceId)
       for (const [id, document] of nextDocuments) {
-        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+        if (document.workspaceId === workspaceId) {
+          removedDocumentIds.add(id)
+          nextDocuments.delete(id)
+        }
       }
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
 
       workspaces = nextWorkspaces
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
     },
     async deleteWorkspaceAndSelectNext(workspaceId, nextWorkspaceId) {
       if (workspaceId === nextWorkspaceId) throw new Error('next workspace must differ from deleted workspace')
@@ -303,15 +331,21 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       const nextWorkspaces = cloneMap(workspaces)
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const removedDocumentIds = new Set<string>()
       nextWorkspaces.delete(workspaceId)
       nextSelections.delete(workspaceId)
       for (const [id, document] of nextDocuments) {
-        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+        if (document.workspaceId === workspaceId) {
+          removedDocumentIds.add(id)
+          nextDocuments.delete(id)
+        }
       }
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
 
       workspaces = nextWorkspaces
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
       activeWorkspaceId = nextWorkspaceId
     },
     async enableLocalLibrary(workspaceId, documentValues, activeDocumentId) {
@@ -339,20 +373,26 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       const nextWorkspaces = cloneMap(workspaces)
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const removedDocumentIds = new Set<string>()
       nextWorkspaces.set(workspaceId, {
         ...clone(workspace),
         storageMode: 'local-library',
         updatedAt: now()
       })
       for (const [id, document] of nextDocuments) {
-        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+        if (document.workspaceId === workspaceId) {
+          removedDocumentIds.add(id)
+          nextDocuments.delete(id)
+        }
       }
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
       for (const document of validatedDocuments) nextDocuments.set(document.id, document)
       nextSelections.set(workspaceId, activeDocumentId)
 
       workspaces = nextWorkspaces
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
     },
     async makeWorkspacePrivate(workspaceId) {
       const workspace = workspaces.get(workspaceId)
@@ -361,19 +401,25 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       const nextWorkspaces = cloneMap(workspaces)
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const removedDocumentIds = new Set<string>()
       nextWorkspaces.set(workspaceId, {
         ...clone(workspace),
         storageMode: 'private-session',
         updatedAt: now()
       })
       for (const [id, document] of nextDocuments) {
-        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+        if (document.workspaceId === workspaceId) {
+          removedDocumentIds.add(id)
+          nextDocuments.delete(id)
+        }
       }
       nextSelections.delete(workspaceId)
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
 
       workspaces = nextWorkspaces
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
     },
     async captureSnapshot(input) {
       validateMaxSnapshots(input.maxSnapshots)
