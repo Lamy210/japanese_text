@@ -198,6 +198,9 @@ export function createWorkspaceController(
     async deleteWorkspace(workspaceId: string): Promise<void> {
       await runMutation(async () => {
         const previousActiveId = appState.activeWorkspaceId()
+        const sessionDocumentIds = runtime.getSessionDocumentLibrary()
+          .list(workspaceId)
+          .map((document) => document.id)
         cancelPendingDocumentPersistence()
         await documents().flushActiveDocument()
         await persistCurrentWorkspaceConfig()
@@ -205,6 +208,7 @@ export function createWorkspaceController(
         const workspaceService = await service()
         const result = await workspaceService.delete(workspaceId)
 
+        runtime.getSessionSnapshotStore().deleteDocuments(sessionDocumentIds)
         runtime.getSessionDocumentLibrary().deleteWorkspace(workspaceId)
         applyContext(result.active)
         appState.setWorkspaceSummaries(await workspaceService.list())
@@ -233,6 +237,7 @@ export function createWorkspaceController(
 
         const documentService = await runtime.getDocumentService()
         const snapshot = await documentService.snapshotWorkspace(active.workspace)
+        const documentIds = snapshot.documents.map((document) => document.id)
         let updated: WorkspaceContext
 
         if (mode === 'local-library') {
@@ -241,9 +246,11 @@ export function createWorkspaceController(
             snapshot.documents,
             snapshot.activeDocumentId
           )
+          runtime.getSessionSnapshotStore().deleteDocuments(documentIds)
           runtime.getSessionDocumentLibrary().deleteWorkspace(workspaceId)
         } else {
           updated = await workspaceService.makePrivate(workspaceId)
+          runtime.getSessionSnapshotStore().deleteDocuments(documentIds)
           runtime.getSessionDocumentLibrary().replaceWorkspace(workspaceId, snapshot)
         }
 
