@@ -295,7 +295,8 @@ export async function persistCapturedDocument(snapshot: DocumentPersistenceSnaps
     if (context.durable === false) return
     const existing = await context.repositories.documents.get(snapshot.documentId)
     if (existing === undefined || existing.workspaceId !== snapshot.workspaceId) return
-    await context.repositories.documents.save(document)
+    const saved = await context.atomic.saveLocalDocumentIfActive(document)
+    if (!saved) return
   } else {
     const { applicationRuntime } = await import('./application-runtime')
     const sessionDocument = applicationRuntime.getSessionDocumentLibrary().get(snapshot.workspaceId, snapshot.documentId)
