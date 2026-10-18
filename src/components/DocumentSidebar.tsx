@@ -153,7 +153,7 @@ export function DocumentSidebar() {
               ref={newDocumentButton}
               type="button"
               class="btn btn-small btn-primary"
-              disabled={appState.documentMutationPending() || !appState.documentLibraryReady()}
+              disabled={appState.documentMutationPending() || appState.historyMutationPending() || !appState.documentLibraryReady()}
               onClick={() => void createDocument()}
             >
               New
@@ -161,7 +161,7 @@ export function DocumentSidebar() {
             <button
               type="button"
               class="btn btn-small"
-              disabled={appState.activeDocumentId() === undefined || appState.documentMutationPending()}
+              disabled={appState.activeDocumentId() === undefined || appState.documentMutationPending() || appState.historyMutationPending()}
               onClick={() => void renameDocument()}
             >
               Rename
@@ -170,7 +170,7 @@ export function DocumentSidebar() {
               ref={deleteActionButton}
               type="button"
               class="btn btn-small"
-              disabled={appState.activeDocumentId() === undefined || appState.documentMutationPending()}
+              disabled={appState.activeDocumentId() === undefined || appState.documentMutationPending() || appState.historyMutationPending()}
               onClick={() => setDeleteConfirmOpen(true)}
             >
               Delete
