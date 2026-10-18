@@ -421,6 +421,17 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       documentSelections = nextSelections
       snapshots = nextSnapshots
     },
+    async saveLocalDocumentIfActive(value) {
+      const document = clone(validateDocumentRecord(value))
+      const workspace = workspaces.get(document.workspaceId)
+      const existing = documents.get(document.id)
+      if (workspace?.storageMode !== 'local-library' ||
+          existing === undefined || existing.workspaceId !== document.workspaceId) return false
+      const nextDocuments = cloneMap(documents)
+      nextDocuments.set(document.id, document)
+      documents = nextDocuments
+      return true
+    },
     async captureSnapshot(input) {
       validateMaxSnapshots(input.maxSnapshots)
       const document = documents.get(input.documentId)
