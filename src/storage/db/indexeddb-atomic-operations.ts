@@ -111,6 +111,35 @@ export function createIndexedDbAtomicOperations(
       }
     },
 
+    async saveDocumentIfLocal(value) {
+      const document = validateDocumentRecord(value)
+      const tx = db.transaction([STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS], 'readwrite')
+      const done = transactionDone(tx)
+      const workspaceStore = tx.objectStore(STORE_WORKSPACES)
+      const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
+      try {
+        const [rawWorkspace, rawExisting] = await Promise.all([
+          requestToPromise(workspaceStore.get(document.workspaceId)),
+          requestToPromise(documentStore.get(document.id))
+        ])
+        if (rawWorkspace === undefined || rawExisting === undefined) {
+          await done
+          return false
+        }
+        const workspace = validateWorkspaceRecord(rawWorkspace)
+        const existing = validateDocumentRecord(rawExisting)
+        if (workspace.storageMode !== 'local-library' || existing.workspaceId !== document.workspaceId) {
+          await done
+          return false
+        }
+        documentStore.put(document)
+        await done
+        return true
+      } catch (error) {
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
     async createDocumentAndActivate(documentValue) {
       const document = validateDocumentRecord(documentValue)
       const tx = db.transaction([STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_META], 'readwrite')
