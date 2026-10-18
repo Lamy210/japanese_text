@@ -51,7 +51,8 @@ vi.mock('../../src/storage/storage', () => ({
         })),
         save: documentSave
       }
-    }
+    },
+    atomic: { saveLocalDocumentIfActive: documentSave }
   })),
   saveConfig: vi.fn(async () => undefined),
   saveWorkspaceDocument: vi.fn(async () => undefined),
