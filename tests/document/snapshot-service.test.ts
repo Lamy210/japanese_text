@@ -3,6 +3,7 @@ import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
 import type { Workspace } from '../../src/core/workspace/types'
 import type { EditableDocument } from '../../src/document/types'
 import { createSessionSnapshotStore } from '../../src/document/session-snapshot-store'
+import { createSessionDocumentLibraryStore } from '../../src/document/session-document-library'
 import { createSnapshotService } from '../../src/history/snapshot-service'
 import { createMemoryStorageContext } from '../../src/storage/repositories/memory'
 
@@ -36,12 +37,14 @@ function document(workspaceId: string, content = 'current'): EditableDocument {
 function serviceHarness(start = 1_000) {
   const durable = createMemoryStorageContext(() => start)
   const sessionSnapshots = createSessionSnapshotStore()
+  const sessionDocuments = createSessionDocumentLibraryStore()
   let clock = start
   let id = 0
   const service = createSnapshotService({
     repositories: durable.repositories,
     atomic: durable.atomicOperations,
     sessionSnapshots,
+    sessionDocuments,
     now: () => clock,
     generateId: () => `snapshot-${++id}`
   })
