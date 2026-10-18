@@ -1,5 +1,6 @@
 import type { DocumentSnapshot, Workspace } from '../core/workspace/types'
 import type { SessionSnapshotStore } from '../document/session-snapshot-store'
+import type { SessionDocumentLibraryStore } from '../document/session-document-library'
 import type { EditableDocument } from '../document/types'
 import type {
   AtomicOperationsPort,
@@ -14,6 +15,7 @@ export interface SnapshotServiceDependencies {
   repositories: StorageRepositories
   atomic: AtomicOperationsPort
   sessionSnapshots: SessionSnapshotStore
+  sessionDocuments: SessionDocumentLibraryStore
   now?: () => number
   generateId?: () => string
 }
@@ -64,7 +66,7 @@ function toSummary(snapshot: DocumentSnapshot): SnapshotSummary {
 }
 
 export function createSnapshotService(dependencies: SnapshotServiceDependencies): SnapshotService {
-  const { repositories, atomic, sessionSnapshots } = dependencies
+  const { repositories, atomic, sessionSnapshots, sessionDocuments } = dependencies
   const now = dependencies.now ?? Date.now
   const generateId = dependencies.generateId ?? defaultGenerateId
   const operationTails = new Map<string, Promise<void>>()
@@ -189,6 +191,7 @@ export function createSnapshotService(dependencies: SnapshotServiceDependencies)
             beforeRestoreCreatedAt: timestamp,
             maxSnapshots: workspace.snapshotPolicy.maxSnapshots
           }, document)
+          if (!result.noOp) sessionDocuments.save(result.document)
           return {
             document: result.document,
             rollbackSnapshot: result.rollbackSnapshot,
