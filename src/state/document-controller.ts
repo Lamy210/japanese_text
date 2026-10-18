@@ -70,6 +70,7 @@ export function createDocumentController(
   }
 
   async function runMutation(operation: () => Promise<void>): Promise<void> {
+    if (appState.historyMutationPending()) throw new Error('History mutation is pending')
     appState.setDocumentMutationPending(true)
     try {
       await operation()
