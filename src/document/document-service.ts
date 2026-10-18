@@ -375,7 +375,7 @@ export function createDocumentService(dependencies: DocumentServiceDependencies)
         sessionLibrary.save(document)
         return
       }
-      await repositories.documents.save(toStored(document))
+      await atomic.saveLocalDocumentIfActive(toStored(document))
     },
 
     async delete(workspace, documentId) {
