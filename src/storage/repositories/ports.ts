@@ -131,6 +131,8 @@ export interface AtomicOperationsPort {
     activeDocumentId: string
   ): Promise<void>
   makeWorkspacePrivate(workspaceId: string): Promise<void>
+  /** Atomically update an existing Local Library document only while its workspace is still Local. */
+  saveLocalDocumentIfActive(document: StoredWorkspaceDocument): Promise<boolean>
   captureSnapshot(input: SnapshotCaptureInput): Promise<SnapshotCaptureResult>
   restoreDocumentFromSnapshot(input: RestoreDocumentInput): Promise<RestoreDocumentResult>
 }
