@@ -80,7 +80,7 @@ describe('history product integration', () => {
     vi.clearAllMocks()
     snapshotCapture.mockResolvedValue({ snapshot: { id: 's1' }, skippedDuplicate: false })
     snapshotAutosave.mockResolvedValue({ snapshot: { id: 'a1' }, skippedDuplicate: false })
-    documentSave.mockResolvedValue(undefined)
+    documentSave.mockResolvedValue(true)
     const { appState } = await import('../../src/state/app-state')
     appState.setActiveWorkspaceId('w1')
     appState.setActiveDocumentId('d1')
@@ -132,7 +132,7 @@ describe('history product integration', () => {
   test('successful Local document save triggers best-effort autosave snapshot after save', async () => {
     const { persistCapturedDocument } = await import('../../src/state/actions')
     const order: string[] = []
-    documentSave.mockImplementationOnce(async () => { order.push('save') })
+    documentSave.mockImplementationOnce(async () => { order.push('save'); return true })
     snapshotAutosave.mockImplementationOnce(async () => { order.push('snapshot'); return { skippedDuplicate: true } })
 
     await persistCapturedDocument({
