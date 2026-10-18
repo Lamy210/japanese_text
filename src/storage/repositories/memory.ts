@@ -228,18 +228,6 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       profiles = nextProfiles
       activeWorkspaceId = validatedWorkspace.id
     },
-    async saveDocumentIfLocal(value) {
-      const document = clone(validateDocumentRecord(value))
-      const workspace = workspaces.get(document.workspaceId)
-      const existing = documents.get(document.id)
-      if (workspace?.storageMode !== 'local-library' || existing?.workspaceId !== document.workspaceId) {
-        return false
-      }
-      const nextDocuments = cloneMap(documents)
-      nextDocuments.set(document.id, document)
-      documents = nextDocuments
-      return true
-    },
     async createDocumentAndActivate(documentValue) {
       const document = clone(validateDocumentRecord(documentValue))
       requireLocalWorkspace(workspaces, document.workspaceId)
