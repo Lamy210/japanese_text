@@ -110,6 +110,7 @@ export function createWorkspaceController(
   }
 
   async function runMutation(operation: () => Promise<void>): Promise<void> {
+    if (appState.historyMutationPending()) throw new Error('History mutation is pending')
     appState.setWorkspaceMutationPending(true)
     try {
       await operation()
