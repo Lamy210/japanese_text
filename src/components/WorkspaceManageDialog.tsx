@@ -29,7 +29,7 @@ export function WorkspaceManageDialog() {
     appState.workspaceSummaries().find((workspace) => workspace.id === appState.activeWorkspaceId())
   )
   const capability = () => appState.storageCapability()
-  const pending = () => appState.workspaceMutationPending()
+  const pending = () => appState.workspaceMutationPending() || appState.historyMutationPending()
   const snapshotMaxValid = () => Number.isInteger(snapshotMax()) && snapshotMax() >= 1 && snapshotMax() <= 1000
 
   createEffect(() => {
