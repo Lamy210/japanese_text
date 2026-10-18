@@ -116,7 +116,6 @@ export interface AtomicOperationsPort {
   saveProjectedState(value: AtomicProjectedStorageState): Promise<void>
   createWorkspaceAndActivate(workspace: Workspace, profile: RuleProfile): Promise<void>
   createDocumentAndActivate(document: StoredWorkspaceDocument): Promise<void>
-  saveDocumentIfLocal(document: StoredWorkspaceDocument): Promise<boolean>
   deleteDocumentAndSelectNext(workspaceId: string, documentId: string, nextDocumentId: string): Promise<void>
   replaceLastDocument(
     workspaceId: string,
