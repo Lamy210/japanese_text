@@ -67,6 +67,8 @@ async function captureBeforeFormatCheckpoint(text: string): Promise<boolean> {
 }
 
 export async function formatDocumentAction(): Promise<void> {
+  const originalWorkspaceId = appState.activeWorkspaceId()
+  const originalDocumentId = appState.activeDocumentId()
   const text = appState.documentText()
   if (text.length === 0) return
   if (!appState.config.formatter.enabled) {
@@ -100,6 +102,14 @@ export async function formatDocumentAction(): Promise<void> {
   }
 
   if (!(await captureBeforeFormatCheckpoint(text))) return
+  if (
+    appState.activeWorkspaceId() !== originalWorkspaceId ||
+    appState.activeDocumentId() !== originalDocumentId ||
+    appState.documentText() !== text
+  ) {
+    appState.pushToast('warning', '編集中に文書が変更されたためFormatを中止しました。')
+    return
+  }
 
   applyFixesTransaction(
     plan.appliedFixes.map((d) => ({ start: d.start, end: d.end, replacement: d.replacement ?? '' })),
