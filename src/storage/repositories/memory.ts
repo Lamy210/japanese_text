@@ -6,11 +6,13 @@
  */
 import {
   validateDocumentRecord,
+  validateDocumentSnapshotRecord,
   validatePreferencesRecord,
   validateRuleProfileRecord,
   validateWorkspaceRecord
 } from '../../core/workspace/validate'
 import type {
+  DocumentSnapshot,
   GlobalPreferences,
   RuleProfile,
   StoredWorkspaceDocument,
@@ -35,6 +37,51 @@ function requireLocalWorkspace(workspaces: Map<string, Workspace>, workspaceId: 
   return workspace
 }
 
+function validateMaxSnapshots(value: number): void {
+  if (!Number.isInteger(value) || value < 1 || value > 1000) {
+    throw new Error('maxSnapshots must be an integer between 1 and 1000')
+  }
+}
+
+function snapshotsForDocument(
+  values: Map<string, DocumentSnapshot>,
+  documentId: string
+): DocumentSnapshot[] {
+  return [...values.values()]
+    .filter((snapshot) => snapshot.documentId === documentId)
+    .map(validateDocumentSnapshotRecord)
+}
+
+function latestSnapshot(values: Map<string, DocumentSnapshot>, documentId: string): DocumentSnapshot | undefined {
+  return snapshotsForDocument(values, documentId)
+    .sort((a, b) => b.revision - a.revision || b.createdAt - a.createdAt || a.id.localeCompare(b.id))[0]
+}
+
+function pruneSnapshots(
+  values: Map<string, DocumentSnapshot>,
+  documentId: string,
+  maxSnapshots: number
+): void {
+  const ordered = snapshotsForDocument(values, documentId)
+    .sort((a, b) => a.revision - b.revision || a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+  while (ordered.length > maxSnapshots) {
+    const oldest = ordered.shift()
+    if (oldest !== undefined) values.delete(oldest.id)
+  }
+}
+
+function withoutDocumentSnapshots(
+  source: Map<string, DocumentSnapshot>,
+  documentIds: Iterable<string>
+): Map<string, DocumentSnapshot> {
+  const ids = new Set(documentIds)
+  const next = cloneMap(source)
+  for (const [snapshotId, snapshot] of next) {
+    if (ids.has(snapshot.documentId)) next.delete(snapshotId)
+  }
+  return next
+}
+
 export interface MemoryStorageContext {
   repositories: StorageRepositories
   atomicOperations: AtomicOperationsPort
@@ -44,6 +91,7 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
   let workspaces = new Map<string, Workspace>()
   let profiles = new Map<string, RuleProfile>()
   let documents = new Map<string, StoredWorkspaceDocument>()
+  let snapshots = new Map<string, DocumentSnapshot>()
   let documentSelections = new Map<string, string>()
   let preferences: GlobalPreferences | undefined
   let activeWorkspaceId: string | undefined
@@ -130,6 +178,19 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       async delete(id) {
         documents.delete(id)
       }
+    },
+    snapshots: {
+      async listByDocument(documentId) {
+        if (documentId.length === 0) throw new Error('documentId must not be empty')
+        return snapshotsForDocument(snapshots, documentId)
+          .map(clone)
+          .sort((a, b) => b.createdAt - a.createdAt || b.revision - a.revision || a.id.localeCompare(b.id))
+      },
+      async get(id) {
+        if (id.length === 0) throw new Error('snapshot id must not be empty')
+        const value = snapshots.get(id)
+        return value === undefined ? undefined : clone(validateDocumentSnapshotRecord(value))
+      }
     }
   }
 
@@ -195,11 +256,13 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
 
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, [documentId])
       nextDocuments.delete(documentId)
       nextSelections.set(workspaceId, nextDocumentId)
 
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
     },
     async replaceLastDocument(workspaceId, oldDocumentId, replacementValue) {
       requireLocalWorkspace(workspaces, workspaceId)
@@ -218,34 +281,48 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
 
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, [oldDocumentId])
       nextDocuments.delete(oldDocumentId)
       nextDocuments.set(replacement.id, replacement)
       nextSelections.set(workspaceId, replacement.id)
 
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
     },
     async deletePersistedDocuments(workspaceId) {
       const nextDocuments = cloneMap(documents)
+      const removedDocumentIds = new Set<string>()
       for (const [id, document] of nextDocuments) {
-        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+        if (document.workspaceId === workspaceId) {
+          removedDocumentIds.add(id)
+          nextDocuments.delete(id)
+        }
       }
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
       documents = nextDocuments
+      snapshots = nextSnapshots
     },
     async deleteWorkspaceCascade(workspaceId) {
       const nextWorkspaces = cloneMap(workspaces)
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const removedDocumentIds = new Set<string>()
 
       nextWorkspaces.delete(workspaceId)
       nextSelections.delete(workspaceId)
       for (const [id, document] of nextDocuments) {
-        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+        if (document.workspaceId === workspaceId) {
+          removedDocumentIds.add(id)
+          nextDocuments.delete(id)
+        }
       }
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
 
       workspaces = nextWorkspaces
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
     },
     async deleteWorkspaceAndSelectNext(workspaceId, nextWorkspaceId) {
       if (workspaceId === nextWorkspaceId) throw new Error('next workspace must differ from deleted workspace')
@@ -254,15 +331,21 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       const nextWorkspaces = cloneMap(workspaces)
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const removedDocumentIds = new Set<string>()
       nextWorkspaces.delete(workspaceId)
       nextSelections.delete(workspaceId)
       for (const [id, document] of nextDocuments) {
-        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+        if (document.workspaceId === workspaceId) {
+          removedDocumentIds.add(id)
+          nextDocuments.delete(id)
+        }
       }
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
 
       workspaces = nextWorkspaces
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
       activeWorkspaceId = nextWorkspaceId
     },
     async enableLocalLibrary(workspaceId, documentValues, activeDocumentId) {
@@ -290,20 +373,26 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       const nextWorkspaces = cloneMap(workspaces)
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const removedDocumentIds = new Set<string>()
       nextWorkspaces.set(workspaceId, {
         ...clone(workspace),
         storageMode: 'local-library',
         updatedAt: now()
       })
       for (const [id, document] of nextDocuments) {
-        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+        if (document.workspaceId === workspaceId) {
+          removedDocumentIds.add(id)
+          nextDocuments.delete(id)
+        }
       }
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
       for (const document of validatedDocuments) nextDocuments.set(document.id, document)
       nextSelections.set(workspaceId, activeDocumentId)
 
       workspaces = nextWorkspaces
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
     },
     async makeWorkspacePrivate(workspaceId) {
       const workspace = workspaces.get(workspaceId)
@@ -312,19 +401,123 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       const nextWorkspaces = cloneMap(workspaces)
       const nextDocuments = cloneMap(documents)
       const nextSelections = new Map(documentSelections)
+      const removedDocumentIds = new Set<string>()
       nextWorkspaces.set(workspaceId, {
         ...clone(workspace),
         storageMode: 'private-session',
         updatedAt: now()
       })
       for (const [id, document] of nextDocuments) {
-        if (document.workspaceId === workspaceId) nextDocuments.delete(id)
+        if (document.workspaceId === workspaceId) {
+          removedDocumentIds.add(id)
+          nextDocuments.delete(id)
+        }
       }
       nextSelections.delete(workspaceId)
+      const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
 
       workspaces = nextWorkspaces
       documents = nextDocuments
       documentSelections = nextSelections
+      snapshots = nextSnapshots
+    },
+    async saveLocalDocumentIfActive(value) {
+      const document = clone(validateDocumentRecord(value))
+      const workspace = workspaces.get(document.workspaceId)
+      const existing = documents.get(document.id)
+      if (workspace?.storageMode !== 'local-library' ||
+          existing === undefined || existing.workspaceId !== document.workspaceId) return false
+      const nextDocuments = cloneMap(documents)
+      nextDocuments.set(document.id, document)
+      documents = nextDocuments
+      return true
+    },
+    async captureSnapshot(input) {
+      validateMaxSnapshots(input.maxSnapshots)
+      const document = documents.get(input.documentId)
+      if (document === undefined) throw new Error(`Document not found: ${input.documentId}`)
+
+      const latest = latestSnapshot(snapshots, input.documentId)
+      if (latest?.content === input.content) return { skippedDuplicate: true }
+      if (snapshots.has(input.id)) throw new Error(`Snapshot already exists: ${input.id}`)
+
+      const revision = (latest?.revision ?? 0) + 1
+      const snapshot = validateDocumentSnapshotRecord({
+        id: input.id,
+        documentId: input.documentId,
+        revision,
+        content: input.content,
+        reason: input.reason,
+        createdAt: input.createdAt
+      })
+      const nextSnapshots = cloneMap(snapshots)
+      nextSnapshots.set(snapshot.id, clone(snapshot))
+      pruneSnapshots(nextSnapshots, input.documentId, input.maxSnapshots)
+      snapshots = nextSnapshots
+      return { snapshot: clone(snapshot), skippedDuplicate: false }
+    },
+    async restoreDocumentFromSnapshot(input) {
+      validateMaxSnapshots(input.maxSnapshots)
+      requireLocalWorkspace(workspaces, input.workspaceId)
+      const document = documents.get(input.documentId)
+      if (document === undefined || document.workspaceId !== input.workspaceId) {
+        throw new Error(`Document not found in workspace: ${input.documentId}`)
+      }
+      const target = snapshots.get(input.snapshotId)
+      if (target === undefined || target.documentId !== input.documentId) {
+        throw new Error(`Snapshot not found for document ${input.documentId}: ${input.snapshotId}`)
+      }
+      const targetContent = target.content
+
+      if (targetContent === input.currentContent) {
+        return {
+          document: clone(document),
+          rollbackSnapshot: clone(validateDocumentSnapshotRecord(target)),
+          createdRollbackSnapshot: false,
+          noOp: true
+        }
+      }
+
+      const nextSnapshots = cloneMap(snapshots)
+      const latest = latestSnapshot(nextSnapshots, input.documentId)
+      let rollbackSnapshot: DocumentSnapshot
+      let createdRollbackSnapshot = false
+      if (latest?.content === input.currentContent) {
+        rollbackSnapshot = clone(latest)
+      } else {
+        if (nextSnapshots.has(input.beforeRestoreSnapshotId)) {
+          throw new Error(`Snapshot already exists: ${input.beforeRestoreSnapshotId}`)
+        }
+        const revision = (latest?.revision ?? 0) + 1
+        rollbackSnapshot = validateDocumentSnapshotRecord({
+          id: input.beforeRestoreSnapshotId,
+          documentId: input.documentId,
+          revision,
+          content: input.currentContent,
+          reason: 'before-restore',
+          createdAt: input.beforeRestoreCreatedAt
+        })
+        nextSnapshots.set(rollbackSnapshot.id, clone(rollbackSnapshot))
+        createdRollbackSnapshot = true
+      }
+      pruneSnapshots(nextSnapshots, input.documentId, input.maxSnapshots)
+
+      const restored = validateDocumentRecord({
+        ...clone(document),
+        content: targetContent,
+        updatedAt: input.restoredUpdatedAt
+      })
+      const nextDocuments = cloneMap(documents)
+      nextDocuments.set(restored.id, clone(restored))
+
+      snapshots = nextSnapshots
+      documents = nextDocuments
+      return {
+        document: clone(restored),
+        rollbackSnapshot: clone(rollbackSnapshot),
+        createdRollbackSnapshot,
+        noOp: false
+      }
     }
   }
 

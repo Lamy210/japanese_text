@@ -6,6 +6,7 @@ import type {
   SessionDocumentLibrarySnapshot,
   SessionDocumentLibraryStore
 } from './session-document-library'
+import type { SessionSnapshotStore } from './session-snapshot-store'
 import type {
   DocumentContext,
   DocumentDeleteResult,
@@ -18,6 +19,7 @@ export interface DocumentServiceDependencies {
   repositories: StorageRepositories
   atomic: AtomicOperationsPort
   sessionLibrary: SessionDocumentLibraryStore
+  sessionSnapshots?: SessionSnapshotStore
   now?: () => number
   generateId?: () => string
 }
@@ -137,7 +139,7 @@ function assertDocumentWorkspace(workspace: Workspace, document: EditableDocumen
 }
 
 export function createDocumentService(dependencies: DocumentServiceDependencies): DocumentService {
-  const { repositories, atomic, sessionLibrary } = dependencies
+  const { repositories, atomic, sessionLibrary, sessionSnapshots } = dependencies
   const now = dependencies.now ?? Date.now
   const generateId = dependencies.generateId ?? defaultGenerateId
   const transientLocalSelections = new Map<string, string>()
@@ -373,7 +375,7 @@ export function createDocumentService(dependencies: DocumentServiceDependencies)
         sessionLibrary.save(document)
         return
       }
-      await repositories.documents.save(toStored(document))
+      await atomic.saveLocalDocumentIfActive(toStored(document))
     },
 
     async delete(workspace, documentId) {
@@ -398,6 +400,7 @@ export function createDocumentService(dependencies: DocumentServiceDependencies)
             documents: [replacement],
             activeDocumentId: replacement.id
           })
+          sessionSnapshots?.deleteDocument(documentId)
           return {
             ...privateContext(workspace, replacement),
             deletedDocumentId: documentId
@@ -422,6 +425,7 @@ export function createDocumentService(dependencies: DocumentServiceDependencies)
         if (deletingActive) sessionLibrary.setActiveDocumentId(workspace.id, nextSelection)
         const next = sessionLibrary.get(workspace.id, nextSelection)
         if (next === undefined) throw new Error(`Successor document disappeared: ${nextSelection}`)
+        sessionSnapshots?.deleteDocument(documentId)
         return {
           ...privateContext(workspace, next),
           deletedDocumentId: documentId

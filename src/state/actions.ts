@@ -4,6 +4,8 @@
 
 import type { Diagnostic, DocumentType } from '../core/types'
 import type { AppConfig, PresetId, ThemeMode } from '../core/config/schema'
+import type { Workspace } from '../core/workspace/types'
+import type { EditableDocument } from '../document/types'
 import { formatDocument as formatDocumentCore } from '../core/formatter/formatter'
 import { migrateConfig } from '../core/config/validate'
 import { applyFixesTransaction, applyReplacement, jumpToPosition } from '../editor/editor-adapter'
@@ -28,7 +30,45 @@ export function jumpToDiagnostic(diagnostic: Diagnostic): void {
   jumpToPosition(diagnostic.start, diagnostic.end)
 }
 
+async function activeWorkspaceForHistory(): Promise<Workspace | undefined> {
+  const workspaceId = appState.activeWorkspaceId()
+  if (workspaceId === undefined) return undefined
+  const { applicationRuntime } = await import('./application-runtime')
+  const active = await (await applicationRuntime.getWorkspaceService()).getActive()
+  return active.workspace.id === workspaceId ? active.workspace : undefined
+}
+
+async function captureBeforeFormatCheckpoint(text: string): Promise<boolean> {
+  const workspace = await activeWorkspaceForHistory()
+  if (workspace === undefined || !workspace.snapshotPolicy.enabled) return true
+
+  try {
+    const { documentController } = await import('./workspace-runtime')
+    const current = documentController.currentEditableDocument()
+    if (
+      current.workspaceId !== workspace.id ||
+      current.id !== appState.activeDocumentId() ||
+      current.content !== text ||
+      appState.documentText() !== text
+    ) {
+      appState.pushToast('warning', '編集中に文書が変更されたためFormatを中止しました。')
+      return false
+    }
+    const { applicationRuntime } = await import('./application-runtime')
+    await (await applicationRuntime.getSnapshotService()).capture(workspace, current, 'before-format')
+    return true
+  } catch (error) {
+    appState.pushToast(
+      'error',
+      `Format前の履歴保存に失敗したためFormatを中止しました: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return false
+  }
+}
+
 export async function formatDocumentAction(): Promise<void> {
+  const originalWorkspaceId = appState.activeWorkspaceId()
+  const originalDocumentId = appState.activeDocumentId()
   const text = appState.documentText()
   if (text.length === 0) return
   if (!appState.config.formatter.enabled) {
@@ -59,6 +99,16 @@ export async function formatDocumentAction(): Promise<void> {
     }
   } catch {
     // Safe Fix only: continue if shadow lint itself fails.
+  }
+
+  if (!(await captureBeforeFormatCheckpoint(text))) return
+  if (
+    appState.activeWorkspaceId() !== originalWorkspaceId ||
+    appState.activeDocumentId() !== originalDocumentId ||
+    appState.documentText() !== text
+  ) {
+    appState.pushToast('warning', '編集中に文書が変更されたためFormatを中止しました。')
+    return
   }
 
   applyFixesTransaction(
@@ -222,15 +272,8 @@ export function cancelPendingDocumentPersistence(): void {
   }
 }
 
-async function persistCapturedDocument(snapshot: DocumentPersistenceSnapshot): Promise<void> {
-  const context = await getStorageContext()
-  const workspace = await context.repositories.workspaces.get(snapshot.workspaceId)
-  if (workspace === undefined || workspace.storageMode !== 'local-library') return
-
-  const existing = await context.repositories.documents.get(snapshot.documentId)
-  if (existing === undefined || existing.workspaceId !== snapshot.workspaceId) return
-
-  await context.repositories.documents.save({
+function editableFromPersistence(snapshot: DocumentPersistenceSnapshot): EditableDocument {
+  return {
     id: snapshot.documentId,
     workspaceId: snapshot.workspaceId,
     name: snapshot.name,
@@ -239,7 +282,36 @@ async function persistCapturedDocument(snapshot: DocumentPersistenceSnapshot): P
     sourceKind: snapshot.sourceKind,
     createdAt: snapshot.createdAt,
     updatedAt: snapshot.updatedAt
-  })
+  }
+}
+
+export async function persistCapturedDocument(snapshot: DocumentPersistenceSnapshot): Promise<void> {
+  const context = await getStorageContext()
+  const workspace = await context.repositories.workspaces.get(snapshot.workspaceId)
+  if (workspace === undefined || workspace.storageMode === 'file-backed') return
+
+  const document = editableFromPersistence(snapshot)
+  if (workspace.storageMode === 'local-library') {
+    if (context.durable === false) return
+    const existing = await context.repositories.documents.get(snapshot.documentId)
+    if (existing === undefined || existing.workspaceId !== snapshot.workspaceId) return
+    const saved = await context.atomic.saveLocalDocumentIfActive(document)
+    if (!saved) return
+  } else {
+    const { applicationRuntime } = await import('./application-runtime')
+    const sessionDocument = applicationRuntime.getSessionDocumentLibrary().get(snapshot.workspaceId, snapshot.documentId)
+    if (sessionDocument === undefined) return
+  }
+
+  try {
+    const { applicationRuntime } = await import('./application-runtime')
+    await (await applicationRuntime.getSnapshotService()).captureAutosave(workspace, document)
+  } catch (error) {
+    appState.pushToast(
+      'warning',
+      `本文は保存しましたが履歴のAutosaveに失敗しました: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
 }
 
 /**
@@ -247,7 +319,6 @@ async function persistCapturedDocument(snapshot: DocumentPersistenceSnapshot): P
  * the callback never re-resolves current Workspace/Document selection or editor state.
  */
 export function persistDocumentDebounced(snapshot: DocumentPersistenceSnapshot): void {
-  if (!isStorageAvailable()) return
   cancelPendingDocumentPersistence()
   const captured = structuredClone(snapshot)
   documentSaveTimer = setTimeout(() => {

@@ -1,5 +1,6 @@
 import {
   validateDocumentRecord,
+  validateDocumentSnapshotRecord,
   validatePreferencesRecord,
   validateRuleProfileRecord,
   validateWorkspaceRecord
@@ -28,6 +29,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function shouldScrubLegacyDocument(db: IDBDatabase, workspaceId: string): boolean {
   return workspaceId === MIGRATED_WORKSPACE_ID && db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
+}
+
+function validateMaxSnapshots(value: number): void {
+  if (!Number.isInteger(value) || value < 1 || value > 1000) {
+    throw new Error('maxSnapshots must be an integer between 1 and 1000')
+  }
 }
 
 async function abortAndRethrow(tx: IDBTransaction, done: Promise<void>, error: unknown): Promise<never> {
@@ -671,6 +678,190 @@ export function createIndexedDbAtomicOperations(
         await done
       } catch (error) {
         if (validationError !== undefined) throw validationError
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
+    async saveLocalDocumentIfActive(value) {
+      const document = validateDocumentRecord(value)
+      const tx = db.transaction([STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS], 'readwrite')
+      const done = transactionDone(tx)
+      const workspacesStore = tx.objectStore(STORE_WORKSPACES)
+      const documentsStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
+      try {
+        const [rawWorkspace, rawExisting] = await Promise.all([
+          requestToPromise(workspacesStore.get(document.workspaceId)),
+          requestToPromise(documentsStore.get(document.id))
+        ])
+        const workspace = rawWorkspace === undefined ? undefined : validateWorkspaceRecord(rawWorkspace)
+        const existing = rawExisting === undefined ? undefined : validateDocumentRecord(rawExisting)
+        if (workspace?.storageMode !== 'local-library' ||
+            existing === undefined || existing.workspaceId !== document.workspaceId) {
+          await done
+          return false
+        }
+        documentsStore.put(document)
+        await done
+        return true
+      } catch (error) {
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
+    async captureSnapshot(input) {
+      validateMaxSnapshots(input.maxSnapshots)
+      const tx = db.transaction([STORE_WORKSPACE_DOCUMENTS, STORE_DOCUMENT_SNAPSHOTS], 'readwrite')
+      const done = transactionDone(tx)
+      const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
+      const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
+
+      try {
+        const documentRequest = documentStore.get(input.documentId)
+        const snapshotsRequest = snapshotStore.index(INDEX_DOCUMENT_ID).getAll(input.documentId)
+        const collisionRequest = snapshotStore.get(input.id)
+        const [rawDocument, rawSnapshots, collision] = await Promise.all([
+          requestToPromise(documentRequest),
+          requestToPromise(snapshotsRequest),
+          requestToPromise(collisionRequest)
+        ])
+        if (rawDocument === undefined) throw new Error(`Document not found: ${input.documentId}`)
+        validateDocumentRecord(rawDocument)
+        const existing = rawSnapshots.map(validateDocumentSnapshotRecord)
+        const latest = [...existing].sort(
+          (a, b) => b.revision - a.revision || b.createdAt - a.createdAt || a.id.localeCompare(b.id)
+        )[0]
+        if (latest?.content === input.content) {
+          await done
+          return { skippedDuplicate: true }
+        }
+        if (collision !== undefined) throw new Error(`Snapshot already exists: ${input.id}`)
+
+        const revision = existing.reduce((max, snapshot) => Math.max(max, snapshot.revision), 0) + 1
+        const snapshot = validateDocumentSnapshotRecord({
+          id: input.id,
+          documentId: input.documentId,
+          revision,
+          content: input.content,
+          reason: input.reason,
+          createdAt: input.createdAt
+        })
+        snapshotStore.put(snapshot)
+        const ordered = [...existing, snapshot].sort(
+          (a, b) => a.revision - b.revision || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+        )
+        while (ordered.length > input.maxSnapshots) {
+          const oldest = ordered.shift()
+          if (oldest !== undefined) snapshotStore.delete(oldest.id)
+        }
+        await done
+        return { snapshot, skippedDuplicate: false }
+      } catch (error) {
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
+    async restoreDocumentFromSnapshot(input) {
+      validateMaxSnapshots(input.maxSnapshots)
+      const tx = db.transaction(
+        [STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_DOCUMENT_SNAPSHOTS],
+        'readwrite'
+      )
+      const done = transactionDone(tx)
+      const workspaceStore = tx.objectStore(STORE_WORKSPACES)
+      const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
+      const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
+
+      try {
+        const workspaceRequest = workspaceStore.get(input.workspaceId)
+        const documentRequest = documentStore.get(input.documentId)
+        const targetRequest = snapshotStore.get(input.snapshotId)
+        const snapshotsRequest = snapshotStore.index(INDEX_DOCUMENT_ID).getAll(input.documentId)
+        const rollbackCollisionRequest = snapshotStore.get(input.beforeRestoreSnapshotId)
+        const [rawWorkspace, rawDocument, rawTarget, rawSnapshots, rollbackCollision] = await Promise.all([
+          requestToPromise(workspaceRequest),
+          requestToPromise(documentRequest),
+          requestToPromise(targetRequest),
+          requestToPromise(snapshotsRequest),
+          requestToPromise(rollbackCollisionRequest)
+        ])
+
+        if (rawWorkspace === undefined) throw new Error(`Workspace not found: ${input.workspaceId}`)
+        const workspace = validateWorkspaceRecord(rawWorkspace)
+        if (workspace.storageMode !== 'local-library') {
+          throw new Error(`Workspace is not Local Library: ${input.workspaceId}`)
+        }
+        if (rawDocument === undefined) throw new Error(`Document not found: ${input.documentId}`)
+        const document = validateDocumentRecord(rawDocument)
+        if (document.workspaceId !== input.workspaceId) {
+          throw new Error(`Document not found in workspace: ${input.documentId}`)
+        }
+        if (rawTarget === undefined) {
+          throw new Error(`Snapshot not found for document ${input.documentId}: ${input.snapshotId}`)
+        }
+        const target = validateDocumentSnapshotRecord(rawTarget)
+        if (target.documentId !== input.documentId) {
+          throw new Error(`Snapshot not found for document ${input.documentId}: ${input.snapshotId}`)
+        }
+        const targetContent = target.content
+
+        if (targetContent === input.currentContent) {
+          await done
+          return {
+            document,
+            rollbackSnapshot: target,
+            createdRollbackSnapshot: false,
+            noOp: true
+          }
+        }
+
+        const existing = rawSnapshots.map(validateDocumentSnapshotRecord)
+        const latest = [...existing].sort(
+          (a, b) => b.revision - a.revision || b.createdAt - a.createdAt || a.id.localeCompare(b.id)
+        )[0]
+        let rollbackSnapshot
+        let createdRollbackSnapshot = false
+        if (latest?.content === input.currentContent) {
+          rollbackSnapshot = latest
+        } else {
+          if (rollbackCollision !== undefined) {
+            throw new Error(`Snapshot already exists: ${input.beforeRestoreSnapshotId}`)
+          }
+          const revision = existing.reduce((max, snapshot) => Math.max(max, snapshot.revision), 0) + 1
+          rollbackSnapshot = validateDocumentSnapshotRecord({
+            id: input.beforeRestoreSnapshotId,
+            documentId: input.documentId,
+            revision,
+            content: input.currentContent,
+            reason: 'before-restore',
+            createdAt: input.beforeRestoreCreatedAt
+          })
+          snapshotStore.put(rollbackSnapshot)
+          createdRollbackSnapshot = true
+        }
+
+        const retainedCandidates = createdRollbackSnapshot ? [...existing, rollbackSnapshot] : [...existing]
+        retainedCandidates.sort(
+          (a, b) => a.revision - b.revision || a.createdAt - b.createdAt || a.id.localeCompare(b.id)
+        )
+        while (retainedCandidates.length > input.maxSnapshots) {
+          const oldest = retainedCandidates.shift()
+          if (oldest !== undefined) snapshotStore.delete(oldest.id)
+        }
+
+        const restored = validateDocumentRecord({
+          ...document,
+          content: targetContent,
+          updatedAt: input.restoredUpdatedAt
+        })
+        documentStore.put(restored)
+        await done
+        return {
+          document: restored,
+          rollbackSnapshot,
+          createdRollbackSnapshot,
+          noOp: false
+        }
+      } catch (error) {
         return abortAndRethrow(tx, done, error)
       }
     }

@@ -16,7 +16,9 @@ import {
 } from '../core/config/schema'
 import { createDefaultConfig, validateAppConfig } from '../core/config/validate'
 import { getPreset } from '../core/config/presets'
+import type { DocumentSnapshot } from '../core/workspace/types'
 import type { DocumentSummary } from '../document/types'
+import type { SnapshotSummary } from '../history/types'
 import type { WorkspaceSummary } from '../workspace/workspace-service'
 import type { StorageCapability } from '../workspace/storage-capability'
 import { WELCOME_DOCUMENT } from './welcome-document'
@@ -41,6 +43,12 @@ const [documentLibraryReady, setDocumentLibraryReady] = createSignal(false)
 const [documentMutationPending, setDocumentMutationPending] = createSignal(false)
 const [documentSidebarOpen, setDocumentSidebarOpen] = createSignal(true)
 const [documentFilter, setDocumentFilter] = createSignal('')
+
+const [historyOpen, setHistoryOpen] = createSignal(false)
+const [historyLoading, setHistoryLoading] = createSignal(false)
+const [historyMutationPending, setHistoryMutationPending] = createSignal(false)
+const [historyEntries, setHistoryEntries] = createSignal<SnapshotSummary[]>([])
+const [selectedHistorySnapshot, setSelectedHistorySnapshot] = createSignal<DocumentSnapshot | undefined>(undefined)
 
 const [tierResults, setTierResults] = createStore<Record<RuleTier, TierResult | undefined>>({
   fast: undefined,
@@ -179,6 +187,26 @@ export const appState = {
   setDocumentSidebarOpen,
   documentFilter,
   setDocumentFilter,
+
+  historyOpen,
+  setHistoryOpen,
+  historyLoading,
+  setHistoryLoading,
+  historyMutationPending,
+  setHistoryMutationPending,
+  historyEntries,
+  setHistoryEntries: (values: SnapshotSummary[]): void => {
+    setHistoryEntries(structuredClone(values))
+  },
+  selectedHistorySnapshot,
+  setSelectedHistorySnapshot: (value: DocumentSnapshot | undefined): void => {
+    setSelectedHistorySnapshot(value === undefined ? undefined : structuredClone(value))
+  },
+  resetHistoryForDocumentContext: (): void => {
+    setHistoryEntries([])
+    setSelectedHistorySnapshot(undefined)
+    setHistoryLoading(false)
+  },
 
   diagnostics,
   filteredDiagnostics,

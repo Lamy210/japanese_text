@@ -3,6 +3,7 @@ import { createDefaultWorkspaceState } from '../core/workspace/defaults'
 import type {
   GlobalPreferences,
   RuleProfile,
+  SnapshotPolicy,
   StorageMode,
   StoredWorkspaceDocument,
   Workspace
@@ -54,6 +55,7 @@ export interface WorkspaceService {
   saveConfig(workspaceId: string, config: AppConfig): Promise<WorkspaceContext>
   create(input: { name: string }): Promise<WorkspaceContext>
   rename(workspaceId: string, name: string): Promise<Workspace>
+  updateSnapshotPolicy(workspaceId: string, policy: SnapshotPolicy): Promise<Workspace>
   switchTo(targetWorkspaceId: string): Promise<WorkspaceSwitchResult>
   delete(workspaceId: string): Promise<WorkspaceDeleteResult>
   enableLocalLibrary(
@@ -77,6 +79,14 @@ function normalizeWorkspaceName(raw: string): string {
   if ([...name].length > 80) throw new Error('Workspace name must be 80 Unicode code points or fewer')
   if (/[\u0000-\u001f\u007f]/u.test(name)) throw new Error('Workspace name must not contain control characters')
   return name
+}
+
+function validateSnapshotPolicy(policy: SnapshotPolicy): SnapshotPolicy {
+  if (typeof policy.enabled !== 'boolean') throw new Error('snapshotPolicy.enabled must be boolean')
+  if (!Number.isInteger(policy.maxSnapshots) || policy.maxSnapshots < 1 || policy.maxSnapshots > 1000) {
+    throw new Error('snapshotPolicy.maxSnapshots must be an integer between 1 and 1000')
+  }
+  return { enabled: policy.enabled, maxSnapshots: policy.maxSnapshots }
 }
 
 function defaultGenerateId(kind: 'workspace' | 'profile'): string {
@@ -241,6 +251,18 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
       const renamed: Workspace = { ...workspace, name, updatedAt: now() }
       await repositories.workspaces.save(renamed)
       return renamed
+    },
+
+    async updateSnapshotPolicy(workspaceId, policy): Promise<Workspace> {
+      const workspace = await repositories.workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+      const updated: Workspace = {
+        ...workspace,
+        snapshotPolicy: validateSnapshotPolicy(policy),
+        updatedAt: now()
+      }
+      await repositories.workspaces.save(updated)
+      return updated
     },
 
     async switchTo(targetWorkspaceId): Promise<WorkspaceSwitchResult> {

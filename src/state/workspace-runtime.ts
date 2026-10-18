@@ -2,6 +2,7 @@ import { cancelPendingDocumentPersistence } from './actions'
 import { appState } from './app-state'
 import { applicationRuntime } from './application-runtime'
 import { createDocumentController } from './document-controller'
+import { createHistoryController } from './history-controller'
 import { lintController } from './lint-controller'
 import { createWorkspaceController } from './workspace-controller'
 
@@ -18,6 +19,16 @@ const toast = (kind: Parameters<typeof appState.pushToast>[0], message: string):
 export const documentController = createDocumentController({
   getDocumentService: applicationRuntime.getDocumentService,
   getWorkspaceService: applicationRuntime.getWorkspaceService,
+  relint,
+  toast,
+  cancelPendingDocumentPersistence
+})
+
+/** Application-wide History controller sharing the same snapshot/session runtime. */
+export const historyController = createHistoryController({
+  getSnapshotService: applicationRuntime.getSnapshotService,
+  getWorkspaceService: applicationRuntime.getWorkspaceService,
+  getCurrentDocument: documentController.currentEditableDocument,
   relint,
   toast,
   cancelPendingDocumentPersistence

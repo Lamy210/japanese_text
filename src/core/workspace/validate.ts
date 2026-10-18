@@ -2,7 +2,15 @@ import { validateAppConfig } from '../config/validate'
 import type { PresetId, ThemeMode } from '../config/schema'
 import type { DocumentType } from '../types'
 import { WORKSPACE_MODEL_SCHEMA_VERSION } from './defaults'
-import type { GlobalPreferences, RuleProfile, StoredWorkspaceDocument, StorageMode, Workspace } from './types'
+import type {
+  DocumentSnapshot,
+  GlobalPreferences,
+  RuleProfile,
+  SnapshotReason,
+  StoredWorkspaceDocument,
+  StorageMode,
+  Workspace
+} from './types'
 
 export class WorkspaceRecordValidationError extends Error {
   constructor(message: string) {
@@ -39,6 +47,13 @@ const PERSISTED_DEFAULT_MODES = new Set<GlobalPreferences['defaultStorageMode']>
 const THEMES = new Set<ThemeMode>(['light', 'dark', 'system'])
 const PRESETS = new Set<PresetId>(['general', 'technical', 'strict', 'minimal', 'custom'])
 const DOCUMENT_TYPES = new Set<DocumentType>(['markdown', 'text'])
+const SNAPSHOT_REASONS = new Set<SnapshotReason>([
+  'autosave',
+  'manual',
+  'before-format',
+  'before-import',
+  'before-restore'
+])
 
 export function validateWorkspaceRecord(raw: unknown): Workspace {
   const value = requireRecord(raw, 'workspace')
@@ -192,5 +207,28 @@ export function validateDocumentRecord(raw: unknown): StoredWorkspaceDocument {
     sourceKind,
     createdAt: requireTimestamp(value.createdAt, 'document.createdAt'),
     updatedAt: requireTimestamp(value.updatedAt, 'document.updatedAt')
+  }
+}
+
+export function validateDocumentSnapshotRecord(raw: unknown): DocumentSnapshot {
+  const value = requireRecord(raw, 'documentSnapshot')
+  const reason = requireString(value.reason, 'documentSnapshot.reason') as SnapshotReason
+  if (!SNAPSHOT_REASONS.has(reason)) {
+    throw new WorkspaceRecordValidationError('documentSnapshot.reason is invalid')
+  }
+  if (typeof value.revision !== 'number' || !Number.isInteger(value.revision) || value.revision < 1) {
+    throw new WorkspaceRecordValidationError('documentSnapshot.revision must be a positive integer')
+  }
+  if (typeof value.content !== 'string') {
+    throw new WorkspaceRecordValidationError('documentSnapshot.content must be a string')
+  }
+
+  return {
+    id: requireString(value.id, 'documentSnapshot.id'),
+    documentId: requireString(value.documentId, 'documentSnapshot.documentId'),
+    revision: value.revision,
+    content: value.content,
+    reason,
+    createdAt: requireTimestamp(value.createdAt, 'documentSnapshot.createdAt')
   }
 }

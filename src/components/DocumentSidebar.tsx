@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import type { DocumentSummary } from '../document/types'
 import { appState } from '../state/app-state'
-import { documentController } from '../state/workspace-runtime'
+import { documentController, historyController } from '../state/workspace-runtime'
 import {
   documentDialogKeyboardAction,
   filterDocumentSummaries,
@@ -77,6 +77,15 @@ export function DocumentSidebar() {
     closeOverlayAfterNavigation()
   }
 
+  const openHistory = async (): Promise<void> => {
+    try {
+      await historyController.open()
+      if (viewportWidth() < 1280) appState.setDocumentSidebarOpen(false)
+    } catch (error) {
+      appState.pushToast('error', `履歴を開けませんでした: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   const handleDeleteDialogKeyDown = (event: KeyboardEvent): void => {
     const currentFocus = document.activeElement === confirmDeleteButton ? 'delete' : 'cancel'
     const action = documentDialogKeyboardAction(event.key, event.shiftKey, currentFocus)
@@ -144,7 +153,7 @@ export function DocumentSidebar() {
               ref={newDocumentButton}
               type="button"
               class="btn btn-small btn-primary"
-              disabled={appState.documentMutationPending() || !appState.documentLibraryReady()}
+              disabled={appState.documentMutationPending() || appState.historyMutationPending() || !appState.documentLibraryReady()}
               onClick={() => void createDocument()}
             >
               New
@@ -152,7 +161,7 @@ export function DocumentSidebar() {
             <button
               type="button"
               class="btn btn-small"
-              disabled={appState.activeDocumentId() === undefined || appState.documentMutationPending()}
+              disabled={appState.activeDocumentId() === undefined || appState.documentMutationPending() || appState.historyMutationPending()}
               onClick={() => void renameDocument()}
             >
               Rename
@@ -161,10 +170,25 @@ export function DocumentSidebar() {
               ref={deleteActionButton}
               type="button"
               class="btn btn-small"
-              disabled={appState.activeDocumentId() === undefined || appState.documentMutationPending()}
+              disabled={appState.activeDocumentId() === undefined || appState.documentMutationPending() || appState.historyMutationPending()}
               onClick={() => setDeleteConfirmOpen(true)}
             >
               Delete
+            </button>
+            <button
+              id="history-toggle"
+              type="button"
+              class="btn btn-small"
+              disabled={
+                appState.activeDocumentId() === undefined ||
+                appState.documentMutationPending() ||
+                appState.workspaceMutationPending() ||
+                appState.historyMutationPending()
+              }
+              aria-expanded={appState.historyOpen()}
+              onClick={() => void openHistory()}
+            >
+              History
             </button>
           </div>
           <label class="document-filter-label">
@@ -197,7 +221,7 @@ export function DocumentSidebar() {
                         type="button"
                         class={`document-row${active() ? ' active' : ''}`}
                         aria-current={active() ? 'page' : undefined}
-                        disabled={appState.documentMutationPending()}
+                        disabled={appState.documentMutationPending() || appState.historyMutationPending()}
                         onClick={() => {
                           void documentController.switchDocument(summary.id).then(closeOverlayAfterNavigation)
                         }}

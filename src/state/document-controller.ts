@@ -54,12 +54,15 @@ export function createDocumentController(
   }
 
   function applyContext(context: DocumentContext): void {
-    appState.setDocumentSummaries(context.summaries)
-    if ('id' in context.document) {
-      appState.setActiveDocumentId(context.document.id)
-    } else {
-      appState.setActiveDocumentId(undefined)
+    const previousDocumentId = appState.activeDocumentId()
+    const nextDocumentId = 'id' in context.document ? context.document.id : undefined
+    if (previousDocumentId !== nextDocumentId) {
+      appState.setHistoryOpen(false)
+      appState.resetHistoryForDocumentContext()
     }
+
+    appState.setDocumentSummaries(context.summaries)
+    appState.setActiveDocumentId(nextDocumentId)
     appState.setDocument(context.document.content, context.document.name, context.document.docType)
     appState.resetDiagnosticsForDocumentContext()
     if (context.warning !== undefined) toast('warning', context.warning)
@@ -67,6 +70,7 @@ export function createDocumentController(
   }
 
   async function runMutation(operation: () => Promise<void>): Promise<void> {
+    if (appState.historyMutationPending()) throw new Error('History mutation is pending')
     appState.setDocumentMutationPending(true)
     try {
       await operation()

@@ -7,7 +7,7 @@ function reportError(action: string, error: unknown): void {
 }
 
 export function WorkspaceSwitcher() {
-  const disabled = () => !appState.workspaceReady() || appState.workspaceMutationPending()
+  const disabled = () => !appState.workspaceReady() || appState.workspaceMutationPending() || appState.historyMutationPending()
 
   const createWorkspace = (): void => {
     const name = window.prompt('新しいワークスペース名', 'New Workspace')

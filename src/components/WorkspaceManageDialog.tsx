@@ -21,15 +21,37 @@ function errorMessage(error: unknown): string {
 
 export function WorkspaceManageDialog() {
   const [renameValue, setRenameValue] = createSignal('')
+  const [snapshotEnabled, setSnapshotEnabled] = createSignal(false)
+  const [snapshotMax, setSnapshotMax] = createSignal(20)
+  const [snapshotPolicyLoaded, setSnapshotPolicyLoaded] = createSignal(false)
 
   const active = createMemo(() =>
     appState.workspaceSummaries().find((workspace) => workspace.id === appState.activeWorkspaceId())
   )
   const capability = () => appState.storageCapability()
-  const pending = () => appState.workspaceMutationPending()
+  const pending = () => appState.workspaceMutationPending() || appState.historyMutationPending()
+  const snapshotMaxValid = () => Number.isInteger(snapshotMax()) && snapshotMax() >= 1 && snapshotMax() <= 1000
 
   createEffect(() => {
-    if (appState.workspaceManagerOpen()) setRenameValue(active()?.name ?? '')
+    if (!appState.workspaceManagerOpen()) return
+    const workspaceId = active()?.id
+    setRenameValue(active()?.name ?? '')
+    setSnapshotPolicyLoaded(false)
+    if (workspaceId === undefined) return
+
+    void workspaceController.getService().then((service) => service.getActive()).then((context) => {
+      if (
+        appState.workspaceManagerOpen() &&
+        appState.activeWorkspaceId() === workspaceId &&
+        context.workspace.id === workspaceId
+      ) {
+        setSnapshotEnabled(context.workspace.snapshotPolicy.enabled)
+        setSnapshotMax(context.workspace.snapshotPolicy.maxSnapshots)
+        setSnapshotPolicyLoaded(true)
+      }
+    }).catch((error) => {
+      appState.pushToast('warning', `履歴設定の読み込みに失敗しました: ${errorMessage(error)}`)
+    })
   })
 
   const rename = (): void => {
@@ -39,6 +61,18 @@ export function WorkspaceManageDialog() {
       appState.pushToast('success', 'ワークスペース名を変更しました。')
     }).catch((error) => {
       appState.pushToast('error', `名前変更に失敗しました: ${errorMessage(error)}`)
+    })
+  }
+
+  const saveSnapshotPolicy = (): void => {
+    if (!snapshotMaxValid()) return
+    void workspaceController.setSnapshotPolicy({
+      enabled: snapshotEnabled(),
+      maxSnapshots: snapshotMax()
+    }).then(() => {
+      appState.pushToast('success', '履歴設定を保存しました。')
+    }).catch((error) => {
+      appState.pushToast('error', `履歴設定の保存に失敗しました: ${errorMessage(error)}`)
     })
   }
 
@@ -141,6 +175,48 @@ export function WorkspaceManageDialog() {
                       </Show>
                     </Show>
                     <p class="settings-note">Private Sessionの本文はこのタブ内のメモリだけに保持されます。Local Libraryの本文も外部サーバーには送信されません。</p>
+                  </fieldset>
+
+                  <fieldset class="field-group">
+                    <legend>Document History</legend>
+                    <Show when={snapshotPolicyLoaded()} fallback={<p class="settings-note">履歴設定を読み込んでいます…</p>}>
+                      <label class="setting-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={snapshotEnabled()}
+                          disabled={pending()}
+                          onChange={(event) => setSnapshotEnabled(event.currentTarget.checked)}
+                        />
+                        <span>Snapshot / History を有効にする</span>
+                      </label>
+                      <label class="setting-row">
+                        <span>1文書あたりの最大履歴数</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="1000"
+                          step="1"
+                          value={snapshotMax()}
+                          disabled={pending()}
+                          onInput={(event) => setSnapshotMax(Number(event.currentTarget.value))}
+                          aria-label="1文書あたりの最大履歴数"
+                        />
+                      </label>
+                      <Show when={!snapshotMaxValid()}>
+                        <p class="settings-note status-warn">1〜1000の整数を指定してください。</p>
+                      </Show>
+                      <button
+                        type="button"
+                        class="btn btn-primary"
+                        disabled={pending() || !snapshotMaxValid()}
+                        onClick={saveSnapshotPolicy}
+                      >
+                        履歴設定を保存
+                      </button>
+                      <p class="settings-note">
+                        Private Sessionの履歴はメモリのみ、Local Libraryの履歴はIndexedDBへ保存します。無効化しても既存履歴は削除しません。
+                      </p>
+                    </Show>
                   </fieldset>
 
                   <fieldset class="field-group">

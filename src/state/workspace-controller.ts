@@ -1,4 +1,5 @@
 import type { AppConfig } from '../core/config/schema'
+import type { SnapshotPolicy } from '../core/workspace/types'
 import type { StorageContext } from '../storage/bootstrap'
 import { getStorageContext } from '../storage/runtime'
 import {
@@ -36,6 +37,7 @@ export interface WorkspaceController {
   renameWorkspace(workspaceId: string, name: string): Promise<void>
   deleteWorkspace(workspaceId: string): Promise<void>
   setStorageMode(mode: 'private-session' | 'local-library'): Promise<void>
+  setSnapshotPolicy(policy: SnapshotPolicy): Promise<void>
   requestPersistence(): Promise<StorageCapability>
   getService(): Promise<WorkspaceService>
   getContext(): Promise<StorageContext>
@@ -108,6 +110,7 @@ export function createWorkspaceController(
   }
 
   async function runMutation(operation: () => Promise<void>): Promise<void> {
+    if (appState.historyMutationPending()) throw new Error('History mutation is pending')
     appState.setWorkspaceMutationPending(true)
     try {
       await operation()
@@ -196,6 +199,9 @@ export function createWorkspaceController(
     async deleteWorkspace(workspaceId: string): Promise<void> {
       await runMutation(async () => {
         const previousActiveId = appState.activeWorkspaceId()
+        const sessionDocumentIds = runtime.getSessionDocumentLibrary()
+          .list(workspaceId)
+          .map((document) => document.id)
         cancelPendingDocumentPersistence()
         await documents().flushActiveDocument()
         await persistCurrentWorkspaceConfig()
@@ -203,6 +209,7 @@ export function createWorkspaceController(
         const workspaceService = await service()
         const result = await workspaceService.delete(workspaceId)
 
+        runtime.getSessionSnapshotStore().deleteDocuments(sessionDocumentIds)
         runtime.getSessionDocumentLibrary().deleteWorkspace(workspaceId)
         applyContext(result.active)
         appState.setWorkspaceSummaries(await workspaceService.list())
@@ -231,6 +238,7 @@ export function createWorkspaceController(
 
         const documentService = await runtime.getDocumentService()
         const snapshot = await documentService.snapshotWorkspace(active.workspace)
+        const documentIds = snapshot.documents.map((document) => document.id)
         let updated: WorkspaceContext
 
         if (mode === 'local-library') {
@@ -239,14 +247,26 @@ export function createWorkspaceController(
             snapshot.documents,
             snapshot.activeDocumentId
           )
+          runtime.getSessionSnapshotStore().deleteDocuments(documentIds)
           runtime.getSessionDocumentLibrary().deleteWorkspace(workspaceId)
         } else {
           updated = await workspaceService.makePrivate(workspaceId)
+          runtime.getSessionSnapshotStore().deleteDocuments(documentIds)
           runtime.getSessionDocumentLibrary().replaceWorkspace(workspaceId, snapshot)
         }
 
         applyContext(updated)
         await documents().bootstrapForWorkspace(updated.workspace)
+        appState.setWorkspaceSummaries(await workspaceService.list())
+      })
+    },
+
+    async setSnapshotPolicy(policy: SnapshotPolicy): Promise<void> {
+      await runMutation(async () => {
+        const workspaceId = appState.activeWorkspaceId()
+        if (workspaceId === undefined) throw new Error('Active workspace is missing')
+        const workspaceService = await service()
+        await workspaceService.updateSnapshotPolicy(workspaceId, policy)
         appState.setWorkspaceSummaries(await workspaceService.list())
       })
     },
