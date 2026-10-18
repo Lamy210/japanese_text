@@ -256,7 +256,13 @@ describe('DocumentService CRUD and switching', () => {
     }
     const service = createDocumentService({
       repositories,
-      atomic: memory.atomicOperations,
+      atomic: {
+        ...memory.atomicOperations,
+        async saveLocalDocumentIfActive(value) {
+          if (value.id === 'doc-a') throw new Error('forced save failure')
+          return memory.atomicOperations.saveLocalDocumentIfActive(value)
+        }
+      },
       sessionLibrary: createSessionDocumentLibraryStore(),
       now: () => 5000,
       generateId: () => 'generated'
