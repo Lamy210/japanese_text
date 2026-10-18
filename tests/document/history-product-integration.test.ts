@@ -157,4 +157,18 @@ describe('history product integration', () => {
 
     expect(documentSave).toHaveBeenCalledTimes(1)
   })
+  test('Format aborts if the editor changes while the before-format checkpoint is pending', async () => {
+    const { appState } = await import('../../src/state/app-state')
+    const { formatDocumentAction } = await import('../../src/state/actions')
+    snapshotCapture.mockImplementationOnce(async () => {
+      appState.onDocumentEdited('concurrent user edit')
+      return { snapshot: { id: 's1' }, skippedDuplicate: false }
+    })
+
+    await formatDocumentAction()
+
+    expect(applyFixesTransaction).not.toHaveBeenCalled()
+    expect(appState.documentText()).toBe('concurrent user edit')
+  })
+
 })
