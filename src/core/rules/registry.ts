@@ -20,6 +20,7 @@ import { doubleHonorificRule } from './fast/double-honorific'
 import { ambiguityRule } from './fast/ambiguity'
 import { commaCountRule } from './deep/comma-count'
 import { mixedToneRule } from './fast/mixed-tone'
+import { crossParagraphToneRule } from './fast/cross-paragraph-tone'
 import { headingOrderRule } from './markdown/heading-order'
 import {
   createCitationNumberRule,
@@ -75,6 +76,7 @@ export function buildRuleRegistry(config: AppConfig): Map<string, CoreRule> {
     doubleHonorificRule,
     ambiguityRule,
     mixedToneRule,
+    crossParagraphToneRule,
     // Deep Engine (独自)
     commaCountRule,
     headingOrderRule,
