@@ -34,3 +34,13 @@ export interface DocumentContext {
 export interface DocumentDeleteResult extends DocumentContext {
   deletedDocumentId: string
 }
+
+/** On-demand body-search hit. Offsets refer to UTF-16 positions in the original document. */
+export interface DocumentSearchHit {
+  workspaceId: string
+  documentId: string
+  name: string
+  start: number
+  end: number
+  preview: string
+}
