@@ -72,6 +72,23 @@ describe('cross-paragraph tone consistency', () => {
     expect(results[0]?.start).toBe(source.lastIndexOf('だ。'))
   })
 
+  test('does not treat headings inside masked fenced code as section boundaries', () => {
+    const source = [
+      '今日は晴れです。',
+      '',
+      '明日も晴れます。',
+      '',
+      '```markdown',
+      '# この見出しはコード例',
+      '```',
+      '',
+      '昨日は雨だ。'
+    ].join('\\n')
+    const results = check(source)
+    expect(results).toHaveLength(1)
+    expect(results[0]?.start).toBe(source.lastIndexOf('だ。'))
+  })
+
   test('registers an idle rule with conservative built-in preset severity and no safe fix', () => {
     const rule = buildRuleRegistry(testConfig()).get(ruleId)
     expect(rule?.tier).toBe('idle')
