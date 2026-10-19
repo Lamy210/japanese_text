@@ -95,7 +95,11 @@ export const crossParagraphToneRule: CoreRule = {
 
     for (let index = 0; index < ctx.lines.length; index++) {
       const sourceLine = ctx.lines[index]!
-      if (isHeadingLine(sourceLine)) {
+      const offset = ctx.lineStarts[index]!
+      const maskedLine = ctx.maskedText.slice(offset, offset + sourceLine.length)
+      // A visible heading in the original may be inside a masked code fence.
+      // Only unmasked headings start a new prose section.
+      if (isHeadingLine(sourceLine) && isHeadingLine(maskedLine)) {
         finishSection()
         continue
       }
@@ -103,9 +107,6 @@ export const crossParagraphToneRule: CoreRule = {
         finishParagraph()
         continue
       }
-
-      const offset = ctx.lineStarts[index]!
-      const maskedLine = ctx.maskedText.slice(offset, offset + sourceLine.length)
       polite.push(...collectEndings(maskedLine, offset, POLITE_ENDINGS))
       plain.push(...collectEndings(maskedLine, offset, PLAIN_ENDINGS))
     }
