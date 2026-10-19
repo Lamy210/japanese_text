@@ -194,3 +194,8 @@
     flex-basis: auto;
   }
 }
+
+.document-sidebar-actions .btn[aria-pressed="true"] {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
