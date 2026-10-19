@@ -49,9 +49,9 @@ describe('DocumentController body search', () => {
     const search = vi.fn<DocumentService['search']>(async () => [hit])
     const controller = harness(search)
     expect(await controller.searchWorkspaceDocuments('needle')).toEqual([hit])
-    expect(search).toHaveBeenCalledWith(ws, expect.objectContaining({
+    expect(search).toHaveBeenCalledWith(ws, 'needle', expect.objectContaining({
       workspaceId: 'w1', id: 'd1', content: 'needle unsaved'
-    }), 'needle')
+    }))
     expect(appState.documentText()).toBe('needle unsaved')
   })
 
