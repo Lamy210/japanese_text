@@ -8,6 +8,7 @@ import {
   isDocumentRowActive,
   shouldFocusDocumentSidebarOnMount
 } from './document-sidebar-model'
+import { DocumentBodySearch } from './DocumentBodySearch'
 import './DocumentSidebar.css'
 
 function viewportWidth(): number {
@@ -27,6 +28,7 @@ function backgroundTargets(): HTMLElement[] {
 
 export function DocumentSidebar() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = createSignal(false)
+  const [bodySearchOpen, setBodySearchOpen] = createSignal(false)
   let newDocumentButton: HTMLButtonElement | undefined
   let deleteActionButton: HTMLButtonElement | undefined
   let cancelDeleteButton: HTMLButtonElement | undefined
@@ -190,6 +192,14 @@ export function DocumentSidebar() {
             >
               History
             </button>
+            <button
+              type="button"
+              class="btn btn-small"
+              aria-pressed={bodySearchOpen()}
+              onClick={() => setBodySearchOpen(!bodySearchOpen())}
+            >
+              Search bodies
+            </button>
           </div>
           <label class="document-filter-label">
             <span class="visually-hidden">ドキュメントを絞り込む</span>
@@ -203,6 +213,10 @@ export function DocumentSidebar() {
           </label>
         </div>
 
+        <Show when={bodySearchOpen()}>
+          <DocumentBodySearch />
+        </Show>
+        <Show when={!bodySearchOpen()}>
         <Show
           when={appState.documentLibraryReady()}
           fallback={<p class="document-sidebar-empty" role="status">Loading documents…</p>}
@@ -235,6 +249,7 @@ export function DocumentSidebar() {
               </For>
             </ul>
           </Show>
+        </Show>
         </Show>
       </nav>
 

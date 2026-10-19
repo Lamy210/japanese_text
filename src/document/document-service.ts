@@ -2,6 +2,7 @@ import type { DocumentType } from '../core/types'
 import type { StoredWorkspaceDocument, Workspace } from '../core/workspace/types'
 import type { AtomicOperationsPort, StorageRepositories } from '../storage/repositories/ports'
 import { WELCOME_DOCUMENT } from '../state/welcome-document'
+import { searchDocumentBodies } from './body-search'
 import type {
   SessionDocumentLibrarySnapshot,
   SessionDocumentLibraryStore
@@ -11,6 +12,7 @@ import type {
   DocumentContext,
   DocumentDeleteResult,
   DocumentSummary,
+  DocumentSearchHit,
   EditableDocument,
   RecoveryDocumentState
 } from './types'
@@ -26,6 +28,7 @@ export interface DocumentServiceDependencies {
 
 export interface DocumentService {
   list(workspace: Workspace): Promise<DocumentSummary[]>
+  search(workspace: Workspace, query: string, activeDocument?: EditableDocument): Promise<DocumentSearchHit[]>
   resolveActive(workspace: Workspace): Promise<DocumentContext>
   create(
     workspace: Workspace,
@@ -309,6 +312,26 @@ export function createDocumentService(dependencies: DocumentServiceDependencies)
   const service: DocumentService = {
     async list(workspace) {
       return (await service.resolveActive(workspace)).summaries
+    },
+
+    async search(workspace, query, activeDocument) {
+      assertSupportedWorkspace(workspace)
+      if (query.trim().length === 0) return []
+      // Bound query before loading potentially many large document bodies.
+      if ([...query.trim()].length > 80) throw new Error('Search query must be 80 Unicode code points or fewer')
+      const values = workspace.storageMode === 'private-session'
+        ? sessionLibrary.list(workspace.id)
+        : (await repositories.documents.listByWorkspace(workspace.id)).map((stored) => toEditable(stored).document)
+      const scoped = values.filter((document) => document.workspaceId === workspace.id)
+      if (
+        activeDocument !== undefined &&
+        activeDocument.workspaceId === workspace.id &&
+        scoped.some((document) => document.id === activeDocument.id)
+      ) {
+        const index = scoped.findIndex((document) => document.id === activeDocument.id)
+        scoped[index] = structuredClone(activeDocument)
+      }
+      return searchDocumentBodies(scoped, query)
     },
 
     async resolveActive(workspace) {
