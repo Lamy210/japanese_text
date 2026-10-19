@@ -83,7 +83,7 @@ describe('cross-paragraph tone consistency', () => {
       '```',
       '',
       '昨日は雨だ。'
-    ].join('\\n')
+    ].join('\n')
     const results = check(source)
     expect(results).toHaveLength(1)
     expect(results[0]?.start).toBe(source.lastIndexOf('だ。'))
