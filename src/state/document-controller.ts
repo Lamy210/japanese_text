@@ -1,7 +1,7 @@
 import type { DocumentType } from '../core/types'
 import type { Workspace } from '../core/workspace/types'
 import type { DocumentService } from '../document/document-service'
-import type { DocumentContext, EditableDocument } from '../document/types'
+import type { DocumentContext, DocumentSearchHit, EditableDocument } from '../document/types'
 import type { WorkspaceService } from '../workspace/workspace-service'
 import { appState, type Toast } from './app-state'
 
@@ -19,6 +19,7 @@ export interface DocumentControllerDependencies {
 export interface DocumentController {
   bootstrapForWorkspace(workspace: Workspace): Promise<void>
   refresh(): Promise<void>
+  searchWorkspaceDocuments(query: string): Promise<DocumentSearchHit[]>
   createDocument(): Promise<void>
   renameActiveDocument(name: string): Promise<void>
   switchDocument(documentId: string): Promise<void>
@@ -92,6 +93,30 @@ export function createDocumentController(
 
     async refresh(): Promise<void> {
       await controller.bootstrapForWorkspace(await activeWorkspace())
+    },
+
+    async searchWorkspaceDocuments(query): Promise<DocumentSearchHit[]> {
+      const workspaceId = appState.activeWorkspaceId()
+      const documentId = appState.activeDocumentId()
+      const revision = appState.revision()
+      if (workspaceId === undefined || documentId === undefined) {
+        throw new Error('No active document available for body search')
+      }
+      const current = controller.currentEditableDocument()
+      const workspace = await activeWorkspace()
+      if (workspace.id !== workspaceId ||
+        appState.activeWorkspaceId() !== workspaceId ||
+        appState.activeDocumentId() !== documentId ||
+        appState.revision() !== revision) {
+        throw new Error('Body search request became stale')
+      }
+      const results = await (await dependencies.getDocumentService()).search(workspace, query, current)
+      if (appState.activeWorkspaceId() !== workspaceId ||
+        appState.activeDocumentId() !== documentId ||
+        appState.revision() !== revision) {
+        throw new Error('Body search results became stale')
+      }
+      return results
     },
 
     async createDocument(): Promise<void> {
