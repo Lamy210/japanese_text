@@ -78,4 +78,16 @@ describe('DocumentController body search', () => {
     pending.resolve([hit])
     await expect(request).rejects.toThrow(/stale/i)
   })
+  test('rejects results after active document changes mid-search', async () => {
+    const pending = deferred<DocumentSearchHit[]>()
+    let began!: () => void
+    const started = new Promise<void>((resolve) => { began = resolve })
+    const controller = harness(async () => { began(); return pending.promise })
+    const request = controller.searchWorkspaceDocuments('needle')
+    await started
+    appState.setActiveDocumentId('d2')
+    pending.resolve([hit])
+    await expect(request).rejects.toThrow(/stale/i)
+  })
+
 })
