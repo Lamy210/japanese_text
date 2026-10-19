@@ -16,6 +16,7 @@ import { alnumWidthRule } from './fast/alnum-width'
 import { createNgWordRule } from './fast/ng-word'
 import { createTerminologyRule } from './fast/terminology'
 import { redundancyRule } from './fast/redundancy'
+import { doubleHonorificRule } from './fast/double-honorific'
 import { ambiguityRule } from './fast/ambiguity'
 import { commaCountRule } from './deep/comma-count'
 import { mixedToneRule } from './fast/mixed-tone'
@@ -71,6 +72,7 @@ export function buildRuleRegistry(config: AppConfig): Map<string, CoreRule> {
     createNgWordRule(() => config.ngWords),
     createTerminologyRule(() => config.terminology),
     redundancyRule,
+    doubleHonorificRule,
     ambiguityRule,
     mixedToneRule,
     // Deep Engine (独自)
