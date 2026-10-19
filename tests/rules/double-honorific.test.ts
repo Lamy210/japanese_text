@@ -33,6 +33,13 @@ describe('double honorific detection', () => {
     expect(runSingleRule(ruleId, text, testConfig())).toEqual([])
   })
 
+  test('does not inspect URLs or Markdown code while scanning surrounding text', () => {
+    const text = 'https://example.com/お読みになられる と `ご覧になられる`、おっしゃられる。'
+    const diagnostics = runSingleRule(ruleId, text, testConfig())
+    expect(diagnostics).toHaveLength(1)
+    expect(text.slice(diagnostics[0]!.start, diagnostics[0]!.end)).toBe('おっしゃられる')
+  })
+
   test('preserves UTF-16 positions across emoji and repeated expressions', () => {
     const text = '😊お読みになられる。ご覧になられました。'
     const diagnostics = runSingleRule(ruleId, text, testConfig())
