@@ -26,7 +26,8 @@ GitHub Pages: <https://lamy210.github.io/japanese_text/>
 - Quick Fix / Diagnostics
 - プリセットと設定 Import / Export
 - Web Worker による解析
-- local-first storage
+- local-first storage: Workspace別のPrivate Session / Local Library、複数文書、Snapshot / History / Restore
+- Workspace内本文検索（最大50件、ローカル処理、未保存本文も検索対象）
 - Light / Dark / System theme
 
 ## Tech stack
@@ -40,7 +41,13 @@ GitHub Pages: <https://lamy210.github.io/japanese_text/>
 - Bun
 - GitHub Actions / GitHub Pages
 
-Backend、Database、認証、LLM API は使用しません。
+Backend、サーバー側Database、認証、LLM API は使用しません。Local Libraryの本文と履歴だけをIndexedDBへ保存します。
+
+## Document Library / 本文検索
+
+左側の Documents で文書作成・選択・名前変更・削除ができます。**Search bodies** を押して本文検索モードに切り替え、キーワードを入力して Enter または Search を押してください。結果を選ぶと対象文書を開き、一致範囲が変更されていなければその位置へ移動します。検索対象は現在のWorkspaceの本文のみで、履歴の本文や他のWorkspaceは検索しません。
+
+検索は明示実行の都度ブラウザ内で行い、検索語・検索結果を保存・送信しません。Private Sessionでは本文と履歴をメモリにのみ保持し、Local Libraryを明示的に有効化したWorkspaceだけがIndexedDBに保存されます。現在編集中の未保存本文も検索対象です。
 
 ## Development
 
