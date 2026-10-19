@@ -198,7 +198,7 @@ export function DocumentSidebar() {
               aria-pressed={bodySearchOpen()}
               onClick={() => setBodySearchOpen(!bodySearchOpen())}
             >
-              {bodySearchOpen() ? 'Documents' : 'Search bodies'}
+              Search bodies
             </button>
           </div>
           <label class="document-filter-label">
