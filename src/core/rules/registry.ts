@@ -1,103 +1,85 @@
 /**
- * Rule Registry — 仕様書 §14 (Rule IDはnamespace形式) / §23 (Fast/Deep 2層Engine)
+ * Rule registry: provider aggregation + rule execution metadata.
  *
- * Fast Engine: 独自実装 (高速・正規表現・辞書ベース)
- * Deep Engine: textlint (別adapter) + 独自の文書構造解析ルール
- * Idle Tier:   document-wide解析
+ * The textlint provider advertises manifests only; textlint execution still
+ * belongs to the existing asynchronous deep adapter. No external plugin loading.
  */
-
 import type { CoreRule } from '../types'
 import type { AppConfig } from '../config/schema'
+import { builtinRuleProvider } from './providers/builtin'
+import { textlintRuleProvider } from './providers/textlint'
+import type { RuleManifest, RuleProvider } from './providers/types'
 
-import { fullWidthSpaceRule, unnecessarySpaceRule } from './fast/whitespace'
-import { punctuationRule } from './fast/punctuation'
-import { bracketsRule } from './fast/brackets'
-import { alnumWidthRule } from './fast/alnum-width'
-import { createNgWordRule } from './fast/ng-word'
-import { createTerminologyRule } from './fast/terminology'
-import { redundancyRule } from './fast/redundancy'
-import { doubleHonorificRule } from './fast/double-honorific'
-import { ambiguityRule } from './fast/ambiguity'
-import { commaCountRule } from './deep/comma-count'
-import { mixedToneRule } from './fast/mixed-tone'
-import { crossParagraphToneRule } from './fast/cross-paragraph-tone'
-import { headingOrderRule } from './markdown/heading-order'
-import {
-  createCitationNumberRule,
-  createCitationComparisonRule,
-  createCitationExternalFactRule
-} from './citation/citation-detector'
-import {
-  referenceUndefinedRule,
-  referenceEmptyUrlRule,
-  referenceMalformedUrlRule,
-  referenceBrokenAnchorRule,
-  referenceDuplicateIdRule,
-  referenceUnusedRule,
-  referenceDuplicateAnchorRule
-} from './reference/markdown-reference'
+export { TEXTLINT_RULE_IDS, TEXTLINT_RULE_META } from './providers/textlint'
+export type { RuleManifest, RuleProvider } from './providers/types'
 
-export const TEXTLINT_RULE_IDS = ['style/sentence-length', 'typography/nfd', 'typography/hankaku-kana'] as const
+export const DEFAULT_RULE_PROVIDERS: readonly RuleProvider[] = [
+  builtinRuleProvider,
+  textlintRuleProvider
+]
 
-/** textlintルールのメタ情報 (説明・オプション) — adapterと設定UIで共有 */
-export const TEXTLINT_RULE_META: Record<
-  string,
-  { description: string; defaultSeverity: 'info' | 'warning' | 'error'; optionDefs?: CoreRule['optionDefs'] }
-> = {
-  'style/sentence-length': {
-    description:
-      '一文が長すぎる場合に検出します (textlint-rule-sentence-length)。長い文は読みやすさを損なうため、句点での分割を検討してください。上限は設定から変更できます (デフォルト: 100文字)。',
-    defaultSeverity: 'warning',
-    optionDefs: [{ key: 'max', type: 'number', label: '一文の最大文字数', defaultValue: 100, min: 10, max: 1000 }]
-  },
-  'typography/nfd': {
-    description:
-      'NFD正規化された文字 (濁点が分解された文字) を検出します (textlint-rule-no-nfd)。OS間のコピペで混入することがあります。',
-    defaultSeverity: 'error'
-  },
-  'typography/hankaku-kana': {
-    description: '半角カタカナを検出します (textlint-rule-no-hankaku-kana)。日本語文書では全角カタカナが標準です。',
-    defaultSeverity: 'warning'
+const RULE_ID = /^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*$/
+
+function collectManifests(providers: readonly RuleProvider[]): Map<string, RuleManifest> {
+  const providerIds = new Set<string>()
+  const manifests = new Map<string, RuleManifest>()
+
+  for (const provider of providers) {
+    if (provider.id.length === 0) throw new Error('Provider ID must not be empty')
+    if (providerIds.has(provider.id)) throw new Error(`Duplicate provider ID: ${provider.id}`)
+    providerIds.add(provider.id)
+
+    for (const raw of provider.listManifests()) {
+      if (!RULE_ID.test(raw.id)) throw new Error(`Invalid rule ID: ${raw.id}`)
+      if (raw.providerId !== provider.id) {
+        throw new Error(`Manifest provider mismatch: ${raw.id} belongs to ${raw.providerId}`)
+      }
+      if (manifests.has(raw.id)) throw new Error(`Duplicate rule ID: ${raw.id}`)
+      manifests.set(raw.id, structuredClone(raw))
+    }
   }
+  return manifests
 }
 
-/** 設定から全ルールのレジストリを構築する (決定論的) */
-export function buildRuleRegistry(config: AppConfig): Map<string, CoreRule> {
-  const rules: CoreRule[] = [
-    // Fast Engine (独自)
-    fullWidthSpaceRule,
-    unnecessarySpaceRule,
-    punctuationRule,
-    bracketsRule,
-    alnumWidthRule,
-    createNgWordRule(() => config.ngWords),
-    createTerminologyRule(() => config.terminology),
-    redundancyRule,
-    doubleHonorificRule,
-    ambiguityRule,
-    mixedToneRule,
-    crossParagraphToneRule,
-    // Deep Engine (独自)
-    commaCountRule,
-    headingOrderRule,
-    createCitationNumberRule(() => config.citation),
-    createCitationComparisonRule(() => config.citation),
-    createCitationExternalFactRule(() => config.citation),
-    referenceUndefinedRule,
-    referenceEmptyUrlRule,
-    referenceMalformedUrlRule,
-    referenceBrokenAnchorRule,
-    referenceDuplicateIdRule,
-    // Idle Tier (document-wide)
-    referenceUnusedRule,
-    referenceDuplicateAnchorRule
-  ]
+/** Stable, self-contained metadata list for settings and future integrations. */
+export function listRuleManifests(
+  providers: readonly RuleProvider[] = DEFAULT_RULE_PROVIDERS
+): RuleManifest[] {
+  return [...collectManifests(providers).values()]
+    .sort((a, b) => a.category.localeCompare(b.category) || a.id.localeCompare(b.id))
+}
 
-  const map = new Map<string, CoreRule>()
-  for (const rule of rules) {
-    map.set(rule.id, rule)
+/** Deterministic native rule aggregation. Does not execute textlint adapter rules. */
+export function buildRuleRegistry(
+  config: AppConfig,
+  providers: readonly RuleProvider[] = DEFAULT_RULE_PROVIDERS
+): Map<string, CoreRule> {
+  const manifests = collectManifests(providers)
+  const rules = new Map<string, CoreRule>()
+  for (const provider of providers) {
+    for (const rule of provider.createRules(config)) {
+      const manifest = manifests.get(rule.id)
+      if (manifest === undefined || manifest.providerId !== provider.id || manifest.source === 'textlint') {
+        throw new Error(`Runtime rule has no matching manifest: ${rule.id}`)
+      }
+      if (rules.has(rule.id)) throw new Error(`Duplicate runtime rule ID: ${rule.id}`)
+      if (
+        rule.category !== manifest.category ||
+        rule.tier !== manifest.tier ||
+        rule.description !== manifest.description ||
+        rule.defaultSeverity !== manifest.defaultSeverity
+      ) {
+        throw new Error(`Runtime rule/manifest mismatch: ${rule.id}`)
+      }
+      rules.set(rule.id, rule)
+    }
   }
-  return map
+  for (const manifest of manifests.values()) {
+    if (manifest.source !== 'textlint' && !rules.has(manifest.id)) {
+      throw new Error(`Manifest has no matching runtime rule: ${manifest.id}`)
+    }
+  }
+  return rules
 }
 
 /** 設定UI表示順 (カテゴリ → ruleId) */
