@@ -22,7 +22,9 @@ describe('WorkspaceController rule profile switching', () => {
     appState.updateConfig((config) => {
       config.ngWords = [{ id: 'only-old', word: 'old', severity: 'warning' }]
     })
+    const revisionBeforeDuplicate = appState.revision()
     const duplicated = await controller.duplicateRuleProfile('Variant')
+    expect(appState.revision()).toBeGreaterThan(revisionBeforeDuplicate)
     expect(duplicated.profile.name).toBe('Variant')
     expect(duplicated.profile.id).not.toBe(profilesBefore[0]?.id)
     expect(appState.activeWorkspaceId()).toBe(workspaceId)
@@ -31,7 +33,9 @@ describe('WorkspaceController rule profile switching', () => {
     appState.updateConfig((config) => {
       config.ngWords = [{ id: 'only-new', word: 'new', severity: 'error' }]
     })
+    const revisionBeforeSwitch = appState.revision()
     await controller.switchRuleProfile(profilesBefore[0]!.id)
+    expect(appState.revision()).toBeGreaterThan(revisionBeforeSwitch)
     expect(appState.config.ngWords.map(word => word.word)).toEqual(['old'])
     await controller.switchRuleProfile(duplicated.profile.id)
     expect(appState.config.ngWords.map(word => word.word)).toEqual(['new'])
