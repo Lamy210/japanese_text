@@ -13,10 +13,10 @@ import type { RuleManifest, RuleProvider } from './providers/types'
 export { TEXTLINT_RULE_IDS, TEXTLINT_RULE_META } from './providers/textlint'
 export type { RuleManifest, RuleProvider } from './providers/types'
 
-export const DEFAULT_RULE_PROVIDERS: readonly RuleProvider[] = [
+export const DEFAULT_RULE_PROVIDERS: readonly RuleProvider[] = Object.freeze([
   builtinRuleProvider,
   textlintRuleProvider
-]
+])
 
 const RULE_ID = /^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*$/
 
