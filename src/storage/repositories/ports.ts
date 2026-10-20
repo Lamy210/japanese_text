@@ -115,6 +115,8 @@ export interface AtomicOperationsPort {
   migrateV1ToV2(): Promise<MigrationResult>
   saveProjectedState(value: AtomicProjectedStorageState): Promise<void>
   createWorkspaceAndActivate(workspace: Workspace, profile: RuleProfile): Promise<void>
+  duplicateProfileAndActivate(workspaceId: string, profile: RuleProfile): Promise<void>
+  activateProfile(workspaceId: string, profileId: string): Promise<void>
   createDocumentAndActivate(document: StoredWorkspaceDocument): Promise<void>
   deleteDocumentAndSelectNext(workspaceId: string, documentId: string, nextDocumentId: string): Promise<void>
   replaceLastDocument(

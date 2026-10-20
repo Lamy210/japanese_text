@@ -75,10 +75,28 @@ export function validateWorkspaceRecord(raw: unknown): Workspace {
     throw new WorkspaceRecordValidationError('workspace.snapshotPolicy.maxSnapshots must be an integer between 1 and 1000')
   }
 
+  const activeRuleProfileId = requireString(value.activeRuleProfileId, 'workspace.activeRuleProfileId')
+  let ruleProfileIds: string[] | undefined
+  if (value.ruleProfileIds !== undefined) {
+    if (!Array.isArray(value.ruleProfileIds) || value.ruleProfileIds.length === 0) {
+      throw new WorkspaceRecordValidationError('workspace.ruleProfileIds must be a nonempty array')
+    }
+    ruleProfileIds = value.ruleProfileIds.map((id, index) =>
+      requireString(id, `workspace.ruleProfileIds[${index}]`)
+    )
+    if (new Set(ruleProfileIds).size !== ruleProfileIds.length) {
+      throw new WorkspaceRecordValidationError('workspace.ruleProfileIds must be unique')
+    }
+    if (!ruleProfileIds.includes(activeRuleProfileId)) {
+      throw new WorkspaceRecordValidationError('workspace.activeRuleProfileId must belong to ruleProfileIds')
+    }
+  }
+
   return {
     id: requireString(value.id, 'workspace.id'),
     name: requireString(value.name, 'workspace.name'),
-    activeRuleProfileId: requireString(value.activeRuleProfileId, 'workspace.activeRuleProfileId'),
+    activeRuleProfileId,
+    ...(ruleProfileIds === undefined ? {} : { ruleProfileIds }),
     storageMode,
     snapshotPolicy: {
       enabled: snapshot.enabled,

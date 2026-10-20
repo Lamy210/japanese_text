@@ -1,6 +1,7 @@
-import { Show, createEffect, createMemo, createSignal } from 'solid-js'
+import { For, Show, createEffect, createMemo, createSignal } from 'solid-js'
 import { appState } from '../state/app-state'
 import { workspaceController } from '../state/workspace-runtime'
+import type { RuleProfileSummary } from '../workspace/workspace-service'
 
 function formatBytes(value: number | undefined): string {
   if (value === undefined) return '不明'
@@ -21,6 +22,9 @@ function errorMessage(error: unknown): string {
 
 export function WorkspaceManageDialog() {
   const [renameValue, setRenameValue] = createSignal('')
+  const [ruleProfiles, setRuleProfiles] = createSignal<RuleProfileSummary[]>([])
+  const [ruleProfilesLoaded, setRuleProfilesLoaded] = createSignal(false)
+  const [selectedRuleProfileId, setSelectedRuleProfileId] = createSignal('')
   const [snapshotEnabled, setSnapshotEnabled] = createSignal(false)
   const [snapshotMax, setSnapshotMax] = createSignal(20)
   const [snapshotPolicyLoaded, setSnapshotPolicyLoaded] = createSignal(false)
@@ -37,7 +41,18 @@ export function WorkspaceManageDialog() {
     const workspaceId = active()?.id
     setRenameValue(active()?.name ?? '')
     setSnapshotPolicyLoaded(false)
+    setRuleProfilesLoaded(false)
     if (workspaceId === undefined) return
+
+    void workspaceController.listRuleProfiles().then((profiles) => {
+      if (appState.workspaceManagerOpen() && appState.activeWorkspaceId() === workspaceId) {
+        setRuleProfiles(profiles)
+        setSelectedRuleProfileId(profiles.find((profile) => profile.active)?.id ?? '')
+        setRuleProfilesLoaded(true)
+      }
+    }).catch((error) => {
+      appState.pushToast('warning', `RuleProfile一覧の読み込みに失敗しました: ${errorMessage(error)}`)
+    })
 
     void workspaceController.getService().then((service) => service.getActive()).then((context) => {
       if (
@@ -53,6 +68,35 @@ export function WorkspaceManageDialog() {
       appState.pushToast('warning', `履歴設定の読み込みに失敗しました: ${errorMessage(error)}`)
     })
   })
+
+  const refreshRuleProfiles = async (): Promise<void> => {
+    const profiles = await workspaceController.listRuleProfiles()
+    setRuleProfiles(profiles)
+    setSelectedRuleProfileId(profiles.find((profile) => profile.active)?.id ?? '')
+    setRuleProfilesLoaded(true)
+  }
+
+  const duplicateRuleProfile = (): void => {
+    const name = window.prompt('複製するRuleProfileの名前', 'New RuleProfile')
+    if (name === null) return
+    void workspaceController.duplicateRuleProfile(name).then(async () => {
+      await refreshRuleProfiles()
+      appState.pushToast('success', 'RuleProfileを複製しました。')
+    }).catch((error) => {
+      appState.pushToast('error', `RuleProfile複製に失敗しました: ${errorMessage(error)}`)
+    })
+  }
+
+  const switchRuleProfile = (): void => {
+    const targetId = selectedRuleProfileId()
+    if (targetId.length === 0) return
+    void workspaceController.switchRuleProfile(targetId).then(async () => {
+      await refreshRuleProfiles()
+      appState.pushToast('success', 'RuleProfileを切り替えました。')
+    }).catch((error) => {
+      appState.pushToast('error', `RuleProfile切替に失敗しました: ${errorMessage(error)}`)
+    })
+  }
 
   const rename = (): void => {
     const workspace = active()
@@ -104,7 +148,7 @@ export function WorkspaceManageDialog() {
   const deleteWorkspace = (): void => {
     const workspace = active()
     if (workspace === undefined) return
-    if (!window.confirm(`ワークスペース「${workspace.name}」を削除しますか？保存済み本文も削除されます。`)) return
+    if (!window.confirm(`ワークスペース「${workspace.name}」を削除しますか？保存済み本文と履歴は削除されますが、RuleProfile設定（NGワード等）は互換性のため残ります。`)) return
     void workspaceController.deleteWorkspace(workspace.id).then(() => {
       appState.pushToast('success', 'ワークスペースを削除しました。')
       setRenameValue(active()?.name ?? '')
@@ -150,6 +194,39 @@ export function WorkspaceManageDialog() {
                       />
                       <button type="button" class="btn" disabled={pending() || renameValue().trim() === ''} onClick={rename}>名前を変更</button>
                     </div>
+                  </fieldset>
+
+                  <fieldset class="field-group">
+                    <legend>RuleProfiles</legend>
+                    <Show when={ruleProfilesLoaded()} fallback={<p class="settings-note">RuleProfile一覧を読み込んでいます…</p>}>
+                      <label class="setting-row">
+                        <span>利用するルール設定</span>
+                        <select
+                          aria-label="RuleProfileを選択"
+                          value={selectedRuleProfileId()}
+                          disabled={pending()}
+                          onChange={(event) => setSelectedRuleProfileId(event.currentTarget.value)}
+                        >
+                          <For each={ruleProfiles()}>
+                            {(profile) => <option value={profile.id}>{profile.name}{profile.active ? ' (active)' : ''}</option>}
+                          </For>
+                        </select>
+                      </label>
+                      <div class="button-row">
+                        <button
+                          type="button"
+                          class="btn btn-primary"
+                          disabled={pending() || selectedRuleProfileId().length === 0 || ruleProfiles().some((profile) => profile.id === selectedRuleProfileId() && profile.active)}
+                          onClick={switchRuleProfile}
+                        >
+                          このProfileに切り替え
+                        </button>
+                        <button type="button" class="btn" disabled={pending()} onClick={duplicateRuleProfile}>
+                          現在のProfileを複製
+                        </button>
+                      </div>
+                      <p class="settings-note">RuleProfileには校正ルール、NGワード、用語、引用、Formatter設定が含まれます。本文や履歴は複製されません。</p>
+                    </Show>
                   </fieldset>
 
                   <fieldset class="field-group">

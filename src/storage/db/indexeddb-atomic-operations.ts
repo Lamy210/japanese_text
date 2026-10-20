@@ -111,6 +111,61 @@ export function createIndexedDbAtomicOperations(
       }
     },
 
+    async duplicateProfileAndActivate(workspaceId, profileValue) {
+      const profile = validateRuleProfileRecord(profileValue)
+      const tx = db.transaction([STORE_WORKSPACES, STORE_RULE_PROFILES], 'readwrite')
+      const done = transactionDone(tx)
+      const workspaceStore = tx.objectStore(STORE_WORKSPACES)
+      const profileStore = tx.objectStore(STORE_RULE_PROFILES)
+      try {
+        const [rawWorkspace, existing] = await Promise.all([
+          requestToPromise(workspaceStore.get(workspaceId)),
+          requestToPromise(profileStore.get(profile.id))
+        ])
+        if (rawWorkspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+        if (existing !== undefined) throw new Error(`RuleProfile already exists: ${profile.id}`)
+        const workspace = validateWorkspaceRecord(rawWorkspace)
+        const members = workspace.ruleProfileIds ?? [workspace.activeRuleProfileId]
+        if (members.includes(profile.id)) throw new Error(`RuleProfile already belongs to workspace: ${profile.id}`)
+        const next = validateWorkspaceRecord({
+          ...workspace,
+          activeRuleProfileId: profile.id,
+          ruleProfileIds: [...members, profile.id],
+          updatedAt: now()
+        })
+        profileStore.add(profile)
+        workspaceStore.put(next)
+        await done
+      } catch (error) {
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
+    async activateProfile(workspaceId, profileId) {
+      const tx = db.transaction([STORE_WORKSPACES, STORE_RULE_PROFILES], 'readwrite')
+      const done = transactionDone(tx)
+      const workspaceStore = tx.objectStore(STORE_WORKSPACES)
+      const profileStore = tx.objectStore(STORE_RULE_PROFILES)
+      try {
+        const [rawWorkspace, rawProfile] = await Promise.all([
+          requestToPromise(workspaceStore.get(workspaceId)),
+          requestToPromise(profileStore.get(profileId))
+        ])
+        if (rawWorkspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+        const workspace = validateWorkspaceRecord(rawWorkspace)
+        const members = workspace.ruleProfileIds ?? [workspace.activeRuleProfileId]
+        if (!members.includes(profileId)) throw new Error(`RuleProfile does not belong to workspace: ${profileId}`)
+        if (rawProfile === undefined) throw new Error(`RuleProfile not found: ${profileId}`)
+        validateRuleProfileRecord(rawProfile)
+        workspaceStore.put(validateWorkspaceRecord({
+          ...workspace, activeRuleProfileId: profileId, updatedAt: now()
+        }))
+        await done
+      } catch (error) {
+        return abortAndRethrow(tx, done, error)
+      }
+    },
+
     async createDocumentAndActivate(documentValue) {
       const document = validateDocumentRecord(documentValue)
       const tx = db.transaction([STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_META], 'readwrite')

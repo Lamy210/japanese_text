@@ -31,6 +31,14 @@ export interface WorkspaceSummary {
   updatedAt: number
 }
 
+export interface RuleProfileSummary {
+  id: string
+  name: string
+  active: boolean
+  createdAt: number
+  updatedAt: number
+}
+
 export interface WorkspaceSwitchResult {
   context: WorkspaceContext
   warning?: string
@@ -53,6 +61,9 @@ export interface WorkspaceService {
   getActive(): Promise<WorkspaceContext>
   list(): Promise<WorkspaceSummary[]>
   saveConfig(workspaceId: string, config: AppConfig): Promise<WorkspaceContext>
+  listRuleProfiles(workspaceId: string): Promise<RuleProfileSummary[]>
+  duplicateRuleProfile(workspaceId: string, name: string): Promise<WorkspaceContext>
+  switchRuleProfile(workspaceId: string, profileId: string): Promise<WorkspaceContext>
   create(input: { name: string }): Promise<WorkspaceContext>
   rename(workspaceId: string, name: string): Promise<Workspace>
   updateSnapshotPolicy(workspaceId: string, policy: SnapshotPolicy): Promise<Workspace>
@@ -78,6 +89,14 @@ function normalizeWorkspaceName(raw: string): string {
   if (name.length === 0) throw new Error('Workspace name must not be empty')
   if ([...name].length > 80) throw new Error('Workspace name must be 80 Unicode code points or fewer')
   if (/[\u0000-\u001f\u007f]/u.test(name)) throw new Error('Workspace name must not contain control characters')
+  return name
+}
+
+function normalizeRuleProfileName(raw: string): string {
+  const name = raw.trim()
+  if (name.length === 0) throw new Error('RuleProfile name must not be empty')
+  if ([...name].length > 80) throw new Error('RuleProfile name must be at most 80 Unicode code points')
+  if (/[\u0000-\u001f\u007f]/u.test(name)) throw new Error('RuleProfile name contains control characters')
   return name
 }
 
@@ -219,6 +238,48 @@ export function createWorkspaceService(dependencies: WorkspaceServiceDependencie
       )
       await atomic.saveProjectedState(next)
       return contextFromProjected(next)
+    },
+
+    async listRuleProfiles(workspaceId): Promise<RuleProfileSummary[]> {
+      const workspace = await repositories.workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+      const ids = workspace.ruleProfileIds ?? [workspace.activeRuleProfileId]
+      const profiles = await Promise.all(ids.map((id) => repositories.profiles.get(id)))
+      return profiles.map((profile, index) => {
+        if (profile === undefined) throw new Error(`RuleProfile missing: ${ids[index]}`)
+        return {
+          id: profile.id, name: profile.name, active: profile.id === workspace.activeRuleProfileId,
+          createdAt: profile.createdAt, updatedAt: profile.updatedAt
+        }
+      })
+    },
+
+    async duplicateRuleProfile(workspaceId, rawName): Promise<WorkspaceContext> {
+      const name = normalizeRuleProfileName(rawName)
+      const workspace = await repositories.workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+      const active = await loadContext(workspace)
+      const timestamp = now()
+      const profile: RuleProfile = {
+        ...structuredClone(active.profile),
+        id: generateId('profile'),
+        name,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      }
+      await atomic.duplicateProfileAndActivate(workspaceId, profile)
+      const updated = await repositories.workspaces.get(workspaceId)
+      if (updated === undefined) throw new Error(`Workspace not found after duplication: ${workspaceId}`)
+      return loadContext(updated)
+    },
+
+    async switchRuleProfile(workspaceId, profileId): Promise<WorkspaceContext> {
+      const workspace = await repositories.workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+      if (workspace.activeRuleProfileId !== profileId) await atomic.activateProfile(workspaceId, profileId)
+      const updated = await repositories.workspaces.get(workspaceId)
+      if (updated === undefined) throw new Error(`Workspace not found after profile switch: ${workspaceId}`)
+      return loadContext(updated)
     },
 
     async create(input): Promise<WorkspaceContext> {

@@ -228,6 +228,35 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       profiles = nextProfiles
       activeWorkspaceId = validatedWorkspace.id
     },
+    async duplicateProfileAndActivate(workspaceId, profileValue) {
+      const workspace = workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+      const profile = clone(validateRuleProfileRecord(profileValue))
+      if (profiles.has(profile.id)) throw new Error(`RuleProfile already exists: ${profile.id}`)
+      const members = workspace.ruleProfileIds ?? [workspace.activeRuleProfileId]
+      if (members.includes(profile.id)) throw new Error(`RuleProfile already belongs to workspace: ${profile.id}`)
+      const nextWorkspaces = cloneMap(workspaces)
+      const nextProfiles = cloneMap(profiles)
+      nextProfiles.set(profile.id, profile)
+      nextWorkspaces.set(workspaceId, clone(validateWorkspaceRecord({
+        ...workspace, activeRuleProfileId: profile.id,
+        ruleProfileIds: [...members, profile.id], updatedAt: now()
+      })))
+      profiles = nextProfiles
+      workspaces = nextWorkspaces
+    },
+    async activateProfile(workspaceId, profileId) {
+      const workspace = workspaces.get(workspaceId)
+      if (workspace === undefined) throw new Error(`Workspace not found: ${workspaceId}`)
+      const members = workspace.ruleProfileIds ?? [workspace.activeRuleProfileId]
+      if (!members.includes(profileId)) throw new Error(`RuleProfile does not belong to workspace: ${profileId}`)
+      if (!profiles.has(profileId)) throw new Error(`RuleProfile not found: ${profileId}`)
+      const nextWorkspaces = cloneMap(workspaces)
+      nextWorkspaces.set(workspaceId, clone(validateWorkspaceRecord({
+        ...workspace, activeRuleProfileId: profileId, updatedAt: now()
+      })))
+      workspaces = nextWorkspaces
+    },
     async createDocumentAndActivate(documentValue) {
       const document = clone(validateDocumentRecord(documentValue))
       requireLocalWorkspace(workspaces, document.workspaceId)

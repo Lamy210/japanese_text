@@ -49,6 +49,12 @@ Backend、サーバー側Database、認証、LLM API は使用しません。Loc
 
 検索は明示実行の都度ブラウザ内で行い、検索語・検索結果を保存・送信しません。Private Sessionでは本文と履歴をメモリにのみ保持し、Local Libraryを明示的に有効化したWorkspaceだけがIndexedDBに保存されます。現在編集中の未保存本文も検索対象です。
 
+## RuleProfiles
+
+「ワークスペース管理」の **RuleProfiles** から、現在のルール設定を独立したProfileとして複製し、同じWorkspace内のProfileを切り替えられます。設定の切替対象は校正ルール・NGワード・用語統一・引用ポリシー・Formatterで、本文や履歴は複製しません。
+
+旧Workspaceは従来の単一Profileのまま読み込めます。Profileの名前変更・削除は未実装です。**Workspaceを削除してもRuleProfileの設定レコードは互換性のため残ります**。NGワード等に個人情報を入力する場合は、この保持仕様に注意してください。
+
 ## Development
 
 Bun 1.4.3 を使用します。

@@ -173,6 +173,12 @@ export const appState = {
     setDocumentText(text)
     setRevision((r) => r + 1)
   },
+  /** Reject in-flight lint results computed under the previous RuleProfile. */
+  invalidateAnalysisForConfigChange: (): void => {
+    setRevision((r) => r + 1)
+    setSelectedDiagnosticId(null)
+    setTierResults({ fast: undefined, deep: undefined, idle: undefined })
+  },
   documentSummaries,
   setDocumentSummaries: (values: DocumentSummary[]): void => {
     setDocumentSummaries(structuredClone(values))
