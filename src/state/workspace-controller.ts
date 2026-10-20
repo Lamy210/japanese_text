@@ -291,7 +291,7 @@ export function createWorkspaceController(
         if (workspaceId !== appState.activeWorkspaceId()) throw new Error('Workspace changed during profile duplication')
         const changed = await (await service()).duplicateRuleProfile(workspaceId, name)
         applyContext(changed)
-        appState.resetDiagnosticsForDocumentContext()
+        appState.invalidateAnalysisForConfigChange()
         relint()
         return changed
       })
@@ -307,7 +307,7 @@ export function createWorkspaceController(
         if (workspaceId !== appState.activeWorkspaceId()) throw new Error('Workspace changed during profile switch')
         const changed = await (await service()).switchRuleProfile(workspaceId, profileId)
         applyContext(changed)
-        appState.resetDiagnosticsForDocumentContext()
+        appState.invalidateAnalysisForConfigChange()
         relint()
         return changed
       })
