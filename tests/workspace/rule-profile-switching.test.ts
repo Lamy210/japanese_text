@@ -23,7 +23,7 @@ async function runContract(label: string, create: () => Promise<{
   close: () => void
 }>) {
   describe(label, () => {
-    test('deleting a Workspace removes owned profiles and keeps the other Workspace intact', async () => {
+    test('deleting a Workspace retains RuleProfiles for backward compatibility', async () => {
       const h = await create()
       try {
         const first = state('w1', 'p1')
@@ -34,8 +34,8 @@ async function runContract(label: string, create: () => Promise<{
         await h.atomic.duplicateProfileAndActivate('w1', { ...first.profile, id: 'p3', name: 'Extra' })
         await h.atomic.deleteWorkspaceAndSelectNext('w1', 'w2')
         expect(await h.repositories.workspaces.get('w1')).toBeUndefined()
-        expect(await h.repositories.profiles.get('p1')).toBeUndefined()
-        expect(await h.repositories.profiles.get('p3')).toBeUndefined()
+        expect((await h.repositories.profiles.get('p1'))?.id).toBe('p1')
+        expect((await h.repositories.profiles.get('p3'))?.id).toBe('p3')
         expect((await h.repositories.profiles.get('p2'))?.id).toBe('p2')
         expect(await h.repositories.selection.getActiveWorkspaceId()).toBe('w2')
       } finally {
