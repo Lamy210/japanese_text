@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from 'vitest'
 import { createDefaultConfig } from '../../src/core/config/validate'
 import {
   buildRuleRegistry,
+  DEFAULT_RULE_PROVIDERS,
   listRuleManifests,
   TEXTLINT_RULE_IDS,
   TEXTLINT_RULE_META
@@ -71,6 +72,11 @@ describe('Phase 2E-A RuleProvider / RuleManifest', () => {
     } finally {
       listSpy.mockRestore()
     }
+  })
+
+  test('default providers cannot be mutated after their manifests are cached', () => {
+    expect(Object.isFrozen(DEFAULT_RULE_PROVIDERS)).toBe(true)
+    expect(DEFAULT_RULE_PROVIDERS.map((provider) => provider.id)).toEqual(['builtin', 'textlint'])
   })
 
   test('manifest listing returns independent metadata including nested option definitions', () => {
