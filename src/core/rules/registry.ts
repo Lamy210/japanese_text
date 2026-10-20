@@ -41,6 +41,9 @@ function collectManifests(providers: readonly RuleProvider[]): Map<string, RuleM
   return manifests
 }
 
+/** Immutable default provider collection; cache validated metadata outside the lint hot path. */
+const DEFAULT_MANIFESTS = collectManifests(DEFAULT_RULE_PROVIDERS)
+
 /** Stable, self-contained metadata list for settings and future integrations. */
 export function listRuleManifests(
   providers: readonly RuleProvider[] = DEFAULT_RULE_PROVIDERS
@@ -54,7 +57,7 @@ export function buildRuleRegistry(
   config: AppConfig,
   providers: readonly RuleProvider[] = DEFAULT_RULE_PROVIDERS
 ): Map<string, CoreRule> {
-  const manifests = collectManifests(providers)
+  const manifests = providers === DEFAULT_RULE_PROVIDERS ? DEFAULT_MANIFESTS : collectManifests(providers)
   const rules = new Map<string, CoreRule>()
   for (const provider of providers) {
     for (const rule of provider.createRules(config)) {
