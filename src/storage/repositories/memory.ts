@@ -339,13 +339,6 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       const removedDocumentIds = new Set<string>()
 
       nextWorkspaces.delete(workspaceId)
-      const deleted = workspaces.get(workspaceId)
-      const memberships = deleted?.ruleProfileIds ?? (deleted === undefined ? [] : [deleted.activeRuleProfileId])
-      const retained = new Set([...nextWorkspaces.values()].flatMap(
-        (workspace) => workspace.ruleProfileIds ?? [workspace.activeRuleProfileId]
-      ))
-      const nextProfiles = cloneMap(profiles)
-      for (const id of memberships) if (!retained.has(id)) nextProfiles.delete(id)
       nextSelections.delete(workspaceId)
       for (const [id, document] of nextDocuments) {
         if (document.workspaceId === workspaceId) {
@@ -355,7 +348,6 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       }
       const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
 
-      profiles = nextProfiles
       workspaces = nextWorkspaces
       documents = nextDocuments
       documentSelections = nextSelections
@@ -370,13 +362,6 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       const nextSelections = new Map(documentSelections)
       const removedDocumentIds = new Set<string>()
       nextWorkspaces.delete(workspaceId)
-      const deleted = workspaces.get(workspaceId)
-      const memberships = deleted?.ruleProfileIds ?? (deleted === undefined ? [] : [deleted.activeRuleProfileId])
-      const retained = new Set([...nextWorkspaces.values()].flatMap(
-        (workspace) => workspace.ruleProfileIds ?? [workspace.activeRuleProfileId]
-      ))
-      const nextProfiles = cloneMap(profiles)
-      for (const id of memberships) if (!retained.has(id)) nextProfiles.delete(id)
       nextSelections.delete(workspaceId)
       for (const [id, document] of nextDocuments) {
         if (document.workspaceId === workspaceId) {
@@ -386,7 +371,6 @@ export function createMemoryStorageContext(now: () => number = Date.now): Memory
       }
       const nextSnapshots = withoutDocumentSnapshots(snapshots, removedDocumentIds)
 
-      profiles = nextProfiles
       workspaces = nextWorkspaces
       documents = nextDocuments
       documentSelections = nextSelections
