@@ -13,7 +13,7 @@ Enable multiple named RuleProfiles per Workspace with safe duplicate-and-activat
 - Profile listing is Workspace-scoped; no cross-workspace switching.
 - Switch atomically checks both membership and existence of target profile, then changes active ID without mutating inactive profiles.
 - Duplication atomically inserts profile and updates membership + active ID with collision detection and no partial writes.
-- Workspace deletion deletes its owned profiles only when no other Workspace references them (legacy shared-profile safety).
+- Workspace deletion retains profile records, as required by the established Phase 2A contract. Explicit cleanup of unreferenced profiles is deferred until a migration/ownership policy is designed; no implicit deletion of potentially shared legacy profiles.
 - Profile removal/renaming and custom declarative/regex rules are deferred to B2/B3.
 
 ## Application/UI
@@ -26,7 +26,7 @@ Enable multiple named RuleProfiles per Workspace with safe duplicate-and-activat
 1. Legacy workspace validates without `ruleProfileIds`; malformed/duplicate/mismatched memberships rejected.
 2. In-memory and IndexedDB adapters enforce clone+activate atomicity, collision rejection and foreign-profile selection rejection.
 3. Switching A->B->A retains different rule/NG word/terminology settings.
-4. Deleted workspace removes only its unreferenced profiles, preserving another Workspace's profile.
+4. Deleted workspace retains rule profile records (including newly duplicated ones) for legacy compatibility; other Workspace profiles remain intact.
 5. Controller persists config before switching, reloads new config, relints and refuses navigation during pending history mutation.
 6. Full bun lint/test/build/build:pages and asset path CI pass. Author review checks privacy, legacy compatibility, stale selection, schema constraints.
 7. PR head green and unresolved review threads 0 before user-approved squash merge; main CI/Pages verified afterwards.
