@@ -148,7 +148,7 @@ export function WorkspaceManageDialog() {
   const deleteWorkspace = (): void => {
     const workspace = active()
     if (workspace === undefined) return
-    if (!window.confirm(`ワークスペース「${workspace.name}」を削除しますか？保存済み本文も削除されます。`)) return
+    if (!window.confirm(`ワークスペース「${workspace.name}」を削除しますか？保存済み本文と履歴は削除されますが、RuleProfile設定（NGワード等）は互換性のため残ります。`)) return
     void workspaceController.deleteWorkspace(workspace.id).then(() => {
       appState.pushToast('success', 'ワークスペースを削除しました。')
       setRenameValue(active()?.name ?? '')
