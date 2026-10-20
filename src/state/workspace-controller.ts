@@ -9,6 +9,7 @@ import {
   type StorageManagerLike
 } from '../workspace/storage-capability'
 import {
+  type RuleProfileSummary,
   type WorkspaceContext,
   type WorkspaceService
 } from '../workspace/workspace-service'
@@ -38,6 +39,9 @@ export interface WorkspaceController {
   deleteWorkspace(workspaceId: string): Promise<void>
   setStorageMode(mode: 'private-session' | 'local-library'): Promise<void>
   setSnapshotPolicy(policy: SnapshotPolicy): Promise<void>
+  listRuleProfiles(): Promise<RuleProfileSummary[]>
+  duplicateRuleProfile(name: string): Promise<WorkspaceContext>
+  switchRuleProfile(profileId: string): Promise<WorkspaceContext>
   requestPersistence(): Promise<StorageCapability>
   getService(): Promise<WorkspaceService>
   getContext(): Promise<StorageContext>
@@ -109,11 +113,11 @@ export function createWorkspaceController(
     appState.setWorkspaceSummaries(await workspaceService.list())
   }
 
-  async function runMutation(operation: () => Promise<void>): Promise<void> {
+  async function runMutation<T>(operation: () => Promise<T>): Promise<T> {
     if (appState.historyMutationPending()) throw new Error('History mutation is pending')
     appState.setWorkspaceMutationPending(true)
     try {
-      await operation()
+      return await operation()
     } finally {
       appState.setWorkspaceMutationPending(false)
     }
@@ -268,6 +272,44 @@ export function createWorkspaceController(
         const workspaceService = await service()
         await workspaceService.updateSnapshotPolicy(workspaceId, policy)
         appState.setWorkspaceSummaries(await workspaceService.list())
+      })
+    },
+
+    async listRuleProfiles(): Promise<RuleProfileSummary[]> {
+      const workspaceId = appState.activeWorkspaceId()
+      if (workspaceId === undefined) throw new Error('Active workspace is missing')
+      return (await service()).listRuleProfiles(workspaceId)
+    },
+
+    async duplicateRuleProfile(name): Promise<WorkspaceContext> {
+      return runMutation(async () => {
+        const workspaceId = appState.activeWorkspaceId()
+        if (workspaceId === undefined) throw new Error('Active workspace is missing')
+        cancelPendingDocumentPersistence()
+        await documents().flushActiveDocument()
+        await persistCurrentWorkspaceConfig()
+        if (workspaceId !== appState.activeWorkspaceId()) throw new Error('Workspace changed during profile duplication')
+        const changed = await (await service()).duplicateRuleProfile(workspaceId, name)
+        applyContext(changed)
+        appState.resetDiagnosticsForDocumentContext()
+        relint()
+        return changed
+      })
+    },
+
+    async switchRuleProfile(profileId): Promise<WorkspaceContext> {
+      return runMutation(async () => {
+        const workspaceId = appState.activeWorkspaceId()
+        if (workspaceId === undefined) throw new Error('Active workspace is missing')
+        cancelPendingDocumentPersistence()
+        await documents().flushActiveDocument()
+        await persistCurrentWorkspaceConfig()
+        if (workspaceId !== appState.activeWorkspaceId()) throw new Error('Workspace changed during profile switch')
+        const changed = await (await service()).switchRuleProfile(workspaceId, profileId)
+        applyContext(changed)
+        appState.resetDiagnosticsForDocumentContext()
+        relint()
+        return changed
       })
     },
 
