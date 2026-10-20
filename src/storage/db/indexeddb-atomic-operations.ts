@@ -31,14 +31,6 @@ function shouldScrubLegacyDocument(db: IDBDatabase, workspaceId: string): boolea
   return workspaceId === MIGRATED_WORKSPACE_ID && db.objectStoreNames.contains(LEGACY_DOCUMENTS_STORE)
 }
 
-function profileIdsForDeletion(value: unknown): string[] {
-  if (!isRecord(value)) return []
-  const active = typeof value.activeRuleProfileId === 'string' ? [value.activeRuleProfileId] : []
-  return Array.isArray(value.ruleProfileIds)
-    ? value.ruleProfileIds.filter((id): id is string => typeof id === 'string')
-    : active
-}
-
 function validateMaxSnapshots(value: number): void {
   if (!Number.isInteger(value) || value < 1 || value > 1000) {
     throw new Error('maxSnapshots must be an integer between 1 and 1000')
@@ -450,7 +442,6 @@ export function createIndexedDbAtomicOperations(
       const stores = [
         STORE_META,
         STORE_WORKSPACES,
-        STORE_RULE_PROFILES,
         STORE_WORKSPACE_DOCUMENTS,
         STORE_DOCUMENT_SNAPSHOTS,
         STORE_SUPPRESSIONS,
@@ -461,20 +452,6 @@ export function createIndexedDbAtomicOperations(
       const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
       const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
       const suppressionStore = tx.objectStore(STORE_SUPPRESSIONS)
-      const profileCleanup = tx.objectStore(STORE_WORKSPACES).getAll()
-      profileCleanup.onsuccess = () => {
-        const allWorkspaces = profileCleanup.result
-        const deleted = allWorkspaces.find((workspace) => isRecord(workspace) && workspace.id === workspaceId)
-        if (deleted === undefined) return
-        const retainedProfiles = new Set(
-          allWorkspaces.filter((workspace) => !isRecord(workspace) || workspace.id !== workspaceId)
-            .flatMap(profileIdsForDeletion)
-        )
-        for (const id of profileIdsForDeletion(deleted)) {
-          if (!retainedProfiles.has(id)) tx.objectStore(STORE_RULE_PROFILES).delete(id)
-        }
-      }
-
 
       try {
         if (scrubLegacy) tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
@@ -528,7 +505,6 @@ export function createIndexedDbAtomicOperations(
       const stores = [
         STORE_META,
         STORE_WORKSPACES,
-        STORE_RULE_PROFILES,
         STORE_WORKSPACE_DOCUMENTS,
         STORE_DOCUMENT_SNAPSHOTS,
         STORE_SUPPRESSIONS,
@@ -540,20 +516,6 @@ export function createIndexedDbAtomicOperations(
       const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
       const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
       const suppressionStore = tx.objectStore(STORE_SUPPRESSIONS)
-      const profileCleanup = tx.objectStore(STORE_WORKSPACES).getAll()
-      profileCleanup.onsuccess = () => {
-        const allWorkspaces = profileCleanup.result
-        const deleted = allWorkspaces.find((workspace) => isRecord(workspace) && workspace.id === workspaceId)
-        if (deleted === undefined) return
-        const retainedProfiles = new Set(
-          allWorkspaces.filter((workspace) => !isRecord(workspace) || workspace.id !== workspaceId)
-            .flatMap(profileIdsForDeletion)
-        )
-        for (const id of profileIdsForDeletion(deleted)) {
-          if (!retainedProfiles.has(id)) tx.objectStore(STORE_RULE_PROFILES).delete(id)
-        }
-      }
-
       let validationError: Error | undefined
 
       try {
