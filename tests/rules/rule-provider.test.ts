@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { createDefaultConfig } from '../../src/core/config/validate'
 import {
   buildRuleRegistry,
@@ -57,6 +57,19 @@ describe('Phase 2E-A RuleProvider / RuleManifest', () => {
       expect(manifest.defaultSeverity).toBe(meta.defaultSeverity)
       expect(manifest.optionDefs).toEqual(meta.optionDefs)
       expect(manifest.tier).toBe('deep')
+    }
+  })
+
+  test('does not rebuild default manifests for every lint registry construction', () => {
+    const config = createDefaultConfig()
+    const listSpy = vi.spyOn(builtinRuleProvider, 'listManifests')
+    try {
+      buildRuleRegistry(config)
+      buildRuleRegistry(config)
+      buildRuleRegistry(config)
+      expect(listSpy).not.toHaveBeenCalled()
+    } finally {
+      listSpy.mockRestore()
     }
   })
 
