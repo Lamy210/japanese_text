@@ -23,6 +23,26 @@ async function runContract(label: string, create: () => Promise<{
   close: () => void
 }>) {
   describe(label, () => {
+    test('deleting a Workspace removes owned profiles and keeps the other Workspace intact', async () => {
+      const h = await create()
+      try {
+        const first = state('w1', 'p1')
+        const second = state('w2', 'p2')
+        await h.repositories.preferences.save(first.preferences)
+        await h.atomic.createWorkspaceAndActivate(first.workspace, first.profile)
+        await h.atomic.createWorkspaceAndActivate(second.workspace, second.profile)
+        await h.atomic.duplicateProfileAndActivate('w1', { ...first.profile, id: 'p3', name: 'Extra' })
+        await h.atomic.deleteWorkspaceAndSelectNext('w1', 'w2')
+        expect(await h.repositories.workspaces.get('w1')).toBeUndefined()
+        expect(await h.repositories.profiles.get('p1')).toBeUndefined()
+        expect(await h.repositories.profiles.get('p3')).toBeUndefined()
+        expect((await h.repositories.profiles.get('p2'))?.id).toBe('p2')
+        expect(await h.repositories.selection.getActiveWorkspaceId()).toBe('w2')
+      } finally {
+        h.close()
+      }
+    })
+
     test('duplicates profile atomically and switches only within its Workspace', async () => {
       const h = await create()
       try {
