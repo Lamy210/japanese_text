@@ -18,7 +18,7 @@ import {
 } from '../state/actions'
 import { generateId, type NgWordEntry } from '../core/config/schema'
 import type { Severity, RuleCategory } from '../core/types'
-import { buildRuleRegistry, TEXTLINT_RULE_META, RULE_CATEGORY_LABELS } from '../core/rules/registry'
+import { listRuleManifests, RULE_CATEGORY_LABELS } from '../core/rules/registry'
 
 const SEVERITIES: Severity[] = ['error', 'warning', 'info']
 const SEVERITY_LABELS: Record<Severity, string> = { error: 'Error', warning: 'Warning', info: 'Info' }
@@ -36,37 +36,13 @@ export function SettingsDialog() {
 
   const ruleEntries = createMemo(() => {
     const config = appState.config
-    const own = buildRuleRegistry({
-      ...config,
-      ngWords: config.ngWords,
-      terminology: config.terminology
-    })
-    const entries: Array<{
-      id: string
-      category: RuleCategory
-      description: string
-      optionDefs?: Array<{ key: string; type: 'number' | 'boolean'; label: string; defaultValue: number | boolean; min?: number; max?: number }>
-      setting: { enabled: boolean; severity: Severity; options?: Record<string, string | number | boolean> } | undefined
-    }> = []
-    for (const rule of own.values()) {
-      entries.push({
-        id: rule.id,
-        category: rule.category,
-        description: rule.description,
-        optionDefs: rule.optionDefs,
-        setting: config.rules[rule.id]
-      })
-    }
-    for (const [id, meta] of Object.entries(TEXTLINT_RULE_META)) {
-      entries.push({
-        id,
-        category: id.startsWith('style/') ? 'style' : 'typography',
-        description: meta.description,
-        optionDefs: meta.optionDefs,
-        setting: config.rules[id]
-      })
-    }
-    return entries.sort((a, b) => a.category.localeCompare(b.category) || a.id.localeCompare(b.id))
+    return listRuleManifests().map((manifest) => ({
+      id: manifest.id,
+      category: manifest.category,
+      description: manifest.description,
+      optionDefs: manifest.optionDefs,
+      setting: config.rules[manifest.id]
+    }))
   })
 
   const groupedRules = createMemo(() => {
