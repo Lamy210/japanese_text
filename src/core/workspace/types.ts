@@ -20,6 +20,8 @@ export interface Workspace {
   id: string
   name: string
   activeRuleProfileId: string
+  /** Optional for legacy Workspace records; absence implies [activeRuleProfileId]. */
+  ruleProfileIds?: string[]
   storageMode: StorageMode
   snapshotPolicy: SnapshotPolicy
   createdAt: number
