@@ -234,6 +234,7 @@ describe('DocumentController mutations', () => {
   it('keeps session ignores through document switching and clears them on deletion', async () => {
     const { appState, controller, state } = await harness('private-session')
     await controller.bootstrapForWorkspace(state.workspace)
+    appState.setActiveWorkspaceId(state.workspace.id)
     const original = appState.activeDocumentId()!
     const content = 'デバックを確認します。'
     appState.setDocument(content)
