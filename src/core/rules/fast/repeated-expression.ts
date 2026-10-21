@@ -39,13 +39,19 @@ export const repeatedPhraseRule: CoreRule = {
       if (shouldSkipLine(ctx.lines[i]!)) continue
       const startOffset = ctx.lineStarts[i]!
       const line = text.slice(startOffset, startOffset + ctx.lines[i]!.length)
-      for (const match of line.matchAll(REPEATED_PHRASE)) {
-        const duplicateStart = startOffset + match.index + match[1]!.length + match[2]!.length
+      const regex = new RegExp(REPEATED_PHRASE.source, REPEATED_PHRASE.flags)
+      let match: RegExpExecArray | null
+      while ((match = regex.exec(line)) !== null) {
+        const duplicateWithinLine = match.index + match[1]!.length + match[2]!.length
+        const duplicateStart = startOffset + duplicateWithinLine
         results.push({
           start: duplicateStart,
           end: duplicateStart + match[1]!.length,
           message: `「${match[1]}」が直後に重複している可能性があります。文脈に応じて不要な表現を確認してください。`
         })
+        // The second phrase may itself start the next adjacent duplicate.
+        // Regex.exec() normally skips overlapping pairs (A、A、A).
+        regex.lastIndex = duplicateWithinLine
       }
     }
     return results
