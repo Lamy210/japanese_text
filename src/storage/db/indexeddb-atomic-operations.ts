@@ -11,6 +11,7 @@ import { MIGRATED_WORKSPACE_ID, migrateV1ToV2 } from './migration-v1-v2'
 import {
   activeDocumentMetaKey,
   INDEX_DOCUMENT_ID,
+  INDEX_SCOPE_AND_SCOPE_ID,
   INDEX_WORKSPACE_ID,
   LEGACY_DOCUMENTS_STORE,
   META_ACTIVE_WORKSPACE_ID,
@@ -55,6 +56,14 @@ function deleteSnapshotsForDocument(snapshotStore: IDBObjectStore, documentId: s
   const keysRequest = snapshotStore.index(INDEX_DOCUMENT_ID).getAllKeys(documentId)
   keysRequest.onsuccess = () => {
     for (const key of keysRequest.result) snapshotStore.delete(key)
+  }
+}
+
+/** Remove document-level suppressions inside the same transaction as deletion. */
+function deleteSuppressionsForDocument(store: IDBObjectStore, documentId: string): void {
+  const keys = store.index(INDEX_SCOPE_AND_SCOPE_ID).getAllKeys(['document', documentId])
+  keys.onsuccess = () => {
+    for (const key of keys.result) store.delete(key)
   }
 }
 
@@ -232,13 +241,14 @@ export function createIndexedDbAtomicOperations(
     async deleteDocumentAndSelectNext(workspaceId, documentId, nextDocumentId) {
       if (documentId === nextDocumentId) throw new Error('next document must differ from deleted document')
       const tx = db.transaction(
-        [STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_DOCUMENT_SNAPSHOTS, STORE_META],
+        [STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_DOCUMENT_SNAPSHOTS, STORE_SUPPRESSIONS, STORE_META],
         'readwrite'
       )
       const done = transactionDone(tx)
       const workspaceStore = tx.objectStore(STORE_WORKSPACES)
       const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
       const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
+      const suppressionStore = tx.objectStore(STORE_SUPPRESSIONS)
       const metaStore = tx.objectStore(STORE_META)
       let validationError: Error | undefined
 
@@ -258,6 +268,7 @@ export function createIndexedDbAtomicOperations(
           }
           documentStore.delete(documentId)
           deleteSnapshotsForDocument(snapshotStore, documentId)
+          deleteSuppressionsForDocument(suppressionStore, documentId)
           metaStore.put(nextDocumentId, activeDocumentMetaKey(workspaceId))
         }
 
@@ -321,13 +332,14 @@ export function createIndexedDbAtomicOperations(
         throw new Error('replacement.workspaceId must match the target workspace')
       }
       const tx = db.transaction(
-        [STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_DOCUMENT_SNAPSHOTS, STORE_META],
+        [STORE_WORKSPACES, STORE_WORKSPACE_DOCUMENTS, STORE_DOCUMENT_SNAPSHOTS, STORE_SUPPRESSIONS, STORE_META],
         'readwrite'
       )
       const done = transactionDone(tx)
       const workspaceStore = tx.objectStore(STORE_WORKSPACES)
       const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
       const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
+      const suppressionStore = tx.objectStore(STORE_SUPPRESSIONS)
       const metaStore = tx.objectStore(STORE_META)
       let validationError: Error | undefined
 
@@ -347,6 +359,7 @@ export function createIndexedDbAtomicOperations(
           }
           documentStore.delete(oldDocumentId)
           deleteSnapshotsForDocument(snapshotStore, oldDocumentId)
+          deleteSuppressionsForDocument(suppressionStore, oldDocumentId)
           documentStore.put(replacement)
           metaStore.put(replacement.id, activeDocumentMetaKey(workspaceId))
         }
@@ -401,12 +414,14 @@ export function createIndexedDbAtomicOperations(
       const stores = [
         STORE_WORKSPACE_DOCUMENTS,
         STORE_DOCUMENT_SNAPSHOTS,
+        STORE_SUPPRESSIONS,
         ...(scrubLegacy ? [LEGACY_DOCUMENTS_STORE] : [])
       ]
       const tx = db.transaction(stores, 'readwrite')
       const done = transactionDone(tx)
       const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
       const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
+      const suppressionStore = tx.objectStore(STORE_SUPPRESSIONS)
 
       try {
         if (scrubLegacy) tx.objectStore(LEGACY_DOCUMENTS_STORE).delete('recent')
@@ -417,7 +432,10 @@ export function createIndexedDbAtomicOperations(
             documentKeysRequest.result.filter((key): key is string => typeof key === 'string')
           )
 
-          for (const key of documentIds) documentStore.delete(key)
+          for (const key of documentIds) {
+            documentStore.delete(key)
+            deleteSuppressionsForDocument(suppressionStore, key)
+          }
 
           const snapshotCursorRequest = snapshotStore.openCursor()
           snapshotCursorRequest.onsuccess = () => {
@@ -678,6 +696,7 @@ export function createIndexedDbAtomicOperations(
         STORE_WORKSPACES,
         STORE_WORKSPACE_DOCUMENTS,
         STORE_DOCUMENT_SNAPSHOTS,
+        STORE_SUPPRESSIONS,
         ...(scrubLegacy ? [LEGACY_DOCUMENTS_STORE] : [])
       ]
       const tx = db.transaction(stores, 'readwrite')
@@ -685,6 +704,7 @@ export function createIndexedDbAtomicOperations(
       const workspaceStore = tx.objectStore(STORE_WORKSPACES)
       const documentStore = tx.objectStore(STORE_WORKSPACE_DOCUMENTS)
       const snapshotStore = tx.objectStore(STORE_DOCUMENT_SNAPSHOTS)
+      const suppressionStore = tx.objectStore(STORE_SUPPRESSIONS)
       const metaStore = tx.objectStore(STORE_META)
       let validationError: Error | undefined
 
@@ -715,7 +735,10 @@ export function createIndexedDbAtomicOperations(
             const documentIds = new Set(
               documentKeysRequest.result.filter((key): key is string => typeof key === 'string')
             )
-            for (const documentId of documentIds) documentStore.delete(documentId)
+            for (const documentId of documentIds) {
+              documentStore.delete(documentId)
+              deleteSuppressionsForDocument(suppressionStore, documentId)
+            }
 
             const snapshotCursorRequest = snapshotStore.openCursor()
             snapshotCursorRequest.onsuccess = () => {

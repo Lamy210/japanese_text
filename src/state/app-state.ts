@@ -238,6 +238,18 @@ export const appState = {
   filteredDiagnostics,
   diagnosticCounts,
   ignoredForActiveDocument,
+  /** Hydrate only a verified Local Library document's suppressions; replace (never merge) old state. */
+  replaceIgnoredForDocument: (
+    workspaceId: string, documentId: string, entries: readonly IgnoredDiagnostic[]
+  ): void => {
+    const scope = documentIgnoreScope(workspaceId, documentId)
+    if (scope === null) return
+    const unique = new Set(entries.map(e => e.key))
+    if (entries.length > MAX_IGNORED_PER_DOCUMENT || unique.size !== entries.length) {
+      throw new Error('Invalid document diagnostic ignore list')
+    }
+    setIgnoredByDocument(previous => ({ ...previous, [scope]: [...entries] }))
+  },
   ignoreDiagnosticForCurrentDocument: (diagnostic: Diagnostic): boolean => {
     const scope = documentIgnoreScope(activeWorkspaceId(), activeDocumentId())
     if (scope === null) return false

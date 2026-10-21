@@ -1,5 +1,6 @@
 import type { DocumentType } from '../core/types'
 import type { Workspace } from '../core/workspace/types'
+import type { IgnoredDiagnostic } from './ignored-diagnostics'
 import type { DocumentService } from '../document/document-service'
 import type { DocumentContext, DocumentSearchHit, EditableDocument } from '../document/types'
 import type { WorkspaceService } from '../workspace/workspace-service'
@@ -14,6 +15,8 @@ export interface DocumentControllerDependencies {
   toast?: (kind: Toast['kind'], message: string) => void
   cancelPendingDocumentPersistence?: () => void
   now?: () => number
+  /** Optional storage-backed adapter. Not called for Private Session. */
+  loadDurableIgnored?: (workspaceId: string, documentId: string) => Promise<IgnoredDiagnostic[]>
 }
 
 export interface DocumentController {
@@ -54,7 +57,7 @@ export function createDocumentController(
     return (await dependencies.getWorkspaceService()).getActive().then((context) => context.workspace)
   }
 
-  function applyContext(context: DocumentContext): void {
+  async function applyContext(context: DocumentContext, workspace: Workspace): Promise<void> {
     const previousDocumentId = appState.activeDocumentId()
     const nextDocumentId = 'id' in context.document ? context.document.id : undefined
     if (previousDocumentId !== nextDocumentId) {
@@ -66,6 +69,21 @@ export function createDocumentController(
     appState.setActiveDocumentId(nextDocumentId)
     appState.setDocument(context.document.content, context.document.name, context.document.docType)
     appState.resetDiagnosticsForDocumentContext()
+    if (nextDocumentId !== undefined && workspace.storageMode === 'local-library' &&
+        dependencies.loadDurableIgnored !== undefined) {
+      try {
+        const loaded = await dependencies.loadDurableIgnored(workspace.id, nextDocumentId)
+        if (appState.activeWorkspaceId() === workspace.id &&
+            appState.activeDocumentId() === nextDocumentId) {
+          appState.replaceIgnoredForDocument(workspace.id, nextDocumentId, loaded)
+        }
+      } catch {
+        // Fail open for lint visibility. Never retain stale local ignores
+        // when persistent state could not be read.
+        appState.replaceIgnoredForDocument(workspace.id, nextDocumentId, [])
+        toast('warning', 'この文書の診断無視設定を読み込めなかったため、警告を表示します。')
+      }
+    }
     if (context.warning !== undefined) toast('warning', context.warning)
     relint()
   }
@@ -85,7 +103,7 @@ export function createDocumentController(
       appState.setDocumentLibraryReady(false)
       try {
         const context = await (await dependencies.getDocumentService()).resolveActive(workspace)
-        applyContext(context)
+        await applyContext(context, workspace)
       } finally {
         appState.setDocumentLibraryReady(true)
       }
@@ -125,7 +143,7 @@ export function createDocumentController(
         await controller.flushActiveDocument()
         const workspace = await activeWorkspace()
         const context = await (await dependencies.getDocumentService()).create(workspace)
-        applyContext(context)
+        await applyContext(context, workspace)
       })
     },
 
@@ -137,7 +155,7 @@ export function createDocumentController(
         await controller.flushActiveDocument()
         const workspace = await activeWorkspace()
         const context = await (await dependencies.getDocumentService()).rename(workspace, documentId, name)
-        applyContext(context)
+        await applyContext(context, workspace)
       })
     },
 
@@ -148,7 +166,7 @@ export function createDocumentController(
         const current = controller.currentEditableDocument()
         const workspace = await activeWorkspace()
         const context = await (await dependencies.getDocumentService()).switchTo(workspace, documentId, current)
-        applyContext(context)
+        await applyContext(context, workspace)
       })
     },
 
@@ -160,7 +178,7 @@ export function createDocumentController(
         const workspace = await activeWorkspace()
         const context = await (await dependencies.getDocumentService()).delete(workspace, documentId)
         appState.clearIgnoredDocument(workspace.id, documentId)
-        applyContext(context)
+        await applyContext(context, workspace)
       })
     },
 
@@ -180,7 +198,7 @@ export function createDocumentController(
           docType: documentTypeForFile(file.name),
           content: normalizeLineEndings(raw)
         })
-        applyContext(context)
+        await applyContext(context, workspace)
         toast('success', `${file.name} をドキュメントライブラリへ追加しました。`)
       })
     },

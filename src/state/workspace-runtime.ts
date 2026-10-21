@@ -5,6 +5,7 @@ import { createDocumentController } from './document-controller'
 import { createHistoryController } from './history-controller'
 import { lintController } from './lint-controller'
 import { createWorkspaceController } from './workspace-controller'
+import { readDocumentIgnores } from '../storage/document-ignore-store'
 
 const relint = (): void => lintController.relintAll()
 const toast = (kind: Parameters<typeof appState.pushToast>[0], message: string): void => {
@@ -21,7 +22,12 @@ export const documentController = createDocumentController({
   getWorkspaceService: applicationRuntime.getWorkspaceService,
   relint,
   toast,
-  cancelPendingDocumentPersistence
+  cancelPendingDocumentPersistence,
+  loadDurableIgnored: async (workspaceId, documentId) => {
+    const context = await applicationRuntime.getStorageContext()
+    if (!context.durable || !context.db) return []
+    return readDocumentIgnores(context.db, workspaceId, documentId)
+  }
 })
 
 /** Application-wide History controller sharing the same snapshot/session runtime. */

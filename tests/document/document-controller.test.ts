@@ -3,10 +3,14 @@ import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
 import { createDocumentService } from '../../src/document/document-service'
 import { createSessionDocumentLibraryStore } from '../../src/document/session-document-library'
 import type { Workspace } from '../../src/core/workspace/types'
+import type { IgnoredDiagnostic } from '../../src/state/ignored-diagnostics'
 import { createMemoryStorageContext } from '../../src/storage/repositories/memory'
 import { createWorkspaceService } from '../../src/workspace/workspace-service'
 
-async function harness(mode: 'private-session' | 'local-library' = 'private-session') {
+async function harness(
+  mode: 'private-session' | 'local-library' = 'private-session',
+  loadDurableIgnored?: (workspaceId: string, documentId: string) => Promise<IgnoredDiagnostic[]>
+) {
   vi.resetModules()
   const [{ appState }, { createDocumentController }] = await Promise.all([
     import('../../src/state/app-state'),
@@ -44,6 +48,7 @@ async function harness(mode: 'private-session' | 'local-library' = 'private-sess
     relint,
     toast,
     cancelPendingDocumentPersistence,
+    loadDurableIgnored,
     now: () => 5000
   })
   return {
@@ -112,6 +117,54 @@ describe('DocumentController bootstrap', () => {
     expect(appState.selectedDiagnosticId()).toBeNull()
     expect(appState.tierResults.fast).toBeUndefined()
     expect(relint).toHaveBeenCalledTimes(1)
+  })
+
+  it('hydrates persistent Local Library ignores on bootstrap and document navigation', async () => {
+    const ignored: IgnoredDiagnostic = {
+      key: JSON.stringify(['core', 'wording/common-typo', 'A']),
+      source: 'core',
+      ruleId: 'wording/common-typo',
+      excerpt: 'A'
+    }
+    const load = vi.fn(async (_workspaceId: string, docId: string) =>
+      docId === 'doc-a' ? [ignored] : []
+    )
+    const { appState, controller, memory, state } = await harness('local-library', load)
+    await seedLocalDocuments(memory, state.workspace)
+    appState.setActiveWorkspaceId(state.workspace.id)
+    await controller.bootstrapForWorkspace(state.workspace)
+    expect(appState.ignoredForActiveDocument()).toEqual([ignored])
+
+    await controller.switchDocument('doc-b')
+    expect(appState.ignoredForActiveDocument()).toEqual([])
+    await controller.switchDocument('doc-a')
+    expect(appState.ignoredForActiveDocument()).toEqual([ignored])
+    expect(load).toHaveBeenCalledWith(state.workspace.id, 'doc-a')
+    expect(load).toHaveBeenCalledWith(state.workspace.id, 'doc-b')
+  })
+
+  it('never loads a durable ignored warning in Private Session', async () => {
+    const load = vi.fn(async () => [{
+      key: JSON.stringify(['core', 'wording/common-typo', 'A']),
+      source: 'core' as const, ruleId: 'wording/common-typo', excerpt: 'A'
+    }])
+    const { controller, state } = await harness('private-session', load)
+    await controller.bootstrapForWorkspace(state.workspace)
+    expect(load).not.toHaveBeenCalled()
+  })
+
+  it('shows warnings when durable ignores cannot be loaded, rather than reusing stale state', async () => {
+    const failed = vi.fn(async (): Promise<IgnoredDiagnostic[]> => { throw new Error('Failed read') })
+    const { controller, state, memory, appState, toast } = await harness('local-library', failed)
+    await seedLocalDocuments(memory, state.workspace)
+    appState.setActiveWorkspaceId(state.workspace.id)
+    appState.replaceIgnoredForDocument(state.workspace.id, 'doc-a', [{
+      key: JSON.stringify(['core', 'wording/common-typo', 'A']),
+      source: 'core', ruleId: 'wording/common-typo', excerpt: 'A'
+    }])
+    await controller.bootstrapForWorkspace(state.workspace)
+    expect(appState.ignoredForActiveDocument()).toEqual([])
+    expect(toast).toHaveBeenCalledWith('warning', expect.stringContaining('読み込めなかった'))
   })
 
   it('creates a Private Session welcome document without durable document or selection writes', async () => {

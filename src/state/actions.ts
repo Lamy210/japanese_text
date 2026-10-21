@@ -6,6 +6,8 @@ import type { Diagnostic, DocumentType } from '../core/types'
 import type { AppConfig, PresetId, ThemeMode } from '../core/config/schema'
 import { generateId } from '../core/config/schema'
 import { createAllowedTypoTerm } from '../core/rules/fast/common-typo'
+import { createIgnoredDiagnostic, MAX_IGNORED_PER_DOCUMENT } from './ignored-diagnostics'
+import { replaceDocumentIgnores } from '../storage/document-ignore-store'
 import type { Workspace } from '../core/workspace/types'
 import type { EditableDocument } from '../document/types'
 import { formatDocument as formatDocumentCore } from '../core/formatter/formatter'
@@ -47,21 +49,96 @@ export function allowDiagnosticSpelling(diagnostic: Diagnostic): boolean {
   return true
 }
 
-/** Session-only, per-document rule+exact-text suppression. */
-export function ignoreDiagnosticForDocument(diagnostic: Diagnostic): boolean {
-  if (!appState.ignoreDiagnosticForCurrentDocument(diagnostic)) {
-    appState.pushToast('warning', '診断結果が古いか、この警告は既に無視されています。')
-    return false
-  }
-  appState.pushToast('success', 'この文書で同じ警告を無視しました（このタブ内のみ）。')
-  return true
+/**
+ * Session-only for Private Session. In Local Library, commit to IndexedDB
+ * BEFORE reflecting the change in UI; failed writes never silently appear
+ * saved. Serializing ignore/restore prevents lost concurrent updates.
+ */
+let ignoreWritePending = false
+
+async function durableIgnoreContext(): Promise<
+  { workspaceId: string; documentId: string; db: IDBDatabase } | null
+> {
+  const workspaceId = appState.activeWorkspaceId()
+  const documentId = appState.activeDocumentId()
+  if (!workspaceId || !documentId) return null
+  const { applicationRuntime } = await import('./application-runtime')
+  const current = await (await applicationRuntime.getWorkspaceService()).getActive()
+  if (current.workspace.id !== workspaceId || appState.activeDocumentId() !== documentId ||
+      appState.activeWorkspaceId() !== workspaceId) return null
+  if (current.workspace.storageMode !== 'local-library') return null
+  const storage = await applicationRuntime.getStorageContext()
+  if (!storage.durable || !storage.db) throw new Error('Local Library storage is unavailable')
+  return { workspaceId, documentId, db: storage.db }
 }
 
-/** Restore a session-only suppression, without editing the document. */
-export function restoreDocumentDiagnostic(key: string): boolean {
-  if (!appState.restoreIgnoredForCurrentDocument(key)) return false
-  appState.pushToast('success', 'この文書の警告を再表示しました。')
-  return true
+function isCurrentDiagnostic(d: Diagnostic): boolean {
+  return appState.diagnostics().some(item =>
+    item.id === d.id && item.ruleId === d.ruleId && item.source === d.source &&
+    item.start === d.start && item.end === d.end
+  )
+}
+
+/** Ignore an exact rule+text match in the current document, with durable Local Library storage. */
+export async function ignoreDiagnosticForDocument(diagnostic: Diagnostic): Promise<boolean> {
+  if (ignoreWritePending) return false
+  const workspaceId = appState.activeWorkspaceId()
+  const documentId = appState.activeDocumentId()
+  const revision = appState.revision()
+  const entry = createIgnoredDiagnostic(diagnostic, appState.documentText())
+  if (!workspaceId || !documentId || !entry || !isCurrentDiagnostic(diagnostic)) return false
+  const existing = appState.ignoredForActiveDocument()
+  if (existing.length >= MAX_IGNORED_PER_DOCUMENT || existing.some(item => item.key === entry.key)) return false
+  ignoreWritePending = true
+  try {
+    const ctx = await durableIgnoreContext()
+    if (ctx !== null) {
+      if (workspaceId !== ctx.workspaceId || documentId !== ctx.documentId ||
+          revision !== appState.revision() || !isCurrentDiagnostic(diagnostic)) return false
+      await replaceDocumentIgnores(ctx.db, workspaceId, documentId, [...existing, entry])
+    } else if (appState.activeWorkspaceId() !== workspaceId ||
+               appState.activeDocumentId() !== documentId || revision !== appState.revision()) return false
+    const accepted = appState.activeWorkspaceId() === workspaceId &&
+      appState.activeDocumentId() === documentId &&
+      appState.ignoreDiagnosticForCurrentDocument(diagnostic)
+    if (accepted) appState.pushToast('success',
+      ctx === null ? 'この文書で無視しました（このタブ内のみ）。' : 'この文書の無視設定をLocal Libraryへ保存しました。')
+    return accepted
+  } catch (error) {
+    appState.pushToast('error', `無視設定を保存できませんでした: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  } finally {
+    ignoreWritePending = false
+  }
+}
+
+/** Restore an ignored diagnostic, and remove durable data before updating the UI. */
+export async function restoreDocumentDiagnostic(key: string): Promise<boolean> {
+  if (ignoreWritePending) return false
+  const workspaceId = appState.activeWorkspaceId()
+  const documentId = appState.activeDocumentId()
+  if (!workspaceId || !documentId) return false
+  const existing = appState.ignoredForActiveDocument()
+  if (!existing.some(item => item.key === key)) return false
+  ignoreWritePending = true
+  try {
+    const ctx = await durableIgnoreContext()
+    if (ctx !== null) {
+      if (workspaceId !== ctx.workspaceId || documentId !== ctx.documentId) return false
+      await replaceDocumentIgnores(ctx.db, workspaceId, documentId, existing.filter(item => item.key !== key))
+    } else if (appState.activeWorkspaceId() !== workspaceId ||
+               appState.activeDocumentId() !== documentId) return false
+    const restored = appState.activeWorkspaceId() === workspaceId &&
+      appState.activeDocumentId() === documentId &&
+      appState.restoreIgnoredForCurrentDocument(key)
+    if (restored) appState.pushToast('success', 'この文書の警告を再表示しました。')
+    return restored
+  } catch (error) {
+    appState.pushToast('error', `無視解除を保存できませんでした: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  } finally {
+    ignoreWritePending = false
+  }
 }
 
 export function jumpToDiagnostic(diagnostic: Diagnostic): void {
