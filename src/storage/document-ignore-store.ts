@@ -63,8 +63,7 @@ function readRecord(raw: unknown, prefix: string, documentId: string): IgnoredDi
       key: JSON.stringify([source, row.ruleId, excerpt])
     }
     assertEntry(item)
-    return row.id === idFor(JSON.parse(prefix.slice(PREFIX.length, -1))[0], documentId, item.key)
-      ? item : null
+    return row.id === prefix + item.key ? item : null
   } catch {
     return null
   }
