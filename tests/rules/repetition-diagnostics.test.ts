@@ -98,6 +98,18 @@ describe('consecutive Japanese conjunctions', () => {
     expect(check(conjunctionId, text)).toEqual([])
   })
 
+  test('does not connect repeated conjunctions across intervening quoted sentences', () => {
+    const text = 'しかし、雨です。「しかし、これは引用です。」しかし、風です。'
+    expect(check(conjunctionId, text)).toEqual([])
+    expect(check(conjunctionId, 'しかし、雨です。『しかし、例です。』しかし、風です。')).toEqual([])
+  })
+
+  test('keeps multi-line quoted speech outside of both diagnostics', () => {
+    const text = 'しかし、雨です。\n「しかし、引用が始まります。\nしかし、続きます。」\nしかし、風です。'
+    expect(check(conjunctionId, text)).toEqual([])
+    expect(check(phraseId, '「について、\nについて」')).toEqual([])
+  })
+
   test('reports the second of three consecutive connectors and preserves no-fix semantics', () => {
     const text = 'しかし、雨です。しかし、風です。しかし、寒いです。'
     const results = check(conjunctionId, text)
