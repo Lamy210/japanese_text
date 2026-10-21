@@ -159,6 +159,7 @@ export function createDocumentController(
         cancelPendingDocumentPersistence()
         const workspace = await activeWorkspace()
         const context = await (await dependencies.getDocumentService()).delete(workspace, documentId)
+        appState.clearIgnoredDocument(workspace.id, documentId)
         applyContext(context)
       })
     },
