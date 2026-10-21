@@ -9,6 +9,7 @@ import { alnumWidthRule } from '../fast/alnum-width'
 import { createNgWordRule } from '../fast/ng-word'
 import { createTerminologyRule } from '../fast/terminology'
 import { redundancyRule } from '../fast/redundancy'
+import { commonTypoRule } from '../fast/common-typo'
 import { nominalizedActionRule } from '../fast/nominalized-action'
 import { repeatedPhraseRule, consecutiveConjunctionRule, additiveConjunctionDensityRule } from '../fast/repeated-expression'
 import { doubleHonorificRule } from '../fast/double-honorific'
@@ -46,6 +47,7 @@ function buildBuiltinRules(config: RuntimeRulesConfig): CoreRule[] {
     createNgWordRule(() => config.ngWords),
     createTerminologyRule(() => config.terminology),
     redundancyRule,
+    commonTypoRule,
     nominalizedActionRule,
     repeatedPhraseRule,
     doubleHonorificRule,

@@ -15,6 +15,7 @@ const nativeRuleIds = [
   'typography/full-width-space', 'typography/unnecessary-space',
   'typography/punctuation', 'typography/brackets', 'typography/alnum-width',
   'wording/ng-word', 'wording/terminology', 'wording/redundancy',
+  'wording/common-typo',
   'wording/nominalized-action',
   'wording/repeated-phrase',
   'wording/double-honorific', 'wording/ambiguity',
