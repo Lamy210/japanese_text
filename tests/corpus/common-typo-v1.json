@@ -1,0 +1,344 @@
+{
+  "schemaVersion": 1,
+  "description": "Small manually curated synthetic examples for exact-span regression; NOT an unbiased estimate of proofreading precision.",
+  "cases": [
+    {
+      "id": "simple-1",
+      "group": "positive",
+      "text": "本文でシュミレーションを確認します。",
+      "expected": [
+        {
+          "surface": "シュミレーション",
+          "occurrence": 1,
+          "replacement": "シミュレーション"
+        }
+      ]
+    },
+    {
+      "id": "correct-1",
+      "group": "negative",
+      "text": "本文でシミュレーションを確認します。",
+      "expected": []
+    },
+    {
+      "id": "simple-2",
+      "group": "positive",
+      "text": "本文でコミニュケーションを確認します。",
+      "expected": [
+        {
+          "surface": "コミニュケーション",
+          "occurrence": 1,
+          "replacement": "コミュニケーション"
+        }
+      ]
+    },
+    {
+      "id": "correct-2",
+      "group": "negative",
+      "text": "本文でコミュニケーションを確認します。",
+      "expected": []
+    },
+    {
+      "id": "simple-3",
+      "group": "positive",
+      "text": "本文でデバックを確認します。",
+      "expected": [
+        {
+          "surface": "デバック",
+          "occurrence": 1,
+          "replacement": "デバッグ"
+        }
+      ]
+    },
+    {
+      "id": "correct-3",
+      "group": "negative",
+      "text": "本文でデバッグを確認します。",
+      "expected": []
+    },
+    {
+      "id": "simple-4",
+      "group": "positive",
+      "text": "本文でうる覚えを確認します。",
+      "expected": [
+        {
+          "surface": "うる覚え",
+          "occurrence": 1,
+          "replacement": "うろ覚え"
+        }
+      ]
+    },
+    {
+      "id": "correct-4",
+      "group": "negative",
+      "text": "本文でうろ覚えを確認します。",
+      "expected": []
+    },
+    {
+      "id": "simple-5",
+      "group": "positive",
+      "text": "本文でコミニュティを確認します。",
+      "expected": [
+        {
+          "surface": "コミニュティ",
+          "occurrence": 1,
+          "replacement": "コミュニティ"
+        }
+      ]
+    },
+    {
+      "id": "correct-5",
+      "group": "negative",
+      "text": "本文でコミュニティを確認します。",
+      "expected": []
+    },
+    {
+      "id": "simple-6",
+      "group": "positive",
+      "text": "本文でアクセサビリティを確認します。",
+      "expected": [
+        {
+          "surface": "アクセサビリティ",
+          "occurrence": 1,
+          "replacement": "アクセシビリティ"
+        }
+      ]
+    },
+    {
+      "id": "correct-6",
+      "group": "negative",
+      "text": "本文でアクセシビリティを確認します。",
+      "expected": []
+    },
+    {
+      "id": "simple-7",
+      "group": "positive",
+      "text": "本文でシュミレーターを確認します。",
+      "expected": [
+        {
+          "surface": "シュミレーター",
+          "occurrence": 1,
+          "replacement": "シミュレーター"
+        }
+      ]
+    },
+    {
+      "id": "correct-7",
+      "group": "negative",
+      "text": "本文でシミュレーターを確認します。",
+      "expected": []
+    },
+    {
+      "id": "simple-8",
+      "group": "positive",
+      "text": "本文でシュミレータを確認します。",
+      "expected": [
+        {
+          "surface": "シュミレータ",
+          "occurrence": 1,
+          "replacement": "シミュレータ"
+        }
+      ]
+    },
+    {
+      "id": "correct-8",
+      "group": "negative",
+      "text": "本文でシミュレータを確認します。",
+      "expected": []
+    },
+    {
+      "id": "unicode-multiple",
+      "group": "unicode",
+      "text": "🎯コミニュティとデバックとシュミレータについて検証します。",
+      "expected": [
+        {
+          "surface": "コミニュティ",
+          "occurrence": 1,
+          "replacement": "コミュニティ"
+        },
+        {
+          "surface": "デバック",
+          "occurrence": 1,
+          "replacement": "デバッグ"
+        },
+        {
+          "surface": "シュミレータ",
+          "occurrence": 1,
+          "replacement": "シミュレータ"
+        }
+      ]
+    },
+    {
+      "id": "multi-occurrence",
+      "group": "positive",
+      "text": "デバックして、デバックして、再実行します。",
+      "expected": [
+        {
+          "surface": "デバック",
+          "occurrence": 1,
+          "replacement": "デバッグ"
+        },
+        {
+          "surface": "デバック",
+          "occurrence": 2,
+          "replacement": "デバッグ"
+        }
+      ]
+    },
+    {
+      "id": "compound",
+      "group": "positive",
+      "text": "コミニュティ活動とアクセサビリティ調査を進めます。",
+      "expected": [
+        {
+          "surface": "コミニュティ",
+          "occurrence": 1,
+          "replacement": "コミュニティ"
+        },
+        {
+          "surface": "アクセサビリティ",
+          "occurrence": 1,
+          "replacement": "アクセシビリティ"
+        }
+      ]
+    },
+    {
+      "id": "heading-list",
+      "group": "markdown",
+      "text": "# シュミレーターの使い方\n- コミニュティ運営",
+      "expected": [
+        {
+          "surface": "シュミレーター",
+          "occurrence": 1,
+          "replacement": "シミュレーター"
+        },
+        {
+          "surface": "コミニュティ",
+          "occurrence": 1,
+          "replacement": "コミュニティ"
+        }
+      ]
+    },
+    {
+      "id": "katakana-prefix",
+      "group": "negative",
+      "text": "スーパーシュミレータを確認します。",
+      "expected": []
+    },
+    {
+      "id": "katakana-suffix",
+      "group": "negative",
+      "text": "シュミレーターズについて説明します。",
+      "expected": []
+    },
+    {
+      "id": "latin-suffix",
+      "group": "negative",
+      "text": "シュミレータXという製品を説明します。",
+      "expected": []
+    },
+    {
+      "id": "latin-prefix",
+      "group": "negative",
+      "text": "Xシュミレータという製品を説明します。",
+      "expected": []
+    },
+    {
+      "id": "fenced-code",
+      "group": "masked",
+      "text": "```md\nアクセサビリティとデバック\n```",
+      "expected": []
+    },
+    {
+      "id": "inline-code",
+      "group": "masked",
+      "text": "`コミニュティ`です。",
+      "expected": []
+    },
+    {
+      "id": "comments",
+      "group": "masked",
+      "text": "<!-- シュミレーターを使います。 -->",
+      "expected": []
+    },
+    {
+      "id": "url",
+      "group": "masked",
+      "text": "[参照](https://example.com/コミニュティ)",
+      "expected": []
+    },
+    {
+      "id": "blockquote",
+      "group": "masked",
+      "text": "> アクセサビリティについて説明します。",
+      "expected": []
+    },
+    {
+      "id": "quotes",
+      "group": "masked",
+      "text": "「コミニュティ」と『シュミレータ』という文字列です。",
+      "expected": []
+    },
+    {
+      "id": "multiline-quote",
+      "group": "masked",
+      "text": "「デバック\nコミニュティ」\n本文でうる覚えと書きました。",
+      "expected": [
+        {
+          "surface": "うる覚え",
+          "occurrence": 1,
+          "replacement": "うろ覚え"
+        }
+      ]
+    },
+    {
+      "id": "preferred-override",
+      "group": "user-override",
+      "text": "デバックを起動します。",
+      "expected": [],
+      "terminology": [
+        {
+          "id": "pref",
+          "preferred": "デバック",
+          "rejected": [
+            "デバッグ"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rejected-override",
+      "group": "user-override",
+      "text": "コミニュティを更新します。",
+      "expected": [],
+      "terminology": [
+        {
+          "id": "rejected",
+          "preferred": "独自用語",
+          "rejected": [
+            "コミニュティ"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "overrides-independent",
+      "group": "user-override",
+      "text": "デバックとシュミレーションを実行します。",
+      "expected": [
+        {
+          "surface": "シュミレーション",
+          "occurrence": 1,
+          "replacement": "シミュレーション"
+        }
+      ],
+      "terminology": [
+        {
+          "id": "pref",
+          "preferred": "デバック",
+          "rejected": []
+        }
+      ]
+    }
+  ]
+}
