@@ -32,6 +32,9 @@ export function DiagnosticsPanel() {
   const diagnostics = () => appState.filteredDiagnostics()
   const ruleErrors = () => appState.activeRuleErrors()
   const ignored = () => appState.ignoredForActiveDocument()
+  const durable = () => appState.workspaceSummaries().some(w =>
+    w.id === appState.activeWorkspaceId() && w.storageMode === 'local-library'
+  ) && appState.storageAvailable()
 
   const filterTabs = createMemo(() => [
     { key: 'all' as const, label: 'すべて', count: counts().error + counts().warning + counts().info },
@@ -132,7 +135,9 @@ export function DiagnosticsPanel() {
                     <button
                       type="button"
                       class="btn btn-small"
-                      title="この文書で、同じルールと対象文字列の警告だけを無視（ページを再読み込みすると解除）"
+                      title={durable()
+                        ? "この文書で同じルール・文字列の警告を無視（このブラウザのLocal Libraryに保存）"
+                        : "この文書で同じルール・文字列の警告を無視（タブ内のみ）"}
                       onClick={(e) => {
                         e.stopPropagation()
                         ignoreDiagnosticForDocument(d)
@@ -163,7 +168,11 @@ export function DiagnosticsPanel() {
       <Show when={ignored().length > 0}>
         <section class="diagnostic-ignored" aria-label="この文書で無視した警告">
           <h3 class="panel-title">この文書で無視中（{ignored().length}件）</h3>
-          <p class="settings-note">このタブ内だけの設定です。再読み込み後は無視を解除します。</p>
+          <p class="settings-note">
+            {durable()
+              ? 'Local Library：無視したルール名・対象文字列をこのブラウザのIndexedDBに保存します。文書削除やPrivate Sessionへの変更で消去します。'
+              : 'Private Session：このタブ内だけの設定です。再読み込み後は無視を解除します。'}
+          </p>
           <ul class="entry-list">
             <For each={ignored()}>
               {(item) => (
