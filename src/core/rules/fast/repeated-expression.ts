@@ -101,3 +101,55 @@ export const consecutiveConjunctionRule: CoreRule = {
     return results
   }
 }
+
+
+/**
+ * Informational guidance for three consecutive sentence-initial additive
+ * connectives with different spellings. No semantic correctness inference.
+ */
+const INITIAL_ADDITIVE = /^[ \t　]*(また|さらに|加えて|そのうえ|あわせて)[、，]/u
+
+export const additiveConjunctionDensityRule: CoreRule = {
+  id: 'style/additive-conjunction-density',
+  category: 'style',
+  tier: 'fast',
+  defaultSeverity: 'info',
+  description:
+    '「また」「さらに」「加えて」など異なる追加の接続詞が3文連続した場合、表現の整理を促します。文法の誤りとは断定せず、自動修正は行いません。',
+  run(ctx: RuleContext): RawDiagnostic[] {
+    const results: RawDiagnostic[] = []
+    const text = withoutQuotedSpeech(ctx.maskedText)
+    let recent: string[] = []
+
+    for (let i = 0; i < ctx.lines.length; i++) {
+      const sourceLine = ctx.lines[i]!
+      if (shouldSkipLine(sourceLine)) {
+        recent = []
+        continue
+      }
+      const offset = ctx.lineStarts[i]!
+      const line = text.slice(offset, offset + sourceLine.length)
+      for (const sentence of line.matchAll(SENTENCES_IN_LINE)) {
+        const match = INITIAL_ADDITIVE.exec(sentence[0])
+        if (match === null) {
+          recent = []
+          continue
+        }
+        const connective = match[1]!
+        const group = [...recent, connective].slice(-3)
+        if (group.length === 3 && new Set(group).size === 3) {
+          const start = offset + sentence.index + match[0].length - connective.length - 1
+          results.push({
+            start,
+            end: start + connective.length,
+            message: '追加を表す接続詞が3文続いています。接続詞の省略や箇条書きへの整理を検討してください。'
+          })
+        }
+        recent = group.slice(-2)
+      }
+      // Do not infer a new sentence boundary from a soft line break.
+      if (!/[。！？!?][ \t　]*$/u.test(line)) recent = []
+    }
+    return results
+  }
+}
