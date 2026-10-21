@@ -73,17 +73,20 @@ const ignoredForActiveDocument = (): readonly IgnoredDiagnostic[] => {
 }
 
 const derived = createRoot(() => {
-  const diagnostics = createMemo<Diagnostic[]>(() => {
+  const allDiagnostics = createMemo<Diagnostic[]>(() => {
     const rev = revision()
     const merged: Diagnostic[] = []
     for (const tier of ['fast', 'deep', 'idle'] as const) {
       const result = tierResults[tier]
       if (result !== undefined && result.revision === rev) merged.push(...result.diagnostics)
     }
+    return merged.sort((a, b) => a.start - b.start || a.end - b.end || a.ruleId.localeCompare(b.ruleId))
+  })
+
+  const diagnostics = createMemo<Diagnostic[]>(() => {
     const ignored = ignoredForActiveDocument()
     const text = documentText()
-    return merged.filter((item) => !isIgnoredDiagnostic(item, text, ignored))
-      .sort((a, b) => a.start - b.start || a.end - b.end || a.ruleId.localeCompare(b.ruleId))
+    return allDiagnostics().filter((item) => !isIgnoredDiagnostic(item, text, ignored))
   })
 
   const filteredDiagnostics = createMemo<Diagnostic[]>(() => {
@@ -129,9 +132,9 @@ const derived = createRoot(() => {
     }
   })
 
-  return { diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings }
+  return { allDiagnostics, diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings }
 })
-const { diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings } = derived
+const { allDiagnostics, diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings } = derived
 
 const [config, setConfigState] = createStore<AppConfig>(createDefaultConfig())
 const [configLoaded, setConfigLoaded] = createSignal(false)
@@ -231,6 +234,7 @@ export const appState = {
   },
 
   diagnostics,
+  allDiagnostics,
   filteredDiagnostics,
   diagnosticCounts,
   ignoredForActiveDocument,
