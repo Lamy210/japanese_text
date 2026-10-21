@@ -6,7 +6,7 @@ const check = (text: string) => runSingleRule('wording/redundancy', text, testCo
 
 describe('review-only Japanese wording must not offer syntactically unsafe direct replacements', () => {
   test.each([
-    ['休ませていただきます。', 'させていただきます'],
+    ['来させていただきます。', 'させていただきます'],
     ['見させていただきます。', 'させていただきます'],
     ['参加させていただきます。', 'させていただきます'],
     ['ご確認させていただきます。', 'させていただきます'],
