@@ -2,6 +2,7 @@ import type { AppConfig } from '../core/config/schema'
 import type { SnapshotPolicy } from '../core/workspace/types'
 import type { StorageContext } from '../storage/bootstrap'
 import { getStorageContext } from '../storage/runtime'
+import { readDocumentIgnores } from '../storage/document-ignore-store'
 import {
   createStorageCapabilityService,
   type StorageCapability,
@@ -89,7 +90,12 @@ export function createWorkspaceController(
       relint,
       toast,
       cancelPendingDocumentPersistence,
-      now
+      now,
+      loadDurableIgnored: async (workspaceId, documentId) => {
+        const storage = await runtime.getStorageContext()
+        if (!storage.durable || !storage.db) return []
+        return readDocumentIgnores(storage.db, workspaceId, documentId)
+      }
     })
     return documentController
   }
@@ -261,6 +267,7 @@ export function createWorkspaceController(
         }
 
         applyContext(updated)
+        if (mode === 'private-session') appState.clearIgnoredWorkspace(workspaceId)
         await documents().bootstrapForWorkspace(updated.workspace)
         appState.setWorkspaceSummaries(await workspaceService.list())
       })
