@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createDefaultConfig } from '../../src/core/config/validate'
 import { runSingleRule, testConfig } from '../helpers'
 
@@ -25,6 +25,11 @@ beforeEach(() => {
   vi.useFakeTimers()
   expect(appState.loadConfigFrom(createDefaultConfig()).ok).toBe(true)
   appState.setDocument(phrase)
+})
+
+afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
 })
 
 describe('diagnostics panel action: allow intentional spelling', () => {
