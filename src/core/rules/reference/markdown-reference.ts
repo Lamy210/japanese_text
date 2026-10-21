@@ -47,14 +47,26 @@ let cacheValue: RefAnalysis | null = null
 function getAnalysis(ctx: RuleContext): RefAnalysis {
   if (cacheKey === ctx.text && cacheValue !== null) return cacheValue
 
-  /** 指定offsetがコード領域 (fenced block / inline code) 内か。
-   * 参照定義行は maskDocument により 'metadata' としてマスクされるが、
-   * このルールの解析対象そのもののためスキップしない (§21)。 */
-  const isInsideCode = (offset: number): boolean => {
-    for (const r of ctx.maskRegions) {
-      if (r.kind === 'code' && offset >= r.start && offset < r.end) return true
-    }
-    return false
+  // A metadata region can represent an actual reference-definition line,
+  // but frontmatter and HTML comments are not live Markdown definitions.
+  // maskDocument intentionally preserves reference-definition lines as metadata.
+  // Explicit comment spans also cover multiline comments whose definition-like
+  // lines were masked before the HTML comment pass.
+  const comments = [...ctx.text.matchAll(/<!--[\s\S]*?-->/g)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length
+  }))
+  const overlaps = (start: number, end: number, region: { start: number; end: number }) =>
+    region.start < end && start < region.end
+  const isNonProse = (start: number, end: number, allowDefinitionLine = false): boolean => {
+    if (comments.some((comment) => overlaps(start, end, comment))) return true
+    return ctx.maskRegions.some((region) => {
+      if (region.kind === 'url' || !overlaps(start, end, region)) return false
+      if (allowDefinitionLine && region.kind === 'metadata' && region.start === start && region.end === end) {
+        return false
+      }
+      return true
+    })
   }
 
   // ---- 定義行・見出しの解析 ----
@@ -64,10 +76,8 @@ function getAnalysis(ctx: RuleContext): RefAnalysis {
     const rawLine = ctx.lines[i]
     const lineStart = ctx.lineStarts[i]
     const lineEnd = lineStart + rawLine.length
-    if (isInsideCode(lineStart)) continue
-
     const defMatch = /^ {0,3}\[([^\]\n]+)\]:\s*(.*)$/.exec(rawLine)
-    if (defMatch !== null) {
+    if (defMatch !== null && !isNonProse(lineStart, lineEnd, true)) {
       const id = defMatch[1].trim()
       const rest = defMatch[2]
       definitions.push({
@@ -80,7 +90,7 @@ function getAnalysis(ctx: RuleContext): RefAnalysis {
     }
 
     const headMatch = /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(rawLine)
-    if (headMatch !== null) {
+    if (headMatch !== null && !isNonProse(lineStart, lineEnd)) {
       headings.push({ text: headMatch[1], line: i, lineStart, lineEnd })
     }
   }
@@ -103,7 +113,7 @@ function getAnalysis(ctx: RuleContext): RefAnalysis {
   const usageRe = /(!?)\[([^\]\n]*)\]\[([^\]\n]*)\]/g
   let m: RegExpExecArray | null
   while ((m = usageRe.exec(ctx.text)) !== null) {
-    if (isInsideCode(m.index)) continue
+    if (isNonProse(m.index, m.index + m[0].length)) continue
     const id = m[3].trim() !== '' ? m[3].trim() : m[2].trim()
     if (id !== '') usedIds.add(id)
   }
