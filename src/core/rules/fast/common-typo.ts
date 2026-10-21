@@ -1,0 +1,71 @@
+/**
+ * Small, deterministic, explicitly curated Japanese typo dictionary.
+ * No external dictionary or LLM. Suggestions require user confirmation.
+ */
+import type { CoreRule, RawDiagnostic, RuleContext } from '../../types'
+
+interface TypoEntry {
+  wrong: string
+  preferred: string
+}
+
+const TYPO_ENTRIES: readonly TypoEntry[] = [
+  { wrong: 'シュミレーション', preferred: 'シミュレーション' },
+  { wrong: 'コミニュケーション', preferred: 'コミュニケーション' },
+  { wrong: 'デバック', preferred: 'デバッグ' },
+  { wrong: 'うる覚え', preferred: 'うろ覚え' }
+]
+
+// Avoid changing proper-name-like Katakana extensions (e.g. a product name
+// containing the suspicious spelling). Limit this to Katakana entries.
+const KATAKANA = /[\u30A0-\u30FF\u31F0-\u31FFー]/u
+const QUOTED = /「[^」]*(?:」|$)|『[^』]*(?:』|$)/gu
+
+function withoutQuotes(text: string): string {
+  return text.replace(QUOTED, (quote) => '\uFFFF'.repeat(quote.length))
+}
+
+function isBlockQuote(sourceLine: string): boolean {
+  return /^ {0,3}>/u.test(sourceLine)
+}
+
+export const commonTypoRule: CoreRule = {
+  id: 'wording/common-typo',
+  category: 'wording',
+  tier: 'fast',
+  defaultSeverity: 'info',
+  description:
+    'よくある日本語の誤字・誤表記について、小規模な辞書を使って訂正候補を提示します。引用・コード・URLなどを除外し、自動修正はしません。ブランド名や固有名詞は利用者が確認してください。',
+  run(ctx: RuleContext): RawDiagnostic[] {
+    const text = withoutQuotes(ctx.maskedText)
+    const results: RawDiagnostic[] = []
+
+    for (let i = 0; i < ctx.lines.length; i++) {
+      const lineStart = ctx.lineStarts[i]!
+      const sourceLine = ctx.lines[i]!
+      if (isBlockQuote(sourceLine)) continue
+      const line = text.slice(lineStart, lineStart + sourceLine.length)
+
+      for (const entry of TYPO_ENTRIES) {
+        let from = 0
+        while (true) {
+          const idx = line.indexOf(entry.wrong, from)
+          if (idx < 0) break
+          from = idx + entry.wrong.length
+          if (KATAKANA.test(entry.wrong) &&
+            (KATAKANA.test(line[idx - 1] ?? '') || KATAKANA.test(line[from] ?? ''))) {
+            continue
+          }
+          results.push({
+            start: lineStart + idx,
+            end: lineStart + from,
+            fixKind: 'suggestion',
+            replacement: entry.preferred,
+            message: `「${entry.wrong}」は誤表記の可能性があります。「${entry.preferred}」への修正を検討してください。固有名詞や引用の場合は原文を確認してください。`
+          })
+        }
+      }
+    }
+    return results.sort((a, b) => a.start - b.start || a.end - b.end)
+  }
+}
