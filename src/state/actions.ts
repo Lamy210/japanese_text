@@ -4,6 +4,8 @@
 
 import type { Diagnostic, DocumentType } from '../core/types'
 import type { AppConfig, PresetId, ThemeMode } from '../core/config/schema'
+import { generateId } from '../core/config/schema'
+import { createAllowedTypoTerm } from '../core/rules/fast/common-typo'
 import type { Workspace } from '../core/workspace/types'
 import type { EditableDocument } from '../document/types'
 import { formatDocument as formatDocumentCore } from '../core/formatter/formatter'
@@ -23,6 +25,26 @@ export function quickFix(diagnostic: Diagnostic): void {
   if (diagnostic.replacement === undefined) return
   applyReplacement(diagnostic.start, diagnostic.end, diagnostic.replacement, 'input.quickfix')
   appState.pushToast('success', '修正を適用しました。')
+}
+
+/** Accept a highlighted curated typo as intentional terminology, not as a text edit. */
+export function allowDiagnosticSpelling(diagnostic: Diagnostic): boolean {
+  const entry = createAllowedTypoTerm(
+    diagnostic,
+    appState.documentText(),
+    appState.config.terminology,
+    generateId('typo-allowed')
+  )
+  if (entry === null) {
+    appState.pushToast('warning', '古い診断結果か、既に用語集へ登録された表記です。再解析結果を確認してください。')
+    return false
+  }
+  appState.addTerm(entry)
+  // A previous asynchronous Worker result is invalid after the vocabulary change.
+  appState.invalidateAnalysisForConfigChange()
+  persistAndRelint()
+  appState.pushToast('success', `「${entry.preferred}」を許可しました。設定の用語集から解除できます。`)
+  return true
 }
 
 export function jumpToDiagnostic(diagnostic: Diagnostic): void {
