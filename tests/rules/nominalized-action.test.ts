@@ -27,6 +27,19 @@ describe('nominalized-action writing guidance', () => {
     expect(result[0]?.replacement).toBeUndefined()
   })
 
+  test.each([
+    ['確認を実施します。', '確認します'],
+    ['検討を行いました。', '検討しました'],
+    ['分析を実施する。', '分析する'],
+    ['評価を行った。', '評価した']
+  ])('illustrates an inflected concise alternative without applying it: %s', (input, example) => {
+    const d = scan(input)
+    expect(d).toHaveLength(1)
+    expect(d[0]!.message).toContain(`「${example}」`)
+    expect(d[0]!.replacement).toBeUndefined()
+    expect(d[0]!.fixKind).toBe('none')
+  })
+
   test('reports all separate spans in a multi-sentence text, with exact UTF-16 offsets', () => {
     const text = '📊確認を実施します。検証を行いました。'
     const result = scan(text)
