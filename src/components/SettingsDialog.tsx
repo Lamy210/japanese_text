@@ -89,7 +89,7 @@ export function SettingsDialog() {
       .split(/[,、\n]/)
       .map((s) => s.trim())
       .filter((s) => s !== '')
-    if (preferred === '' || rejected.length === 0) return
+    if (preferred === '') return
     appState.addTerm({ id: generateId('term'), preferred, rejected, caseSensitive: /[A-Za-z]/.test(preferred) })
     setTermPreferred('')
     setTermRejected('')
@@ -297,7 +297,7 @@ export function SettingsDialog() {
             <Show when={appState.settingsTab() === 'terminology'}>
               <div class="settings-section">
                 <p class="settings-note">
-                  同一概念の表記を統一します (§16)。Rejected表記が検出された場合、Preferred表記へのSafe Fixを提示します。
+                  同一概念の表記を統一します (§16)。却下表記は任意です。推奨表記だけを登録すると、内蔵誤字辞書の例外として使用できます。却下表記がある場合は推奨表記へのSafe Fixを提示します。
                 </p>
                 <div class="entry-form">
                   <input
@@ -308,7 +308,7 @@ export function SettingsDialog() {
                   />
                   <input
                     type="text"
-                    placeholder="却下表記 (カンマ区切り, 例: Github, github)"
+                    placeholder="却下表記（任意・カンマ区切り）"
                     value={termRejected()}
                     onInput={(e) => setTermRejected(e.currentTarget.value)}
                   />
@@ -316,7 +316,7 @@ export function SettingsDialog() {
                     type="button"
                     class="btn"
                     onClick={addTerm}
-                    disabled={termPreferred().trim() === '' || termRejected().trim() === ''}
+                    disabled={termPreferred().trim() === ''}
                   >
                     追加
                   </button>
@@ -326,8 +326,13 @@ export function SettingsDialog() {
                     {(entry) => (
                       <li class="entry-item">
                         <code>{entry.preferred}</code>
-                        <span class="fix-arrow">←</span>
-                        <code>{entry.rejected.join(', ')}</code>
+                        <Show
+                          when={entry.rejected.length > 0}
+                          fallback={<span class="position">誤字辞書の例外（正式表記）</span>}
+                        >
+                          <span class="fix-arrow">←</span>
+                          <code>{entry.rejected.join(', ')}</code>
+                        </Show>
                         <button
                           type="button"
                           class="btn btn-icon"
