@@ -22,7 +22,7 @@ function shouldSkipLine(line: string): boolean {
 
 /** Mask inline quotation spans across lines, retaining UTF-16 offsets. */
 function withoutQuotedSpeech(maskedText: string): string {
-  return maskedText.replace(/「[^」]*(?:」|$)|『[^』]*(?:』|$)/gu, (quoted) => ' '.repeat(quoted.length))
+  return maskedText.replace(/「[^」]*(?:」|$)|『[^』]*(?:』|$)/gu, (quoted) => '\uFFFF'.repeat(quoted.length))
 }
 
 export const repeatedPhraseRule: CoreRule = {
