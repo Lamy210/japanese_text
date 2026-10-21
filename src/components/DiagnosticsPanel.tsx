@@ -11,7 +11,8 @@
 import { For, Show, createMemo } from 'solid-js'
 import type { Diagnostic } from '../core/types'
 import { appState } from '../state/app-state'
-import { allowDiagnosticSpelling, jumpToDiagnostic, quickFix } from '../state/actions'
+import { allowDiagnosticSpelling, ignoreDiagnosticForDocument, restoreDocumentDiagnostic, jumpToDiagnostic, quickFix } from '../state/actions'
+import { createIgnoredDiagnostic } from '../state/ignored-diagnostics'
 
 const SEVERITY_META: Record<string, { icon: string; label: string }> = {
   error: { icon: '✕', label: 'Error' },
@@ -30,6 +31,7 @@ export function DiagnosticsPanel() {
   const filter = () => appState.severityFilter()
   const diagnostics = () => appState.filteredDiagnostics()
   const ruleErrors = () => appState.activeRuleErrors()
+  const ignored = () => appState.ignoredForActiveDocument()
 
   const filterTabs = createMemo(() => [
     { key: 'all' as const, label: 'すべて', count: counts().error + counts().warning + counts().info },
@@ -125,6 +127,20 @@ export function DiagnosticsPanel() {
                       </button>
                     </div>
                   </Show>
+                  <Show when={appState.activeDocumentId() !== undefined &&
+                    createIgnoredDiagnostic(d, appState.documentText()) !== null}>
+                    <button
+                      type="button"
+                      class="btn btn-small"
+                      title="この文書で、同じルールと対象文字列の警告だけを無視（ページを再読み込みすると解除）"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        ignoreDiagnosticForDocument(d)
+                      }}
+                    >
+                      この文書で同じ警告を無視
+                    </button>
+                  </Show>
                   <Show when={d.ruleId === 'wording/common-typo' && d.fixKind === 'suggestion'}>
                     <button
                       type="button"
@@ -144,6 +160,30 @@ export function DiagnosticsPanel() {
           </For>
         </Show>
       </div>
+      <Show when={ignored().length > 0}>
+        <section class="diagnostic-ignored" aria-label="この文書で無視した警告">
+          <h3 class="panel-title">この文書で無視中（{ignored().length}件）</h3>
+          <p class="settings-note">このタブ内だけの設定です。再読み込み後は無視を解除します。</p>
+          <ul class="entry-list">
+            <For each={ignored()}>
+              {(item) => (
+                <li class="entry-item">
+                  <code>{item.ruleId}</code>
+                  <span class="position">「{item.excerpt}」</span>
+                  <button
+                    type="button"
+                    class="btn btn-small"
+                    aria-label={`「${item.excerpt}」の無視を解除`}
+                    onClick={() => restoreDocumentDiagnostic(item.key)}
+                  >
+                    再表示
+                  </button>
+                </li>
+              )}
+            </For>
+          </ul>
+        </section>
+      </Show>
     </aside>
   )
 }
