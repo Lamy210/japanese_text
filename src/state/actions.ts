@@ -123,7 +123,9 @@ export async function formatDocumentAction(): Promise<void> {
     return
   }
 
-  const errorsBefore = diagnostics.filter((d) => d.severity === 'error').length
+  // Shadow lint returns the full diagnostics. Compare raw with raw so that
+  // deliberately hidden errors do not look like *new* errors after formatting.
+  const errorsBefore = appState.allDiagnostics().filter((d) => d.severity === 'error').length
   try {
     const shadow = await lintController.lintShadowText(plan.text)
     const shadowDiags: Diagnostic[] = []
