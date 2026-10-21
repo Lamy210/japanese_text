@@ -2,7 +2,7 @@
  * Small, deterministic, explicitly curated Japanese typo dictionary.
  * No external dictionary or LLM. Suggestions require user confirmation.
  */
-import type { CoreRule, RawDiagnostic, RuleContext } from '../../types'
+import type { CoreRule, RawDiagnostic, RuleContext, Diagnostic } from '../../types'
 import type { TermEntry } from '../../config/schema'
 
 interface TypoEntry {
@@ -39,6 +39,31 @@ function isBlockQuote(sourceLine: string): boolean {
  * guidance for a spelling that the user explicitly prefers or manages as a
  * rejected custom terminology variant.
  */
+/**
+ * Register the exact visible typo spelling as intentional user terminology.
+ * Never trust a stale UI diagnostic or arbitrary replacement text.
+ * A preferred-only entry is already supported by AppConfig schema v1 and
+ * can be removed from the normal terminology Settings tab.
+ */
+export function createAllowedTypoTerm(
+  diagnostic: Pick<Diagnostic, 'ruleId' | 'start' | 'end' | 'fixKind' | 'replacement'>,
+  text: string,
+  terms: readonly TermEntry[],
+  id: string
+): TermEntry | null {
+  if (diagnostic.ruleId !== 'wording/common-typo' || diagnostic.fixKind !== 'suggestion') return null
+  if (typeof id !== 'string' || !id.trim() || terms.length >= 500 || terms.some(term => term.id === id)) return null
+  if (!Number.isSafeInteger(diagnostic.start) || !Number.isSafeInteger(diagnostic.end) ||
+      diagnostic.start < 0 || diagnostic.end <= diagnostic.start || diagnostic.end > text.length) return null
+
+  const spelling = text.slice(diagnostic.start, diagnostic.end)
+  const pair = TYPO_ENTRIES.find(entry => entry.wrong === spelling)
+  if (!pair || diagnostic.replacement !== pair.preferred) return null
+  if (terms.some(term => term.preferred === spelling || term.rejected.includes(spelling))) return null
+
+  return { id, preferred: spelling, rejected: [], caseSensitive: true }
+}
+
 export function createCommonTypoRule(terminology: () => readonly TermEntry[]): CoreRule {
   return {
     id: 'wording/common-typo',
