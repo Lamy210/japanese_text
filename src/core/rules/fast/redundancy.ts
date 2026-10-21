@@ -2,17 +2,18 @@
  * 冗長表現ルール — 仕様書 §3.1 (冗長表現)
  *
  * wording/redundancy: 決定論的な辞書ベースで冗長表現を検出する。
- * 明確に安全なもののみ Safe Fix、それ以外は Suggestion。
+ * 明確に安全なもののみ Safe Fix。変更が文脈に依存する場合は診断のみ（Quick Fixなし）。
  */
 
 import type { CoreRule, RawDiagnostic } from '../../types'
 
-interface RedundancyEntry {
+type RedundancyEntry = {
   pattern: RegExp
-  replacement?: string
-  fixKind: 'safe' | 'suggestion' | 'none'
   message: string
-}
+} & (
+  | { fixKind: 'safe' | 'suggestion'; replacement: string }
+  | { fixKind: 'none'; replacement?: never }
+)
 
 const ENTRIES: RedundancyEntry[] = [
   {
@@ -80,7 +81,7 @@ export const redundancyRule: CoreRule = {
   category: 'wording',
   tier: 'fast',
   description:
-    '辞書ベースで冗長な表現を検出します (例: 「〜することができる」→「〜できる」、「致します」→「します」)。表記ゆれ (行なう/出来る) は Safe Fix、意味が変わる可能性のあるものは Suggestion として提示します。',
+    '辞書ベースで冗長な表現を検出します (例: 「〜することができる」→「〜できる」、「致します」→「します」)。表記ゆれ (行なう/出来る) は Safe Fix、文脈依存の言い換えは提案のみで置換候補を出さない場合があります。',
   defaultSeverity: 'info',
   run: (ctx): RawDiagnostic[] => {
     const results: RawDiagnostic[] = []
