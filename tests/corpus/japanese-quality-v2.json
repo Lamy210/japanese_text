@@ -1059,7 +1059,7 @@
       "genre": "unicode",
       "group": "positive",
       "split": "holdout",
-      "text": "🌸また、確認します。また、共有します。",
+      "text": "🌸確認します。また、検証します。また、共有します。",
       "expected": [
         {
           "surface": "また",
