@@ -9,11 +9,21 @@ import type { CoreRule, RawDiagnostic, RuleContext } from '../../types'
 
 const ACTION_NOUNS = '確認|検討|調査|検証|分析|評価|測定|点検'
 const ACTION_VERBS = '実施しました|実施します|実施する|実施した|行いました|行います|行った|行う'
+const ENDINGS: Readonly<Record<string, string>> = {
+  実施しました: 'しました',
+  実施します: 'します',
+  実施する: 'する',
+  実施した: 'した',
+  行いました: 'しました',
+  行います: 'します',
+  行った: 'した',
+  行う: 'する'
+}
 
 // A kana suffix can be a continuation ("実施したい", "行ったら") rather
 // than the completed form. Only explicitly recognized endings are reported.
 const ACTION_PHRASE = new RegExp(
-  `(?:${ACTION_NOUNS})を(?:${ACTION_VERBS})(?![ぁ-んァ-ン])`,
+  `(${ACTION_NOUNS})を(${ACTION_VERBS})(?![ぁ-んァ-ン])`,
   'gu'
 )
 
@@ -35,11 +45,12 @@ export const nominalizedActionRule: CoreRule = {
     const text = maskJapaneseQuotations(ctx.maskedText)
     const re = new RegExp(ACTION_PHRASE.source, ACTION_PHRASE.flags)
     for (const m of text.matchAll(re)) {
+      const example = `${m[1]}${ENDINGS[m[2]!]}`
       results.push({
         start: m.index,
         end: m.index + m[0].length,
         message:
-          `「${m[0]}」は「${m[0].split('を')[0]}する」などの簡潔な表現を検討できます。前後の助詞や意味のつながりを確認してください。`
+          `「${m[0]}」は「${example}」などの簡潔な表現を検討できます。ただし周辺の助詞や意味に合わせて文章全体を見直してください。`
       })
     }
     return results
