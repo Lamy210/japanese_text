@@ -9,7 +9,7 @@ const check = (text: string) => runSingleRule(ruleId, text, testConfig())
 
 describe('bounded additive-conjunction writing guidance', () => {
   test('flags the third distinct additive conjunction with exact UTF-16 location', () => {
-    const text = '😊また、準備します。さらに、検証します。加えて、結果を共有します。'
+    const text = '😊案内です。また、準備します。さらに、検証します。加えて、結果を共有します。'
     const d = check(text)
     expect(d).toHaveLength(1)
     expect(d[0]?.start).toBe(text.lastIndexOf('加えて'))
