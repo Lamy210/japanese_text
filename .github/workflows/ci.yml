@@ -38,6 +38,9 @@ jobs:
       - name: Unit tests
         run: bun run test
 
+      - name: Analysis benchmark smoke (correctness only, no timing thresholds)
+        run: bun run bench:smoke
+
       - name: Production build
         run: bun run build
 
