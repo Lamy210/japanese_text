@@ -16,6 +16,7 @@ import type { CoreRule, RawDiagnostic, RuleContext } from '../../types'
 import type { CitationPolicy } from '../../config/schema'
 import { splitSentences, isSegmenterAvailable } from '../../text/segmenter'
 import { isHeadingLine } from '../shared'
+import { hasUsableReferenceDefinition } from '../reference/markdown-reference'
 
 /** 引用とみなす範囲 (raw text上) */
 interface CitationRanges {
@@ -58,9 +59,10 @@ function findCitationRanges(ctx: RuleContext): Array<{ start: number; end: numbe
   const text = ctx.text
   const ranges: Array<{ start: number; end: number }> = []
   const nonProse = ctx.maskRegions.filter((region) => region.kind !== 'url')
+  const referencePattern = /\[([^\]\n]*)\]\[([^\]\n]*)\]/g
   const patterns: RegExp[] = [
     /\[[^\]\n]*\]\([^)\n]*\)/g, // inline link
-    /\[[^\]\n]*\]\[[^\]\n]*\]/g, // reference link (full + collapsed)
+    referencePattern, // reference link (full + collapsed)
     /<https?:\/\/[^>\s]*>/g, // autolink
     /(?:https?|ftp):\/\/[^\s>"'`\u3040-\u30ff\u3400-\u9fff]+/g // 裸URL
   ]
@@ -72,6 +74,11 @@ function findCitationRanges(ctx: RuleContext): Array<{ start: number; end: numbe
       // Raw links within fenced/inline code, HTML comments or frontmatter
       // are examples/metadata, not evidence for the surrounding claim.
       if (nonProse.some((region) => region.start < end && start < region.end)) continue
+      if (re === referencePattern) {
+        // Match reference/undefined's ID lookup, including [label][].
+        const id = (m[2] ?? '').trim() || (m[1] ?? '').trim()
+        if (!id || !hasUsableReferenceDefinition(ctx, id)) continue
+      }
       ranges.push({ start, end })
     }
   }

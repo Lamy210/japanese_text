@@ -152,6 +152,18 @@ function extractDefUrl(rest: string): { url: string; empty: boolean; malformed: 
   return { url, empty: false, malformed: false }
 }
 
+/**
+ * Determine whether a reference-style citation resolves to a structurally
+ * usable destination under the same definition rules as reference lint.
+ * The URL's existence/authority is intentionally not verified.
+ */
+export function hasUsableReferenceDefinition(ctx: RuleContext, id: string): boolean {
+  const definition = getAnalysis(ctx).defById.get(id)
+  if (definition === undefined) return false
+  const result = extractDefUrl(definition.url)
+  return !result.empty && !result.malformed
+}
+
 /** inline link [text](url) の検索 (コード内はスキップ) */
 interface InlineLink {
   start: number
