@@ -46,6 +46,7 @@ const [docType, setDocType] = createSignal<DocumentType>('markdown')
 const [revision, setRevision] = createSignal<number>(0)
 const [documentSummaries, setDocumentSummaries] = createSignal<DocumentSummary[]>([])
 const [activeDocumentId, setActiveDocumentId] = createSignal<string | undefined>(undefined)
+const [activeWorkspaceId, setActiveWorkspaceId] = createSignal<string | undefined>(undefined)
 const [documentLibraryReady, setDocumentLibraryReady] = createSignal(false)
 const [documentMutationPending, setDocumentMutationPending] = createSignal(false)
 const [documentSidebarOpen, setDocumentSidebarOpen] = createSignal(true)
@@ -140,7 +141,6 @@ function setConfig(next: AppConfig): void {
 }
 
 const [workspaceSummaries, setWorkspaceSummaries] = createSignal<WorkspaceSummary[]>([])
-const [activeWorkspaceId, setActiveWorkspaceId] = createSignal<string | undefined>(undefined)
 const [workspaceReady, setWorkspaceReady] = createSignal(false)
 const [workspaceManagerOpen, setWorkspaceManagerOpen] = createSignal(false)
 const [workspaceMutationPending, setWorkspaceMutationPending] = createSignal(false)
