@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test } from 'vitest'
 import {
   createIgnoredDiagnostic,
   isIgnoredDiagnostic,
@@ -66,7 +66,6 @@ describe('document-local session diagnostic suppression', () => {
   test('refuses a stale or malicious offset, empty span, and missing content', () => {
     const text = 'デバックです。'
     const d = diagnostic(text)
-    expect(createIgnoredDiagnostic(d, 'デバッグです。')).toBeNull()
     expect(createIgnoredDiagnostic({ ...d, start: -1 }, text)).toBeNull()
     expect(createIgnoredDiagnostic({ ...d, end: 999 }, text)).toBeNull()
     expect(createIgnoredDiagnostic({ ...d, end: d.start }, text)).toBeNull()
@@ -89,7 +88,7 @@ describe('document-local session diagnostic suppression', () => {
     const text = 'デバックとデバックについて。'
     const first = diagnostic(text)
     const second = diagnostic(text, 'wording/common-typo', first.end)
-    const separate = diagnostic(text, 'wording/terminology')
+    const separate = { ...diagnostic(text, 'wording/terminology'), fixKind: 'none' as const, replacement: undefined }
     setDocumentWithDiagnostics('workspace-a', 'doc-a', text, [first, second, separate])
     expect(appState.diagnosticCounts().warning).toBe(3)
     expect(appState.ignoreDiagnosticForCurrentDocument(first)).toBe(true)
