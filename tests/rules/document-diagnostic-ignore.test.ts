@@ -92,6 +92,8 @@ describe('document-local session diagnostic suppression', () => {
     setDocumentWithDiagnostics('workspace-a', 'doc-a', text, [first, second, separate])
     expect(appState.diagnosticCounts().warning).toBe(3)
     expect(appState.ignoreDiagnosticForCurrentDocument(first)).toBe(true)
+    // Hidden diagnostics stay available for raw pre/post formatting safety checks.
+    expect(appState.allDiagnostics()).toEqual([first, separate, second])
     expect(appState.diagnostics()).toEqual([separate])
     expect(appState.filteredDiagnostics()).toEqual([separate])
     expect(appState.diagnosticCounts().warning).toBe(1)
