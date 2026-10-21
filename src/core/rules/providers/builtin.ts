@@ -14,6 +14,7 @@ import { repeatedPhraseRule, consecutiveConjunctionRule, additiveConjunctionDens
 import { doubleHonorificRule } from '../fast/double-honorific'
 import { ambiguityRule } from '../fast/ambiguity'
 import { commaCountRule } from '../deep/comma-count'
+import { paragraphDensityRule } from '../fast/paragraph-density'
 import { mixedToneRule } from '../fast/mixed-tone'
 import { crossParagraphToneRule } from '../fast/cross-paragraph-tone'
 import { headingOrderRule } from '../markdown/heading-order'
@@ -54,6 +55,7 @@ function buildBuiltinRules(config: RuntimeRulesConfig): CoreRule[] {
     consecutiveConjunctionRule,
     additiveConjunctionDensityRule,
     commaCountRule,
+    paragraphDensityRule,
     headingOrderRule,
     createCitationNumberRule(() => config.citation),
     createCitationComparisonRule(() => config.citation),
