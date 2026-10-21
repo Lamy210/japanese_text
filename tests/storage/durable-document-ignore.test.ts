@@ -118,4 +118,36 @@ describe('durable document ignore: existing IndexedDB v2 suppressions store', ()
       expect(await readDocumentIgnores(db, workspaceId, 'doc-a')).toEqual([])
     } finally { db.close() }
   })
+  test('clears ignored entries atomically when replacing the last document', async () => {
+    const { db, atomic, repo, workspaceId } = await setup()
+    try {
+      await replaceDocumentIgnores(db, workspaceId, 'doc-a', [sample])
+      await atomic.deleteDocumentAndSelectNext(workspaceId, 'doc-b', 'doc-a')
+      await atomic.replaceLastDocument(workspaceId, 'doc-a', {
+        id: 'doc-new', workspaceId, name: 'fresh.md', docType: 'markdown',
+        content: '', sourceKind: 'local', createdAt: 4000, updatedAt: 4000
+      })
+      await repo.documents.save({
+        id: 'doc-a', workspaceId, name: 'reused.md', docType: 'markdown',
+        content: '', sourceKind: 'local', createdAt: 4001, updatedAt: 4001
+      })
+      expect(await readDocumentIgnores(db, workspaceId, 'doc-a')).toEqual([])
+    } finally { db.close() }
+  })
+
+  test('purges suppressions alongside all persisted documents in bulk deletion', async () => {
+    const { db, atomic, repo, workspaceId } = await setup()
+    try {
+      await replaceDocumentIgnores(db, workspaceId, 'doc-a', [sample])
+      await replaceDocumentIgnores(db, workspaceId, 'doc-b', [other])
+      await atomic.deletePersistedDocuments(workspaceId)
+      await repo.documents.save({
+        id: 'doc-a', workspaceId, name: 'recreated.md',
+        docType: 'markdown', content: '', sourceKind: 'local',
+        createdAt: 5000, updatedAt: 5000
+      })
+      expect(await readDocumentIgnores(db, workspaceId, 'doc-a')).toEqual([])
+    } finally { db.close() }
+  })
+
 })
