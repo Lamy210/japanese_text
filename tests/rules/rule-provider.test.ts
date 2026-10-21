@@ -20,7 +20,7 @@ const nativeRuleIds = [
   'wording/double-honorific', 'wording/ambiguity',
   'style/mixed-tone', 'style/cross-paragraph-tone', 'style/consecutive-conjunction',
   'style/additive-conjunction-density',
-  'style/comma-count', 'markdown/heading-order',
+  'style/comma-count', 'style/paragraph-density', 'markdown/heading-order',
   'evidence/citation-number', 'evidence/citation-comparison',
   'evidence/citation-external-fact', 'reference/undefined',
   'reference/empty-url', 'reference/malformed-url',
