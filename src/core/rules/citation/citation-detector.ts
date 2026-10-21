@@ -34,7 +34,7 @@ function getCitationContext(ctx: RuleContext, scope: CitationPolicy['scope']): C
     // scope が変わった場合のみ scopes を再計算
     if (lastScope === scope) return cacheValue
   }
-  const citations = findCitationRanges(ctx.text)
+  const citations = findCitationRanges(ctx)
   const exclusions = findExclusionRanges(ctx)
   const scopes = computeScopes(ctx, scope)
   const headingLines = new Set<number>()
@@ -49,9 +49,15 @@ function getCitationContext(ctx: RuleContext, scope: CitationPolicy['scope']): C
 
 let lastScope: CitationPolicy['scope'] | null = null
 
-/** raw text 上の出典候補 (Markdown link / reference link / autolink / 裸URL) */
-function findCitationRanges(text: string): Array<{ start: number; end: number }> {
+/**
+ * Scan original text for citations but reject candidate links located in
+ * non-prose masked regions. URL masks are allowed: real Markdown link targets
+ * and autolinks are masked to prevent linting inside the URL itself.
+ */
+function findCitationRanges(ctx: RuleContext): Array<{ start: number; end: number }> {
+  const text = ctx.text
   const ranges: Array<{ start: number; end: number }> = []
+  const nonProse = ctx.maskRegions.filter((region) => region.kind !== 'url')
   const patterns: RegExp[] = [
     /\[[^\]\n]*\]\([^)\n]*\)/g, // inline link
     /\[[^\]\n]*\]\[[^\]\n]*\]/g, // reference link (full + collapsed)
@@ -61,7 +67,12 @@ function findCitationRanges(text: string): Array<{ start: number; end: number }>
   for (const re of patterns) {
     let m: RegExpExecArray | null
     while ((m = re.exec(text)) !== null) {
-      ranges.push({ start: m.index, end: m.index + m[0].length })
+      const start = m.index
+      const end = start + m[0].length
+      // Raw links within fenced/inline code, HTML comments or frontmatter
+      // are examples/metadata, not evidence for the surrounding claim.
+      if (nonProse.some((region) => region.start < end && start < region.end)) continue
+      ranges.push({ start, end })
     }
   }
   return ranges
