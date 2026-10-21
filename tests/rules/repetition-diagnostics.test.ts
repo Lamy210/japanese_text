@@ -58,7 +58,7 @@ describe('repeated Japanese phrases', () => {
 
 describe('consecutive Japanese conjunctions', () => {
   test('flags the second sentence-initial repeated connective, not the first', () => {
-    const text = '😊しかし、雨です。しかし、風もあります。'
+    const text = '😊前日の予報です。しかし、雨です。しかし、風もあります。'
     const results = check(conjunctionId, text)
     expect(results).toHaveLength(1)
     expect(results[0]?.start).toBe(text.lastIndexOf('しかし'))
