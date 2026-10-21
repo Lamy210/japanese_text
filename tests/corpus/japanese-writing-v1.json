@@ -1,0 +1,584 @@
+{
+  "schemaVersion": 1,
+  "description": "Hand-labeled synthetic development corpus for bounded rule evaluation. NOT representative real-world writing quality.",
+  "policy": "Only bounded surface forms. Context-dependent judgment is intentionally excluded.",
+  "cases": [
+    {
+      "id": "phrase-base-1",
+      "ruleId": "wording/repeated-phrase",
+      "group": "positive",
+      "text": "対象について、について説明します。",
+      "expected": [
+        {
+          "surface": "について",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "phrase-base-2",
+      "ruleId": "wording/repeated-phrase",
+      "group": "positive",
+      "text": "対象に関して、に関して説明します。",
+      "expected": [
+        {
+          "surface": "に関して",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "phrase-base-3",
+      "ruleId": "wording/repeated-phrase",
+      "group": "positive",
+      "text": "対象において、において説明します。",
+      "expected": [
+        {
+          "surface": "において",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "phrase-base-4",
+      "ruleId": "wording/repeated-phrase",
+      "group": "positive",
+      "text": "対象に対して、に対して説明します。",
+      "expected": [
+        {
+          "surface": "に対して",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "phrase-base-5",
+      "ruleId": "wording/repeated-phrase",
+      "group": "positive",
+      "text": "対象という、という説明します。",
+      "expected": [
+        {
+          "surface": "という",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "phrase-base-6",
+      "ruleId": "wording/repeated-phrase",
+      "group": "positive",
+      "text": "対象として、として説明します。",
+      "expected": [
+        {
+          "surface": "として",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "phrase-punctuation-1",
+      "ruleId": "wording/repeated-phrase",
+      "group": "positive",
+      "text": "仕様に関して、 に関して確認します。",
+      "expected": [
+        {
+          "surface": "に関して",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "phrase-punctuation-2",
+      "ruleId": "wording/repeated-phrase",
+      "group": "positive",
+      "text": "仕様に関して， に関して確認します。",
+      "expected": [
+        {
+          "surface": "に関して",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "phrase-punctuation-3",
+      "ruleId": "wording/repeated-phrase",
+      "group": "positive",
+      "text": "仕様に関して, に関して確認します。",
+      "expected": [
+        {
+          "surface": "に関して",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "phrase-emoji",
+      "ruleId": "wording/repeated-phrase",
+      "group": "unicode",
+      "text": "😊仕様について、について報告します。",
+      "expected": [
+        {
+          "surface": "について",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "phrase-triple",
+      "ruleId": "wording/repeated-phrase",
+      "group": "boundary",
+      "text": "本件について、について、について説明します。",
+      "expected": [
+        {
+          "surface": "について",
+          "occurrence": 2
+        },
+        {
+          "surface": "について",
+          "occurrence": 3
+        }
+      ],
+      "note": "All second-and-later adjacent occurrences should be reported"
+    },
+    {
+      "id": "phrase-triple-space",
+      "ruleId": "wording/repeated-phrase",
+      "group": "boundary",
+      "text": "対象に関して、 に関して、 に関して記述します。",
+      "expected": [
+        {
+          "surface": "に関して",
+          "occurrence": 2
+        },
+        {
+          "surface": "に関して",
+          "occurrence": 3
+        }
+      ]
+    },
+    {
+      "id": "phrase-ordinary-two-topics",
+      "ruleId": "wording/repeated-phrase",
+      "group": "negative",
+      "text": "日本について、教育について話します。",
+      "expected": []
+    },
+    {
+      "id": "phrase-different",
+      "ruleId": "wording/repeated-phrase",
+      "group": "negative",
+      "text": "仕様について、設計に関して議論します。",
+      "expected": []
+    },
+    {
+      "id": "phrase-no-comma",
+      "ruleId": "wording/repeated-phrase",
+      "group": "negative",
+      "text": "仕様についてについて話します。",
+      "expected": [],
+      "note": "Not a supported bounded pattern"
+    },
+    {
+      "id": "phrase-no-adjacency",
+      "ruleId": "wording/repeated-phrase",
+      "group": "negative",
+      "text": "仕様について、詳細な仕様について議論します。",
+      "expected": []
+    },
+    {
+      "id": "phrase-quoted",
+      "ruleId": "wording/repeated-phrase",
+      "group": "masked",
+      "text": "「について、について」という入力を示します。",
+      "expected": []
+    },
+    {
+      "id": "phrase-code",
+      "ruleId": "wording/repeated-phrase",
+      "group": "masked",
+      "text": "`について、について`",
+      "expected": []
+    },
+    {
+      "id": "phrase-fenced",
+      "ruleId": "wording/repeated-phrase",
+      "group": "masked",
+      "text": "```text\nについて、について\n```",
+      "expected": []
+    },
+    {
+      "id": "phrase-link",
+      "ruleId": "wording/repeated-phrase",
+      "group": "masked",
+      "text": "[参考](https://example.com/について、について)",
+      "expected": []
+    },
+    {
+      "id": "phrase-blockquote",
+      "ruleId": "wording/repeated-phrase",
+      "group": "masked",
+      "text": "> について、について",
+      "expected": []
+    },
+    {
+      "id": "phrase-bullet",
+      "ruleId": "wording/repeated-phrase",
+      "group": "masked",
+      "text": "- について、について",
+      "expected": []
+    },
+    {
+      "id": "phrase-heading",
+      "ruleId": "wording/repeated-phrase",
+      "group": "masked",
+      "text": "# について、について",
+      "expected": []
+    },
+    {
+      "id": "phrase-in-prose-after-code",
+      "ruleId": "wording/repeated-phrase",
+      "group": "masked",
+      "text": "`について、について` 本文について、について説明します。",
+      "expected": [
+        {
+          "surface": "について",
+          "occurrence": 4
+        }
+      ]
+    },
+    {
+      "id": "phrase-separated-lines",
+      "ruleId": "wording/repeated-phrase",
+      "group": "boundary",
+      "text": "仕様について、\nについて説明します。",
+      "expected": []
+    },
+    {
+      "id": "phrase-multiline-quote",
+      "ruleId": "wording/repeated-phrase",
+      "group": "masked",
+      "text": "「について、\nについて」",
+      "expected": []
+    },
+    {
+      "id": "conjunction-base-1",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "しかし、作業を始めます。しかし、結果を確認します。",
+      "expected": [
+        {
+          "surface": "しかし",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-2",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "また、作業を始めます。また、結果を確認します。",
+      "expected": [
+        {
+          "surface": "また",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-3",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "さらに、作業を始めます。さらに、結果を確認します。",
+      "expected": [
+        {
+          "surface": "さらに",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-4",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "ただし、作業を始めます。ただし、結果を確認します。",
+      "expected": [
+        {
+          "surface": "ただし",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-5",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "そのため、作業を始めます。そのため、結果を確認します。",
+      "expected": [
+        {
+          "surface": "そのため",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-6",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "一方、作業を始めます。一方、結果を確認します。",
+      "expected": [
+        {
+          "surface": "一方",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-7",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "つまり、作業を始めます。つまり、結果を確認します。",
+      "expected": [
+        {
+          "surface": "つまり",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-8",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "例えば、作業を始めます。例えば、結果を確認します。",
+      "expected": [
+        {
+          "surface": "例えば",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-9",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "そして、作業を始めます。そして、結果を確認します。",
+      "expected": [
+        {
+          "surface": "そして",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-10",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "なお、作業を始めます。なお、結果を確認します。",
+      "expected": [
+        {
+          "surface": "なお",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-11",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "したがって、作業を始めます。したがって、結果を確認します。",
+      "expected": [
+        {
+          "surface": "したがって",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-12",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "ところが、作業を始めます。ところが、結果を確認します。",
+      "expected": [
+        {
+          "surface": "ところが",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-13",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "加えて、作業を始めます。加えて、結果を確認します。",
+      "expected": [
+        {
+          "surface": "加えて",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-base-14",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "positive",
+      "text": "すなわち、作業を始めます。すなわち、結果を確認します。",
+      "expected": [
+        {
+          "surface": "すなわち",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-three",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "boundary",
+      "text": "しかし、Aです。しかし、Bです。しかし、Cです。",
+      "expected": [
+        {
+          "surface": "しかし",
+          "occurrence": 2
+        },
+        {
+          "surface": "しかし",
+          "occurrence": 3
+        }
+      ]
+    },
+    {
+      "id": "conjunction-newline",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "boundary",
+      "text": "また、準備します。\nまた、確認します。",
+      "expected": [
+        {
+          "surface": "また",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-emoji",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "unicode",
+      "text": "😊昨日の報告です。しかし、雨でした。しかし、風もありました。",
+      "expected": [
+        {
+          "surface": "しかし",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "conjunction-intervening",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "negative",
+      "text": "しかし、雨です。今日は寒いです。しかし、風もあります。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-different",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "negative",
+      "text": "しかし、雨です。また、風もあります。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-adverb",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "negative",
+      "text": "また会いましょう。また、連絡します。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-similar-word",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "negative",
+      "text": "しかしながら、雨です。しかし、風があります。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-blank-line",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "boundary",
+      "text": "しかし、雨です。\n\nしかし、風です。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-heading",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "masked",
+      "text": "しかし、雨です。\n# 概要\nしかし、風です。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-list",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "masked",
+      "text": "しかし、雨です。\n- 状況を確認\nしかし、風です。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-quote-line",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "masked",
+      "text": "しかし、雨です。\n> 発言\nしかし、風です。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-quoted",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "masked",
+      "text": "「しかし、雨です。しかし、風です。」",
+      "expected": []
+    },
+    {
+      "id": "conjunction-inner-quote",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "masked",
+      "text": "しかし、雨です。「しかし、引用です。」しかし、風です。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-fenced",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "masked",
+      "text": "```md\nしかし、雨です。しかし、風です。\n```",
+      "expected": []
+    },
+    {
+      "id": "conjunction-inline-code",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "masked",
+      "text": "しかし、雨です。\n`しかし、風です。`\nしかし、寒いです。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-softline",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "boundary",
+      "text": "しかし、雨が降っています\nしかし、風です。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-no-comma",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "negative",
+      "text": "しかし雨です。しかし、風です。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-separated",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "negative",
+      "text": "しかし、雨です。なお、補足します。しかし、風です。",
+      "expected": []
+    },
+    {
+      "id": "conjunction-multiline-quote",
+      "ruleId": "style/consecutive-conjunction",
+      "group": "masked",
+      "text": "しかし、雨です。\n「しかし、引用です。\nしかし、続きます。」\nしかし、風です。",
+      "expected": []
+    }
+  ]
+}
