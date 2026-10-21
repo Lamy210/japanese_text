@@ -11,7 +11,7 @@
 import { For, Show, createMemo } from 'solid-js'
 import type { Diagnostic } from '../core/types'
 import { appState } from '../state/app-state'
-import { jumpToDiagnostic, quickFix } from '../state/actions'
+import { allowDiagnosticSpelling, jumpToDiagnostic, quickFix } from '../state/actions'
 
 const SEVERITY_META: Record<string, { icon: string; label: string }> = {
   error: { icon: '✕', label: 'Error' },
@@ -124,6 +124,19 @@ export function DiagnosticsPanel() {
                         修正
                       </button>
                     </div>
+                  </Show>
+                  <Show when={d.ruleId === 'wording/common-typo' && d.fixKind === 'suggestion'}>
+                    <button
+                      type="button"
+                      class="btn btn-small"
+                      title="この表記を用語集の正式表記として登録し、今後の同じ誤字警告を抑制します"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        allowDiagnosticSpelling(d)
+                      }}
+                    >
+                      この表記を許可
+                    </button>
                   </Show>
                 </div>
               </div>
