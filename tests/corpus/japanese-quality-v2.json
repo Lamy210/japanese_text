@@ -1,0 +1,1148 @@
+{
+  "schemaVersion": 2,
+  "description": "Synthetic rule-level gold annotations for regression. Created alongside implementation; not independent real-world precision or recall.",
+  "annotationPolicy": "Surface occurrence is 1-based in original UTF-16 text, including masked segments; explicit zero-diagnostic negatives are required.",
+  "splits": [
+    "development",
+    "holdout"
+  ],
+  "cases": [
+    {
+      "id": "hon-bad-1",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "担当者はお読みになられる。",
+      "expected": [
+        {
+          "surface": "お読みになられる",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-bad-2",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "担当者はお読みになられます。",
+      "expected": [
+        {
+          "surface": "お読みになられます",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-bad-3",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "担当者はお読みになられました。",
+      "expected": [
+        {
+          "surface": "お読みになられました",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-bad-4",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "担当者はご覧になられる。",
+      "expected": [
+        {
+          "surface": "ご覧になられる",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-bad-5",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "担当者はご覧になられます。",
+      "expected": [
+        {
+          "surface": "ご覧になられます",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-bad-6",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "担当者はご覧になられました。",
+      "expected": [
+        {
+          "surface": "ご覧になられました",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-bad-7",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "担当者はおっしゃられる。",
+      "expected": [
+        {
+          "surface": "おっしゃられる",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-bad-8",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "担当者はおっしゃられます。",
+      "expected": [
+        {
+          "surface": "おっしゃられます",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-bad-9",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "担当者はおっしゃられました。",
+      "expected": [
+        {
+          "surface": "おっしゃられました",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-valid-1",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "担当者はお読みになる。",
+      "expected": []
+    },
+    {
+      "id": "hon-valid-2",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "担当者はお読みになります。",
+      "expected": []
+    },
+    {
+      "id": "hon-valid-3",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "担当者はお読みになりました。",
+      "expected": []
+    },
+    {
+      "id": "hon-valid-4",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "担当者はご覧になります。",
+      "expected": []
+    },
+    {
+      "id": "hon-valid-5",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "担当者はおっしゃいます。",
+      "expected": []
+    },
+    {
+      "id": "hon-valid-6",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "担当者はお召し上がりになる。",
+      "expected": []
+    },
+    {
+      "id": "hon-valid-7",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "担当者はお読みになっていらっしゃる。",
+      "expected": []
+    },
+    {
+      "id": "hon-valid-8",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "担当者はお目にかかります。",
+      "expected": []
+    },
+    {
+      "id": "hon-valid-9",
+      "ruleId": "wording/double-honorific",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "担当者はご連絡いたします。",
+      "expected": []
+    },
+    {
+      "id": "hon-emoji",
+      "ruleId": "wording/double-honorific",
+      "genre": "unicode",
+      "group": "positive",
+      "split": "holdout",
+      "text": "📧お客様はおっしゃられる。",
+      "expected": [
+        {
+          "surface": "おっしゃられる",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-code",
+      "ruleId": "wording/double-honorific",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "holdout",
+      "text": "`お読みになられる` の記述を示します。",
+      "expected": []
+    },
+    {
+      "id": "hon-url",
+      "ruleId": "wording/double-honorific",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "[資料](https://example.com/お読みになられる)",
+      "expected": []
+    },
+    {
+      "id": "nom-positive-1",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "報告では確認を実施します。",
+      "expected": [
+        {
+          "surface": "確認を実施します",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "nom-positive-2",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "報告では検討を行いました。",
+      "expected": [
+        {
+          "surface": "検討を行いました",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "nom-positive-3",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "報告では調査を実施した。",
+      "expected": [
+        {
+          "surface": "調査を実施した",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "nom-positive-4",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "報告では検証を行う。",
+      "expected": [
+        {
+          "surface": "検証を行う",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "nom-positive-5",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "報告では分析を実施する。",
+      "expected": [
+        {
+          "surface": "分析を実施する",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "nom-positive-6",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "報告では評価を行った。",
+      "expected": [
+        {
+          "surface": "評価を行った",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "nom-positive-7",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "報告では測定を実施しました。",
+      "expected": [
+        {
+          "surface": "測定を実施しました",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "nom-positive-8",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "報告では点検を行います。",
+      "expected": [
+        {
+          "surface": "点検を行います",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "nom-negative-1",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "negative",
+      "split": "holdout",
+      "text": "確認します。",
+      "expected": []
+    },
+    {
+      "id": "nom-negative-2",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "検討しました。",
+      "expected": []
+    },
+    {
+      "id": "nom-negative-3",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "調査しました。",
+      "expected": []
+    },
+    {
+      "id": "nom-negative-4",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "negative",
+      "split": "holdout",
+      "text": "検証します。",
+      "expected": []
+    },
+    {
+      "id": "nom-negative-5",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "評価を要請します。",
+      "expected": []
+    },
+    {
+      "id": "nom-negative-6",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "会議を行いました。",
+      "expected": []
+    },
+    {
+      "id": "nom-negative-7",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "negative",
+      "split": "holdout",
+      "text": "操作を実施しました。",
+      "expected": []
+    },
+    {
+      "id": "nom-negative-8",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "検証を行うことはありません。",
+      "expected": []
+    },
+    {
+      "id": "nom-negative-9",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "確認を実施しない。",
+      "expected": []
+    },
+    {
+      "id": "nom-negative-10",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "negative",
+      "split": "holdout",
+      "text": "確認を行ないます。",
+      "expected": []
+    },
+    {
+      "id": "nom-emoji",
+      "ruleId": "wording/nominalized-action",
+      "genre": "unicode",
+      "group": "positive",
+      "split": "holdout",
+      "text": "🚀分析を実施する。",
+      "expected": [
+        {
+          "surface": "分析を実施する",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "nom-inline",
+      "ruleId": "wording/nominalized-action",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "holdout",
+      "text": "`確認を実施します` と書いてください。",
+      "expected": []
+    },
+    {
+      "id": "nom-quoted",
+      "ruleId": "wording/nominalized-action",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "development",
+      "text": "「検討を行いました」という例です。",
+      "expected": []
+    },
+    {
+      "id": "nom-multi",
+      "ruleId": "wording/nominalized-action",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "確認を実施します。検証を行いました。",
+      "expected": [
+        {
+          "surface": "確認を実施します",
+          "occurrence": 1
+        },
+        {
+          "surface": "検証を行いました",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "rep-pos-1",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "対象について、について説明します。",
+      "expected": [
+        {
+          "surface": "について",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "rep-pos-2",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "対象に関して、に関して説明します。",
+      "expected": [
+        {
+          "surface": "に関して",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "rep-pos-3",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "対象において、において説明します。",
+      "expected": [
+        {
+          "surface": "において",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "rep-pos-4",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "対象に対して、に対して説明します。",
+      "expected": [
+        {
+          "surface": "に対して",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "rep-pos-5",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "対象という、という説明します。",
+      "expected": [
+        {
+          "surface": "という",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "rep-pos-6",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "対象として、として説明します。",
+      "expected": [
+        {
+          "surface": "として",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "rep-triple",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "boundary",
+      "split": "holdout",
+      "text": "対象について、について、について説明します。",
+      "expected": [
+        {
+          "surface": "について",
+          "occurrence": 2
+        },
+        {
+          "surface": "について",
+          "occurrence": 3
+        }
+      ]
+    },
+    {
+      "id": "rep-comma",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "仕様に関して， に関して確認します。",
+      "expected": [
+        {
+          "surface": "に関して",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "rep-neg-1",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "negative",
+      "split": "holdout",
+      "text": "日本について、教育について説明します。",
+      "expected": []
+    },
+    {
+      "id": "rep-neg-2",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "仕様について、別の仕様について話します。",
+      "expected": []
+    },
+    {
+      "id": "rep-neg-3",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "negative",
+      "split": "holdout",
+      "text": "仕様についてについて話します。",
+      "expected": []
+    },
+    {
+      "id": "rep-neg-4",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "について、別項目について説明します。",
+      "expected": []
+    },
+    {
+      "id": "rep-neg-5",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "negative",
+      "split": "holdout",
+      "text": "方針に関して、契約に関して検討します。",
+      "expected": []
+    },
+    {
+      "id": "rep-neg-6",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "接続詞として、役割として記述します。",
+      "expected": []
+    },
+    {
+      "id": "rep-code",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "holdout",
+      "text": "`について、について`",
+      "expected": []
+    },
+    {
+      "id": "rep-quote",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "development",
+      "text": "「について、について」という表現です。",
+      "expected": []
+    },
+    {
+      "id": "rep-heading",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "# について、について",
+      "expected": []
+    },
+    {
+      "id": "rep-emoji",
+      "ruleId": "wording/repeated-phrase",
+      "genre": "unicode",
+      "group": "positive",
+      "split": "holdout",
+      "text": "🌸対象について、について案内します。",
+      "expected": [
+        {
+          "surface": "について",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "red-pos-1",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "業務で行なう。",
+      "expected": [
+        {
+          "surface": "行なう",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-pos-2",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "業務で行ないます。",
+      "expected": [
+        {
+          "surface": "行ないます",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-pos-3",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "業務ですることができる。",
+      "expected": [
+        {
+          "surface": "することができる",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-pos-4",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "業務ですることができます。",
+      "expected": [
+        {
+          "surface": "することができます",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-pos-5",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "業務ですることが可能です。",
+      "expected": [
+        {
+          "surface": "することが可能です",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-pos-6",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "業務で色々。",
+      "expected": [
+        {
+          "surface": "色々",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-pos-7",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "業務でさせていただきます。",
+      "expected": [
+        {
+          "surface": "させていただきます",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-pos-8",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "業務で出来ます。",
+      "expected": [
+        {
+          "surface": "出来ます",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-neg-1",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "実施できます",
+      "expected": []
+    },
+    {
+      "id": "red-neg-2",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "行います",
+      "expected": []
+    },
+    {
+      "id": "red-neg-3",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "できる",
+      "expected": []
+    },
+    {
+      "id": "red-neg-4",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "できます",
+      "expected": []
+    },
+    {
+      "id": "red-neg-5",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "可能です",
+      "expected": []
+    },
+    {
+      "id": "red-neg-6",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "色彩が豊かです",
+      "expected": []
+    },
+    {
+      "id": "red-neg-7",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "担当させます",
+      "expected": []
+    },
+    {
+      "id": "red-neg-8",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "ご確認ください",
+      "expected": []
+    },
+    {
+      "id": "red-neg-9",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "行いません",
+      "expected": []
+    },
+    {
+      "id": "red-neg-10",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "いたします",
+      "expected": []
+    },
+    {
+      "id": "red-emoji",
+      "ruleId": "wording/redundancy",
+      "genre": "unicode",
+      "group": "positive",
+      "split": "holdout",
+      "text": "📚色々試しました。",
+      "expected": [
+        {
+          "surface": "色々",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-code",
+      "ruleId": "wording/redundancy",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "`させていただきます` を例示します。",
+      "expected": []
+    },
+    {
+      "id": "red-url",
+      "ruleId": "wording/redundancy",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "https://example.com/色々 にアクセスします。",
+      "expected": []
+    },
+    {
+      "id": "con-pos-1",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "しかし、確認します。しかし、共有します。",
+      "expected": [
+        {
+          "surface": "しかし",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "con-pos-2",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "また、確認します。また、共有します。",
+      "expected": [
+        {
+          "surface": "また",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "con-pos-3",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "さらに、確認します。さらに、共有します。",
+      "expected": [
+        {
+          "surface": "さらに",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "con-pos-4",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "ただし、確認します。ただし、共有します。",
+      "expected": [
+        {
+          "surface": "ただし",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "con-mixed",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "technical",
+      "group": "negative",
+      "split": "holdout",
+      "text": "しかし、確認します。また、共有します。",
+      "expected": []
+    },
+    {
+      "id": "con-paragraph",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "markdown",
+      "group": "negative",
+      "split": "development",
+      "text": "しかし、確認します。\n\nしかし、共有します。",
+      "expected": []
+    },
+    {
+      "id": "con-heading",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "markdown",
+      "group": "negative",
+      "split": "development",
+      "text": "しかし、確認します。\n# 次の章\nしかし、共有します。",
+      "expected": []
+    },
+    {
+      "id": "con-bullet",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "markdown",
+      "group": "negative",
+      "split": "development",
+      "text": "- しかし、確認します。\n- しかし、共有します。",
+      "expected": []
+    },
+    {
+      "id": "con-quotes",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "development",
+      "text": "「しかし、確認します。しかし、共有します。」",
+      "expected": []
+    },
+    {
+      "id": "con-without-comma",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "しかし確認します。しかし共有します。",
+      "expected": []
+    },
+    {
+      "id": "con-emoji",
+      "ruleId": "style/consecutive-conjunction",
+      "genre": "unicode",
+      "group": "positive",
+      "split": "holdout",
+      "text": "🌸確認します。また、検証します。また、共有します。",
+      "expected": [
+        {
+          "surface": "また",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "add-3",
+      "ruleId": "style/additive-conjunction-density",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "また、確認します。さらに、共有します。加えて、評価します。",
+      "expected": [
+        {
+          "surface": "加えて",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "add-4",
+      "ruleId": "style/additive-conjunction-density",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "また、確認します。さらに、共有します。加えて、評価します。そのうえ、記録します。",
+      "expected": [
+        {
+          "surface": "加えて",
+          "occurrence": 1
+        },
+        {
+          "surface": "そのうえ",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "add-2",
+      "ruleId": "style/additive-conjunction-density",
+      "genre": "technical",
+      "group": "negative",
+      "split": "holdout",
+      "text": "また、確認します。さらに、共有します。",
+      "expected": []
+    },
+    {
+      "id": "add-repeated",
+      "ruleId": "style/additive-conjunction-density",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "また、確認します。さらに、共有します。また、評価します。",
+      "expected": []
+    },
+    {
+      "id": "add-paragraph",
+      "ruleId": "style/additive-conjunction-density",
+      "genre": "markdown",
+      "group": "negative",
+      "split": "development",
+      "text": "また、確認します。さらに、共有します。\n\n加えて、評価します。",
+      "expected": []
+    },
+    {
+      "id": "add-fence",
+      "ruleId": "style/additive-conjunction-density",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "```\nまた、確認します。さらに、共有します。加えて、評価します。\n```",
+      "expected": []
+    },
+    {
+      "id": "add-quoted",
+      "ruleId": "style/additive-conjunction-density",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "development",
+      "text": "「また、確認します。さらに、共有します。加えて、評価します。」",
+      "expected": []
+    }
+  ]
+}
