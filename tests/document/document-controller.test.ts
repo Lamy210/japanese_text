@@ -231,6 +231,43 @@ describe('DocumentController mutations', () => {
     expect(appState.documentText()).toBe('second edited')
   })
 
+  it('keeps session ignores through document switching and clears them on deletion', async () => {
+    const { appState, controller, state } = await harness('private-session')
+    await controller.bootstrapForWorkspace(state.workspace)
+    appState.setActiveWorkspaceId(state.workspace.id)
+    const original = appState.activeDocumentId()!
+    const content = 'デバックを確認します。'
+    appState.setDocument(content)
+    const diagnostic = {
+      id: 'wording/common-typo@0-4',
+      ruleId: 'wording/common-typo',
+      severity: 'warning' as const,
+      message: '確認',
+      start: 0,
+      end: 4,
+      line: 1,
+      column: 1,
+      fixKind: 'suggestion' as const,
+      replacement: 'デバッグ',
+      source: 'core' as const
+    }
+    appState.applyWorkerResult('fast', {
+      revision: appState.revision(), diagnostics: [diagnostic], ruleErrors: [], durationMs: 1
+    })
+    expect(appState.ignoreDiagnosticForCurrentDocument(diagnostic)).toBe(true)
+
+    await controller.createDocument()
+    expect(appState.ignoredForActiveDocument()).toHaveLength(0)
+    await controller.switchDocument(original)
+    expect(appState.ignoredForActiveDocument()).toHaveLength(1)
+
+    await controller.deleteActiveDocument()
+    expect(appState.ignoredForActiveDocument()).toHaveLength(0)
+    appState.setActiveDocumentId(original)
+    expect(appState.ignoredForActiveDocument()).toHaveLength(0)
+    appState.setActiveDocumentId(undefined)
+  })
+
   it('deletes the active document and applies the successor', async () => {
     const { appState, controller, state } = await harness('private-session')
     await controller.bootstrapForWorkspace(state.workspace)

@@ -47,6 +47,23 @@ export function allowDiagnosticSpelling(diagnostic: Diagnostic): boolean {
   return true
 }
 
+/** Session-only, per-document rule+exact-text suppression. */
+export function ignoreDiagnosticForDocument(diagnostic: Diagnostic): boolean {
+  if (!appState.ignoreDiagnosticForCurrentDocument(diagnostic)) {
+    appState.pushToast('warning', '診断結果が古いか、この警告は既に無視されています。')
+    return false
+  }
+  appState.pushToast('success', 'この文書で同じ警告を無視しました（このタブ内のみ）。')
+  return true
+}
+
+/** Restore a session-only suppression, without editing the document. */
+export function restoreDocumentDiagnostic(key: string): boolean {
+  if (!appState.restoreIgnoredForCurrentDocument(key)) return false
+  appState.pushToast('success', 'この文書の警告を再表示しました。')
+  return true
+}
+
 export function jumpToDiagnostic(diagnostic: Diagnostic): void {
   appState.setSelectedDiagnosticId(diagnostic.id)
   jumpToPosition(diagnostic.start, diagnostic.end)
@@ -106,7 +123,9 @@ export async function formatDocumentAction(): Promise<void> {
     return
   }
 
-  const errorsBefore = diagnostics.filter((d) => d.severity === 'error').length
+  // Shadow lint returns the full diagnostics. Compare raw with raw so that
+  // deliberately hidden errors do not look like *new* errors after formatting.
+  const errorsBefore = appState.allDiagnostics().filter((d) => d.severity === 'error').length
   try {
     const shadow = await lintController.lintShadowText(plan.text)
     const shadowDiags: Diagnostic[] = []

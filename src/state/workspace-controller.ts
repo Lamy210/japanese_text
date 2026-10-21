@@ -215,6 +215,7 @@ export function createWorkspaceController(
 
         runtime.getSessionSnapshotStore().deleteDocuments(sessionDocumentIds)
         runtime.getSessionDocumentLibrary().deleteWorkspace(workspaceId)
+        appState.clearIgnoredWorkspace(workspaceId)
         applyContext(result.active)
         appState.setWorkspaceSummaries(await workspaceService.list())
 

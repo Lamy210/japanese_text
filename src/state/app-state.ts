@@ -22,6 +22,13 @@ import type { SnapshotSummary } from '../history/types'
 import type { WorkspaceSummary } from '../workspace/workspace-service'
 import type { StorageCapability } from '../workspace/storage-capability'
 import { WELCOME_DOCUMENT } from './welcome-document'
+import {
+  MAX_IGNORED_PER_DOCUMENT,
+  createIgnoredDiagnostic,
+  documentIgnoreScope,
+  isIgnoredDiagnostic,
+  type IgnoredDiagnostic
+} from './ignored-diagnostics'
 
 export interface TierResult {
   revision: number
@@ -39,6 +46,7 @@ const [docType, setDocType] = createSignal<DocumentType>('markdown')
 const [revision, setRevision] = createSignal<number>(0)
 const [documentSummaries, setDocumentSummaries] = createSignal<DocumentSummary[]>([])
 const [activeDocumentId, setActiveDocumentId] = createSignal<string | undefined>(undefined)
+const [activeWorkspaceId, setActiveWorkspaceId] = createSignal<string | undefined>(undefined)
 const [documentLibraryReady, setDocumentLibraryReady] = createSignal(false)
 const [documentMutationPending, setDocumentMutationPending] = createSignal(false)
 const [documentSidebarOpen, setDocumentSidebarOpen] = createSignal(true)
@@ -57,9 +65,15 @@ const [tierResults, setTierResults] = createStore<Record<RuleTier, TierResult | 
 })
 const [selectedDiagnosticId, setSelectedDiagnosticId] = createSignal<string | null>(null)
 const [severityFilter, setSeverityFilter] = createSignal<'all' | 'error' | 'warning' | 'info'>('all')
+/** Tab-memory only; deliberately never serialized to AppConfig or IndexedDB. */
+const [ignoredByDocument, setIgnoredByDocument] = createSignal<Record<string, IgnoredDiagnostic[]>>({})
+const ignoredForActiveDocument = (): readonly IgnoredDiagnostic[] => {
+  const scope = documentIgnoreScope(activeWorkspaceId(), activeDocumentId())
+  return scope === null ? [] : (ignoredByDocument()[scope] ?? [])
+}
 
 const derived = createRoot(() => {
-  const diagnostics = createMemo<Diagnostic[]>(() => {
+  const allDiagnostics = createMemo<Diagnostic[]>(() => {
     const rev = revision()
     const merged: Diagnostic[] = []
     for (const tier of ['fast', 'deep', 'idle'] as const) {
@@ -67,6 +81,12 @@ const derived = createRoot(() => {
       if (result !== undefined && result.revision === rev) merged.push(...result.diagnostics)
     }
     return merged.sort((a, b) => a.start - b.start || a.end - b.end || a.ruleId.localeCompare(b.ruleId))
+  })
+
+  const diagnostics = createMemo<Diagnostic[]>(() => {
+    const ignored = ignoredForActiveDocument()
+    const text = documentText()
+    return allDiagnostics().filter((item) => !isIgnoredDiagnostic(item, text, ignored))
   })
 
   const filteredDiagnostics = createMemo<Diagnostic[]>(() => {
@@ -112,9 +132,9 @@ const derived = createRoot(() => {
     }
   })
 
-  return { diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings }
+  return { allDiagnostics, diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings }
 })
-const { diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings } = derived
+const { allDiagnostics, diagnostics, filteredDiagnostics, diagnosticCounts, activeRuleErrors, lastTimings } = derived
 
 const [config, setConfigState] = createStore<AppConfig>(createDefaultConfig())
 const [configLoaded, setConfigLoaded] = createSignal(false)
@@ -124,7 +144,6 @@ function setConfig(next: AppConfig): void {
 }
 
 const [workspaceSummaries, setWorkspaceSummaries] = createSignal<WorkspaceSummary[]>([])
-const [activeWorkspaceId, setActiveWorkspaceId] = createSignal<string | undefined>(undefined)
 const [workspaceReady, setWorkspaceReady] = createSignal(false)
 const [workspaceManagerOpen, setWorkspaceManagerOpen] = createSignal(false)
 const [workspaceMutationPending, setWorkspaceMutationPending] = createSignal(false)
@@ -215,8 +234,61 @@ export const appState = {
   },
 
   diagnostics,
+  allDiagnostics,
   filteredDiagnostics,
   diagnosticCounts,
+  ignoredForActiveDocument,
+  ignoreDiagnosticForCurrentDocument: (diagnostic: Diagnostic): boolean => {
+    const scope = documentIgnoreScope(activeWorkspaceId(), activeDocumentId())
+    if (scope === null) return false
+    // UI callbacks from older analyses/documents must not create suppressions.
+    const current = diagnostics().some(item =>
+      item.id === diagnostic.id && item.ruleId === diagnostic.ruleId &&
+      item.source === diagnostic.source && item.start === diagnostic.start && item.end === diagnostic.end
+    )
+    if (!current) return false
+    const entry = createIgnoredDiagnostic(diagnostic, documentText())
+    if (entry === null) return false
+    const existing = ignoredByDocument()[scope] ?? []
+    if (existing.length >= MAX_IGNORED_PER_DOCUMENT || existing.some(item => item.key === entry.key)) return false
+    setIgnoredByDocument(previous => ({ ...previous, [scope]: [...existing, entry] }))
+    setSelectedDiagnosticId(null)
+    return true
+  },
+  restoreIgnoredForCurrentDocument: (key: string): boolean => {
+    const scope = documentIgnoreScope(activeWorkspaceId(), activeDocumentId())
+    if (scope === null) return false
+    const current = ignoredByDocument()[scope] ?? []
+    if (!current.some(item => item.key === key)) return false
+    const next = current.filter(item => item.key !== key)
+    setIgnoredByDocument(previous => {
+      const result = { ...previous }
+      if (next.length > 0) result[scope] = next
+      else delete result[scope]
+      return result
+    })
+    return true
+  },
+  clearIgnoredDocument: (workspaceId: string, documentId: string): void => {
+    const scope = documentIgnoreScope(workspaceId, documentId)
+    if (scope === null) return
+    setIgnoredByDocument(previous => {
+      if (!(scope in previous)) return previous
+      const result = { ...previous }
+      delete result[scope]
+      return result
+    })
+  },
+  clearIgnoredWorkspace: (workspaceId: string): void => {
+    setIgnoredByDocument(previous => {
+      const result = { ...previous }
+      for (const scope of Object.keys(result)) {
+        const decoded = JSON.parse(scope) as [string, string]
+        if (decoded[0] === workspaceId) delete result[scope]
+      }
+      return result
+    })
+  },
   severityFilter,
   setSeverityFilter,
   selectedDiagnosticId,
