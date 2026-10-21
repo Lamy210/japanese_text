@@ -1,5 +1,5 @@
 import { IDBFactory } from 'fake-indexeddb'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { Diagnostic } from '../../src/core/types'
 import { createDefaultWorkspaceState } from '../../src/core/workspace/defaults'
 import { openDatabase } from '../../src/storage/db/open-database'
