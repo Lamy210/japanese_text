@@ -14,18 +14,27 @@ export interface SentenceSpan {
 
 let cachedSegmenter: Intl.Segmenter | null | undefined
 
-export function isSegmenterAvailable(): boolean {
+/**
+ * Keep detection and analysis on the same lazy initialization path.
+ * Without this guard, the first splitSentences() call always falls back
+ * unless isSegmenterAvailable() was called beforehand.
+ */
+function getSentenceSegmenter(): Intl.Segmenter | null {
   if (cachedSegmenter === undefined) {
     try {
       cachedSegmenter =
-        typeof Intl !== 'undefined' && 'Segmenter' in Intl
+        typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
           ? new Intl.Segmenter('ja', { granularity: 'sentence' })
           : null
     } catch {
       cachedSegmenter = null
     }
   }
-  return cachedSegmenter !== null
+  return cachedSegmenter
+}
+
+export function isSegmenterAvailable(): boolean {
+  return getSentenceSegmenter() !== null
 }
 
 const FALLBACK_TERMINATORS = new Set(['。', '？', '！', '?', '!'])
@@ -55,8 +64,8 @@ function splitSentencesFallback(text: string): SentenceSpan[] {
  * 利用不可の場合はフォールバックに切り替わる (決定論的な挙動を保証)。
  */
 export function splitSentences(text: string): SentenceSpan[] {
-  const segmenter = cachedSegmenter
-  if (segmenter === null || segmenter === undefined) {
+  const segmenter = getSentenceSegmenter()
+  if (segmenter === null) {
     return splitSentencesFallback(text)
   }
   const spans: SentenceSpan[] = []
