@@ -15,6 +15,7 @@ import { honorificConsistencyRule } from '../fast/honorific-consistency'
 import { meetingMinutesSectionsRule } from '../fast/meeting-minutes'
 import { businessDocumentStructureRule } from '../fast/business-document-structure'
 import { blockquoteSpacingRule, unnecessaryCushionRule } from '../fast/business-writing'
+import { blockquoteBlankLinesRule } from '../fast/blockquote-blank-lines'
 import { repeatedPhraseRule, consecutiveConjunctionRule, additiveConjunctionDensityRule, mixedConjunctionDensityRule } from '../fast/repeated-expression'
 import { doubleHonorificRule } from '../fast/double-honorific'
 import { honorificRequestRule } from '../fast/honorific-request'
@@ -61,6 +62,7 @@ function buildBuiltinRules(config: RuntimeRulesConfig): CoreRule[] {
     businessDocumentStructureRule,
     unnecessaryCushionRule,
     blockquoteSpacingRule,
+    blockquoteBlankLinesRule,
     repeatedPhraseRule,
     doubleHonorificRule,
     honorificRequestRule,
