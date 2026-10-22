@@ -27,9 +27,12 @@ bun run dev
 | --- | --- |
 | `roundTripMs` | Main Threadの`postMessage`開始から全Tierの受信まで |
 | `workerDurationMs` | Workerが返す独自ルールの処理時間の合計 |
+| `perTierRoundTrip.fast/deep/idle` | 最初の`postMessage`から各Tierの正常応答が届くまでの累積時間（p50/p95/p99） |
 | `coldStartMs` | 専用Workerを起動した直後、初回Lint完了までの往復 |
 | `totalDiagnostics` | 各サンプルで受け取った診断数の合計 |
 | `p50/p95/p99` | 測定回数に対するnearest-rankパーセンタイル |
+
+Tierの受信時刻はそのTier自身の純粋な実行時間ではない。3段階の処理は同じWorker要求内で順番に実行されるため、Deep/Idleの数値には先行する処理・スケジューリング・転送などが含まれる。Fast/Deep/Idleの受信p95を比較すれば、どの段階までに待ち時間が増加するかを把握できるが、単独の処理コストは別の指標で測る。
 
 往復時間には構造化複製、Workerスケジューリング、textlintの非同期解析、
 メッセージ伝達を含む。一方、`workerDurationMs`は現行プロトコルの
@@ -78,6 +81,7 @@ p99は通常5回（詳細3回）の少数サンプルで得られ、
 Workerのメッセージを再現し、終了・異常系を検証する。
 
 - Fast/Deep/Idle全Tierの正常終了だけを成功として集計
+- 各Tierの最初の正常応答をタイムスタンプし、重複/順不同レスポンスでは上書きしない
 - 別revisionと二重応答を無視
 - Skip / Error / RuleError / Timeout / Request.postMessage失敗を拒否
 - 終了後にListenerとTimeoutを破棄
