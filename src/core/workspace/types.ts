@@ -7,6 +7,7 @@ import type {
   TermEntry,
   ThemeMode
 } from '../config/schema'
+import type { ProfileAnalysisSettingsV2 } from '../analysis/profile-settings'
 import type { DocumentType, RuleSetting } from '../types'
 
 export type StorageMode = 'private-session' | 'local-library' | 'file-backed'
@@ -44,6 +45,8 @@ export interface RuleProfile {
   terminology: TermEntry[]
   citation: CitationPolicy
   formatter: FormatterPolicy
+  /** Optional while old RuleProfile records remain v1; metadata is not yet an engine gate. */
+  analysis?: ProfileAnalysisSettingsV2
   customRules: unknown[]
   createdAt: number
   updatedAt: number
