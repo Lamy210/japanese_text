@@ -42,7 +42,7 @@ describe('AP-03a: non-destructive Profile analysis settings', () => {
     expect(validated.dictionaries.enabledSharedAssetIds).not.toBe(input.dictionaries.enabledSharedAssetIds)
   })
 
-  test.each([
+  const malformedCases: Array<[Record<string, unknown>, string]> = [
     [{ extra: 'raw document bytes' }, 'unrecognized root key'],
     [{ morphology: { providerId: 'unverified-plugin' } }, 'unrecognized provider'],
     [{ morphology: { analyzeQuotedBlocks: true } }, 'quote policy'],
@@ -55,14 +55,15 @@ describe('AP-03a: non-destructive Profile analysis settings', () => {
     [{ dictionaries: { rawDictionary: 'secret content' } }, 'private dictionary data'],
     [{ packs: { style: 'on' } }, 'invalid pack flag'],
     [{ packs: { untrusted: true } }, 'new pack without validation']
-  ])('rejects malformed or untrusted settings (%s)', (patch) => {
+  ]
+  test.each(malformedCases)('rejects malformed or untrusted settings (%s)', (patch) => {
     const input = defaultProfileAnalysisSettings()
     const malformed = {
       ...input,
       ...patch,
-      packs: { ...input.packs, ...(patch.packs ?? {}) },
-      morphology: { ...input.morphology, ...(patch.morphology ?? {}) },
-      dictionaries: { ...input.dictionaries, ...(patch.dictionaries ?? {}) }
+      packs: { ...input.packs, ...((patch.packs ?? {}) as Record<string, unknown>) },
+      morphology: { ...input.morphology, ...((patch.morphology ?? {}) as Record<string, unknown>) },
+      dictionaries: { ...input.dictionaries, ...((patch.dictionaries ?? {}) as Record<string, unknown>) }
     }
     expect(() => validateProfileAnalysisSettings(malformed)).toThrow()
     const legacy = createDefaultWorkspaceState(100).profile
