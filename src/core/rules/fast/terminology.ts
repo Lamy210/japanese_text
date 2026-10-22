@@ -15,8 +15,8 @@ import { escapeRegExp } from '../shared'
  * Deliberately conservative: prefer a missed suggestion to corrupting a name.
  */
 const ASCII_TOKEN = /[A-Za-z0-9_]/u
-const KATAKANA_TOKEN = /[\\u30A0-\\u30FF\\u31F0-\\u31FFーA-Za-z0-9_]/u
-const KATAKANA = /[\\u30A0-\\u30FF\\u31F0-\\u31FFー]/u
+const KATAKANA_TOKEN = /[゠-ヿㇰ-ㇿーA-Za-z0-9_]/u
+const KATAKANA = /[゠-ヿㇰ-ㇿー]/u
 
 function isPartOfLongerToken(text: string, start: number, match: string): boolean {
   const left = start > 0 ? text[start - 1]! : ''
