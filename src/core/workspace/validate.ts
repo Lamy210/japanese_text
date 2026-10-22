@@ -1,3 +1,4 @@
+import { validateProfileAnalysisSettings } from '../analysis/profile-settings'
 import { validateAppConfig } from '../config/validate'
 import type { PresetId, ThemeMode } from '../config/schema'
 import type { DocumentType } from '../types'
@@ -198,6 +199,19 @@ export function validateRuleProfileRecord(raw: unknown): RuleProfile {
     citation: structuredClone(validated.citation),
     formatter: structuredClone(validated.formatter),
     customRules: [],
+    // Do not materialize an analysis field on legacy records: an unchanged
+    // Profile must remain byte-for-byte compatible on read and save.
+    ...(value.analysis === undefined ? {} : {
+      analysis: (() => {
+        try {
+          return validateProfileAnalysisSettings(value.analysis)
+        } catch (error) {
+          throw new WorkspaceRecordValidationError(
+            `ruleProfile.analysis is invalid: ${error instanceof Error ? error.message : String(error)}`
+          )
+        }
+      })()
+    }),
     createdAt: requireTimestamp(value.createdAt, 'ruleProfile.createdAt'),
     updatedAt: requireTimestamp(value.updatedAt, 'ruleProfile.updatedAt')
   }

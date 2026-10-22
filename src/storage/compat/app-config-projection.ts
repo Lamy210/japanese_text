@@ -62,6 +62,9 @@ function splitCommon(
       terminology: structuredClone(config.terminology),
       citation: structuredClone(config.citation),
       formatter: structuredClone(config.formatter),
+      // AppConfig v1 cannot represent Analysis flags. Preserve the optional
+      // Profile-local metadata during ordinary saves and legacy migrations.
+      ...(current.profile.analysis === undefined ? {} : { analysis: structuredClone(current.profile.analysis) }),
       customRules: structuredClone(current.profile.customRules),
       createdAt: current.profile.createdAt,
       updatedAt: now
