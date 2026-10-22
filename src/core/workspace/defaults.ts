@@ -15,6 +15,7 @@ export function createDefaultWorkspaceState(now: number): {
     id: DEFAULT_PROFILE_ID,
     name: 'General Japanese',
     sourcePresetId: 'general',
+    analysisPacks: structuredClone(config.analysisPacks),
     rules: structuredClone(config.rules),
     ngWords: structuredClone(config.ngWords),
     terminology: structuredClone(config.terminology),
