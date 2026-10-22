@@ -26,7 +26,8 @@ const supported = new Set([
   'wording/repeated-phrase',
   'wording/redundancy',
   'style/consecutive-conjunction',
-  'style/additive-conjunction-density'
+  'style/additive-conjunction-density',
+  'style/mixed-conjunction-density'
 ])
 
 function nthOffset(text: string, surface: string, occurrence: number): number {

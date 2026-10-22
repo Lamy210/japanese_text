@@ -11,7 +11,7 @@ import { createTerminologyRule } from '../fast/terminology'
 import { redundancyRule } from '../fast/redundancy'
 import { createCommonTypoRule } from '../fast/common-typo'
 import { nominalizedActionRule } from '../fast/nominalized-action'
-import { repeatedPhraseRule, consecutiveConjunctionRule, additiveConjunctionDensityRule } from '../fast/repeated-expression'
+import { repeatedPhraseRule, consecutiveConjunctionRule, additiveConjunctionDensityRule, mixedConjunctionDensityRule } from '../fast/repeated-expression'
 import { doubleHonorificRule } from '../fast/double-honorific'
 import { honorificRequestRule } from '../fast/honorific-request'
 import { doubledObjectParticleRule } from '../fast/doubled-object-particle'
@@ -62,6 +62,7 @@ function buildBuiltinRules(config: RuntimeRulesConfig): CoreRule[] {
     crossParagraphToneRule,
     consecutiveConjunctionRule,
     additiveConjunctionDensityRule,
+    mixedConjunctionDensityRule,
     commaCountRule,
     paragraphDensityRule,
     headingOrderRule,
