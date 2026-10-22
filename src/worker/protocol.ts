@@ -31,7 +31,16 @@ export interface LintTierResult {
 export interface LintErrorMessage {
   type: 'error'
   revision: number
+  tier: LintTier
   message: string
+}
+
+/** Terminal response for obsolete interactive tier work (not an empty result). */
+export interface LintTierSkipped {
+  type: 'skipped'
+  revision: number
+  tier: LintTier
+  reason: 'superseded'
 }
 
 export interface WorkerReadyMessage {
@@ -40,4 +49,4 @@ export interface WorkerReadyMessage {
 }
 
 export type WorkerRequest = LintRequest
-export type WorkerResponse = LintTierResult | LintErrorMessage | WorkerReadyMessage
+export type WorkerResponse = LintTierResult | LintTierSkipped | LintErrorMessage | WorkerReadyMessage
