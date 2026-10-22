@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: bun ci
 
+      - name: Verify generated dictionary assets
+        run: bun run dictionaries:check
+
       - name: Typecheck
         run: bun run lint
 
