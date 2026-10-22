@@ -133,7 +133,10 @@ export async function verifyCuratedTypoPackBytes(
 }
 
 async function hashSha256(bytes: Uint8Array): Promise<string> {
-  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+  // WebCrypto requires an ArrayBuffer-backed view (not SharedArrayBuffer).
+  const ownedBytes = new Uint8Array(bytes.byteLength)
+  ownedBytes.set(bytes)
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', ownedBytes))
   return Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
