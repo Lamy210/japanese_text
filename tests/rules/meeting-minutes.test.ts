@@ -76,7 +76,7 @@ describe('meeting minutes sections', () => {
   })
 
   test('does not count deadline mentions in prose or code', () => {
-    const text = ['# 議事録', '参加者：A', '決定事項：保留', '未決事項：次回確認', '対応事項：検証', '担当者：A', '期日：を確認する予定', ''].join('\n')
+    const text = ['# 議事録', '参加者：A', '決定事項：保留', '未決事項：次回確認', '次回確認：次回会議', '対応事項：検証', '担当者：A', '期日：を確認する予定', ''].join('\n')
     expect(scan(text)).toEqual([])
     const withoutLabel = text.replace('期日：を確認する予定', '本文中に期日：を記載する')
     expect(scan(withoutLabel)).toHaveLength(1)
@@ -89,7 +89,8 @@ describe('meeting minutes sections', () => {
     expect(ds).toHaveLength(1)
     expect(ds[0]!.message).toContain('未決事項')
     expect(ds[0]!.fixKind).toBe('none')
-    expect(scan(base + '\n未決事項：次回判断')).toEqual([])
+    expect(scan(base + '\n未決事項：次回判断').map(d => d.message)).toEqual([expect.stringContaining('フォローアップ')])
+    expect(scan(base + '\n未決事項：次回判断\n次回確認：次回会議')).toEqual([])
   })
 
   test('does not infer pending status from normal decisions or body prose', () => {
