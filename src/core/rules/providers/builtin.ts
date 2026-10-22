@@ -14,6 +14,7 @@ import { nominalizedActionRule } from '../fast/nominalized-action'
 import { repeatedPhraseRule, consecutiveConjunctionRule, additiveConjunctionDensityRule } from '../fast/repeated-expression'
 import { doubleHonorificRule } from '../fast/double-honorific'
 import { honorificRequestRule } from '../fast/honorific-request'
+import { doubledObjectParticleRule } from '../fast/doubled-object-particle'
 import { ambiguityRule } from '../fast/ambiguity'
 import { commaCountRule } from '../deep/comma-count'
 import { paragraphDensityRule } from '../fast/paragraph-density'
@@ -53,6 +54,7 @@ function buildBuiltinRules(config: RuntimeRulesConfig): CoreRule[] {
     repeatedPhraseRule,
     doubleHonorificRule,
     honorificRequestRule,
+    doubledObjectParticleRule,
     ambiguityRule,
     mixedToneRule,
     crossParagraphToneRule,

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "description": "Synthetic rule-level gold annotations for regression across 7 rules. Created alongside implementation, not independent real-world precision or recall.",
+  "description": "Synthetic rule-level gold annotations for regression across 8 rules. Authored alongside code; NOT independent field precision.",
   "annotationPolicy": "Surface occurrence is 1-based in original UTF-16 text, including masked segments; explicit zero-diagnostic negatives are required.",
   "splits": [
     "development",
@@ -1348,6 +1348,175 @@
       "group": "masked",
       "split": "holdout",
       "text": "「お読みになられる」『ご覧になられる』を例示します。",
+      "expected": []
+    },
+    {
+      "id": "obj-bad-1",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "資料をを確認します。",
+      "expected": [
+        {
+          "surface": "を",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "obj-bad-2",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "資料を を確認します。",
+      "expected": [
+        {
+          "surface": "を",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "obj-bad-3",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "資料を、を確認します。",
+      "expected": [
+        {
+          "surface": "を",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "obj-bad-4",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "資料を， を確認します。",
+      "expected": [
+        {
+          "surface": "を",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "obj-bad-5",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "資料を, を確認します。",
+      "expected": [
+        {
+          "surface": "を",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "obj-three",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "unicode",
+      "group": "boundary",
+      "split": "holdout",
+      "text": "📚資料ををを確認します。",
+      "expected": [
+        {
+          "surface": "を",
+          "occurrence": 2
+        },
+        {
+          "surface": "を",
+          "occurrence": 3
+        }
+      ]
+    },
+    {
+      "id": "obj-valid-1",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "general",
+      "group": "negative",
+      "split": "holdout",
+      "text": "資料を確認します。",
+      "expected": []
+    },
+    {
+      "id": "obj-valid-2",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "general",
+      "group": "negative",
+      "split": "development",
+      "text": "本を読んで資料を調べます。",
+      "expected": []
+    },
+    {
+      "id": "obj-valid-3",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "general",
+      "group": "negative",
+      "split": "holdout",
+      "text": "母ははっきり話します。",
+      "expected": []
+    },
+    {
+      "id": "obj-valid-4",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "general",
+      "group": "negative",
+      "split": "development",
+      "text": "人ががんばります。",
+      "expected": []
+    },
+    {
+      "id": "obj-valid-5",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "general",
+      "group": "negative",
+      "split": "holdout",
+      "text": "川ににじが映ります。",
+      "expected": []
+    },
+    {
+      "id": "obj-quoted",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "holdout",
+      "text": "「資料をを確認」と入力してください。",
+      "expected": []
+    },
+    {
+      "id": "obj-code",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "`資料をを確認` を引用します。",
+      "expected": []
+    },
+    {
+      "id": "obj-line-break",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "technical",
+      "group": "boundary",
+      "split": "development",
+      "text": "資料を\\nを確認します。",
+      "expected": []
+    },
+    {
+      "id": "obj-blockquote",
+      "ruleId": "wording/doubled-object-particle",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "> 資料をを確認します。",
       "expected": []
     }
   ]
