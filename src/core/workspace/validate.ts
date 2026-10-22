@@ -174,7 +174,8 @@ export function validateRuleProfileRecord(raw: unknown): RuleProfile {
   let validated
   try {
     validated = validateAppConfig({
-      schemaVersion: 1,
+      schemaVersion: 2,
+      ...(value.analysisPacks === undefined ? {} : { analysisPacks: value.analysisPacks }),
       preset: sourcePresetId ?? 'custom',
       rules: value.rules,
       ngWords: value.ngWords,
@@ -192,6 +193,7 @@ export function validateRuleProfileRecord(raw: unknown): RuleProfile {
     id: requireString(value.id, 'ruleProfile.id'),
     name: requireString(value.name, 'ruleProfile.name'),
     ...(sourcePresetId === undefined ? {} : { sourcePresetId }),
+    ...(value.analysisPacks === undefined ? {} : { analysisPacks: structuredClone(validated.analysisPacks) }),
     rules: structuredClone(validated.rules),
     ngWords: structuredClone(validated.ngWords),
     terminology: structuredClone(validated.terminology),
