@@ -39,6 +39,31 @@ describe('opt-in business document structure', () => {
     expect(results[0]!.message).toContain('回答・結論')
   })
 
+
+  test('accepts Markdown bullet and numbered section labels', () => {
+    expect(scan('# 問い合わせ回答\n- 回答：対応できます。\n1. 質問：可能ですか？')).toEqual([])
+    expect(scan('相談メモ\n* 相談内容：方式の検討\n+ 前提：期限あり')).toEqual([])
+    expect(scan('社内連絡\n2) 連絡事項：休業について')).toEqual([])
+  })
+
+  test('reports missing sections despite prose mentions in list items', () => {
+    const diagnostics = scan('# 問い合わせ回答\n- 本文で回答：可能と説明します。\n- 質問：実施しますか？')
+    expect(diagnostics).toHaveLength(1)
+    expect(diagnostics[0]!.message).toContain('回答・結論')
+  })
+
+  test('still checks answer-first order for labeled list items', () => {
+    const diagnostics = scan('# 問い合わせ回答\n- 質問：可能ですか？\n- 回答：可能です。')
+    expect(diagnostics).toHaveLength(1)
+    expect(diagnostics[0]!.message).toContain('結論')
+    expect(diagnostics[0]!.fixKind).toBe('none')
+  })
+
+  test('does not count list-shaped code examples as real sections', () => {
+    const text = '# 問い合わせ回答\n```md\n- 質問：サンプル\n- 回答：サンプル\n```'
+    expect(scan(text)).toHaveLength(2)
+  })
+
   test('does not guess a document kind from body mentions', () => {
     expect(scan('議事録\n問い合わせ回答の例です。')).toEqual([])
     expect(scan('この問い合わせ回答を確認しました。')).toEqual([])
