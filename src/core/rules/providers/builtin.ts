@@ -11,6 +11,7 @@ import { createTerminologyRule } from '../fast/terminology'
 import { redundancyRule } from '../fast/redundancy'
 import { createCommonTypoRule } from '../fast/common-typo'
 import { nominalizedActionRule } from '../fast/nominalized-action'
+import { honorificConsistencyRule } from '../fast/honorific-consistency'
 import { meetingMinutesSectionsRule } from '../fast/meeting-minutes'
 import { businessDocumentStructureRule } from '../fast/business-document-structure'
 import { blockquoteSpacingRule, unnecessaryCushionRule } from '../fast/business-writing'
@@ -55,6 +56,7 @@ function buildBuiltinRules(config: RuntimeRulesConfig): CoreRule[] {
     redundancyRule,
     createCommonTypoRule(() => config.terminology),
     nominalizedActionRule,
+    honorificConsistencyRule,
     meetingMinutesSectionsRule,
     businessDocumentStructureRule,
     unnecessaryCushionRule,
