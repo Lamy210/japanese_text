@@ -50,10 +50,10 @@ export const meetingMinutesSectionsRule: CoreRule = {
     }
     // Only an explicit undecided decision label triggers this guidance.
     const undecidedDecision = bodyLines.some(line =>
-      /^(?:決定事項|決議事項|決まったこと)[ \\t　]*[：:][ \\t　]*(?:保留|未決|未定|継続審議)(?:[。． \\t　]|$)/u.test(line)
+      /^(?:決定事項|決議事項|決まったこと)[ \t　]*[：:][ \t　]*(?:保留|未決|未定|継続審議)(?:[。． \t　]|$)/u.test(line)
     )
     if (undecidedDecision &&
-        !hasSection(/^(?:未決事項|保留事項|継続審議事項)[ \\t　]*[：:]/u)) {
+        !hasSection(/^(?:未決事項|保留事項|継続審議事項)[ \t　]*[：:]/u)) {
       diagnostics.push({
         start, end: start + '議事録'.length,
         message: '決定事項が保留・未決と記載されています。未決事項の欄を設け、次回の確認対象を明示してください。',
