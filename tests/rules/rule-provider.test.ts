@@ -21,6 +21,7 @@ const nativeRuleIds = [
   'style/meeting-minutes-sections',
   'style/business-document-structure',
   'wording/request-cushion-review', 'markdown/blockquote-spacing',
+  'markdown/blockquote-blank-lines',
   'wording/repeated-phrase',
   'wording/double-honorific', 'wording/honorific-request', 'wording/doubled-object-particle', 'wording/tautology', 'wording/ambiguity',
   'style/mixed-tone', 'style/cross-paragraph-tone', 'style/consecutive-conjunction',
