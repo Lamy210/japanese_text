@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "description": "Synthetic rule-level gold annotations for regression across 9 rules. Not independent real-world accuracy.",
+  "description": "Synthetic rule-level gold annotations for regression across 10 rules; not an independent accuracy estimate.",
   "annotationPolicy": "Surface occurrence is 1-based in original UTF-16 text, including masked segments; explicit zero-diagnostic negatives are required.",
   "splits": [
     "development",
@@ -1709,6 +1709,115 @@
       "group": "masked",
       "split": "development",
       "text": "[資料](https://example.com/今現在)",
+      "expected": []
+    },
+    {
+      "id": "mixed-three",
+      "ruleId": "style/mixed-conjunction-density",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "しかし、調査します。また、確認します。一方、共有します。",
+      "expected": [
+        {
+          "surface": "一方",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "mixed-four",
+      "ruleId": "style/mixed-conjunction-density",
+      "genre": "technical",
+      "group": "positive",
+      "split": "development",
+      "text": "しかし、調査します。また、確認します。一方、共有します。つまり、説明します。",
+      "expected": [
+        {
+          "surface": "一方",
+          "occurrence": 1
+        },
+        {
+          "surface": "つまり",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "mixed-emoji",
+      "ruleId": "style/mixed-conjunction-density",
+      "genre": "unicode",
+      "group": "positive",
+      "split": "holdout",
+      "text": "🌸開始します。しかし、調査します。また、確認します。一方、共有します。",
+      "expected": [
+        {
+          "surface": "一方",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "mixed-additive",
+      "ruleId": "style/mixed-conjunction-density",
+      "genre": "technical",
+      "group": "negative",
+      "split": "holdout",
+      "text": "また、調査します。さらに、確認します。加えて、共有します。",
+      "expected": []
+    },
+    {
+      "id": "mixed-duplicate",
+      "ruleId": "style/mixed-conjunction-density",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "しかし、調査します。しかし、確認します。また、共有します。",
+      "expected": []
+    },
+    {
+      "id": "mixed-short",
+      "ruleId": "style/mixed-conjunction-density",
+      "genre": "technical",
+      "group": "negative",
+      "split": "development",
+      "text": "しかし、調査します。また、確認します。",
+      "expected": []
+    },
+    {
+      "id": "mixed-split",
+      "ruleId": "style/mixed-conjunction-density",
+      "genre": "markdown",
+      "group": "negative",
+      "split": "development",
+      "text": "しかし、調査します。また、確認します。\\n\\n一方、共有します。",
+      "expected": []
+    },
+    {
+      "id": "mixed-heading",
+      "ruleId": "style/mixed-conjunction-density",
+      "genre": "markdown",
+      "group": "negative",
+      "split": "development",
+      "text": "しかし、調査します。また、確認します。\\n# 次章\\n一方、共有します。",
+      "expected": []
+    },
+    {
+      "id": "mixed-quoted",
+      "ruleId": "style/mixed-conjunction-density",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "holdout",
+      "text": "「しかし、調査します。また、確認します。一方、共有します。」",
+      "expected": []
+    },
+    {
+      "id": "mixed-code",
+      "ruleId": "style/mixed-conjunction-density",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "`しかし、調査します。また、確認します。一方、共有します。`",
       "expected": []
     }
   ]
