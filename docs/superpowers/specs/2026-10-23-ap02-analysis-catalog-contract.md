@@ -32,6 +32,7 @@ runtime until an explicit migration is delivered. Existing rules require
 - Every rule has exactly one owning Pack. Declaration and ownership must agree.
 - Pack dependencies must exist and be acyclic.
 - Provider execution context and document-type coverage must match its rule.
+- Provider capabilities must cover every Rule-required capability at registration; runtime capability readiness is an independent gate.
 - Metadata is cloned and frozen on compilation.
 - Skips carry an explicit reason, never a fabricated empty diagnostic result.
 - Deterministic precedence: Pack availability → per-rule flag → document

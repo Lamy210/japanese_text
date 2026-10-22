@@ -192,6 +192,21 @@ describe('AP-02 NLP readiness and consent precedence', () => {
     })).toEqual({ status: 'skipped', ruleId: 'grammar/check-pos', reason: 'runtime-failed' })
   })
 
+  test('rejects impossible Provider capability declarations before runtime', () => {
+    expect(() => compileAnalysisCatalog({
+      ...catalog,
+      rules: catalog.rules.map(rule => rule.id === 'grammar/check-pos'
+        ? { ...rule, capabilitiesRequired: ['reading' as const] } : rule)
+    })).toThrow('Provider lacks declared capability')
+
+    // A valid descriptor alone must not count as runtime readiness.
+    expect(check({
+      readyProviderIds: new Set<AnalysisProviderId>(['lindera-ipadic']),
+      assetReadyIds: new Set(['ja-ipadic-test']),
+      runtimeCapabilities: new Set()
+    })).toMatchObject({ status: 'skipped', reason: 'capability-missing' })
+  })
+
   test('refuses unsupported NLP Safe Fix policy', () => {
     expect(() => compileAnalysisCatalog({
       ...catalog,
