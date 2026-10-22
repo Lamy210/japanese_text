@@ -20,7 +20,7 @@ const nativeRuleIds = [
   'wording/repeated-phrase',
   'wording/double-honorific', 'wording/honorific-request', 'wording/doubled-object-particle', 'wording/tautology', 'wording/ambiguity',
   'style/mixed-tone', 'style/cross-paragraph-tone', 'style/consecutive-conjunction',
-  'style/additive-conjunction-density',
+  'style/additive-conjunction-density', 'style/mixed-conjunction-density',
   'style/comma-count', 'style/paragraph-density', 'markdown/heading-order',
   'evidence/citation-number', 'evidence/citation-comparison',
   'evidence/citation-external-fact', 'reference/undefined',
