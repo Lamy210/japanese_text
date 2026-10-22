@@ -9,6 +9,7 @@
  */
 import type { CoreRule, RawDiagnostic } from '../../types'
 import { escapeRegExp } from '../shared'
+import { isMarkdownBlockquoteAt, maskHonorificQuotedExamples } from './honorific-utils'
 
 const EXAMPLES = [
   ['お読みになられました', 'お読みになりました'],
@@ -37,7 +38,8 @@ export const doubleHonorificRule: CoreRule = {
     const results: RawDiagnostic[] = []
     const regex = new RegExp(pattern.source, pattern.flags)
     let match: RegExpExecArray | null
-    while ((match = regex.exec(ctx.maskedText)) !== null) {
+    while ((match = regex.exec(maskHonorificQuotedExamples(ctx.maskedText))) !== null) {
+      if (isMarkdownBlockquoteAt(ctx, match.index)) continue
       const replacement = replacementByPhrase.get(match[0])
       if (replacement === undefined) continue
       results.push({
