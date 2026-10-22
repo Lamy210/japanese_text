@@ -126,6 +126,25 @@ describe('Worker fatal error and restart must not strand lint waiters', () => {
     expect((await next).size).toBe(3)
   })
 
+  test('automatic recovery starts a fresh Worker and completes new analysis without stale progress', async () => {
+    const old = worker()
+    const interrupted = controller.lintAllNow()
+    old.crash()
+    expect(await settleImmediately(interrupted)).toBe('settled')
+    expect((await interrupted).size).toBe(0)
+    await vi.advanceTimersByTimeAsync(250)
+    const replacement = worker()
+    expect(replacement).not.toBe(old)
+    expect(replacement.requests).toHaveLength(1)
+    const revision = replacement.requests[0]!.revision
+    old.emit(revision, 'fast')
+    expect(appState.analysisStatus()).toBe('linting')
+    replacement.emit(revision, 'fast')
+    replacement.emit(revision, 'deep')
+    replacement.emit(revision, 'idle')
+    expect(appState.analysisStatus()).toBe('idle')
+  })
+
   test('postMessage throwing settles manual lint and marks Worker as failed', async () => {
     FakeWorker.failPost = true
     const pending = controller.lintAllNow()
