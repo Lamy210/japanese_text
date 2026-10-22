@@ -31,6 +31,29 @@ export function buildRuleContext(text: string): RuleContext {
   }
 }
 
+/**
+ * One request-scoped snapshot shared across Fast/Deep/Idle own-rule tiers.
+ * Never reuse across revisions or different config objects: user rules and
+ * terminology are created from that exact config instance.
+ */
+export interface PreparedOwnRuleExecution {
+  readonly text: string
+  readonly config: AppConfig
+  readonly context: RuleContext
+  readonly lineIndex: LineIndex
+  readonly registry: ReturnType<typeof buildRuleRegistry>
+}
+
+export function prepareOwnRuleExecution(text: string, config: AppConfig): PreparedOwnRuleExecution {
+  return {
+    text,
+    config,
+    context: buildRuleContext(text),
+    lineIndex: new LineIndex(text),
+    registry: buildRuleRegistry(config)
+  }
+}
+
 /** RawDiagnostic → Diagnostic 正規化 (行・列・決定論的IDの付与) */
 export function normalizeDiagnostics(
   raws: RawDiagnostic[],
@@ -75,15 +98,20 @@ export function runOwnRules(
   text: string,
   config: AppConfig,
   tier: RuleTier,
-  docType: DocumentType
+  docType: DocumentType,
+  prepared?: PreparedOwnRuleExecution
 ): EngineResult {
   void docType // 独自ルールはMarkdown/Text共通 (§5: Markdown構文検査はmarkdownルールが担う)
+  if (prepared !== undefined && (prepared.text !== text || prepared.config !== config)) {
+    throw new Error('Prepared analysis does not match the current text and config')
+  }
   const started = now()
   const diagnostics: Diagnostic[] = []
   const ruleErrors: RuleError[] = []
-  const registry = buildRuleRegistry(config)
-  const ctx = buildRuleContext(text)
-  const lineIndex = new LineIndex(text)
+  const execution = prepared ?? prepareOwnRuleExecution(text, config)
+  const registry = execution.registry
+  const ctx = execution.context
+  const lineIndex = execution.lineIndex
 
   for (const rule of registry.values()) {
     if (rule.tier !== tier) continue
