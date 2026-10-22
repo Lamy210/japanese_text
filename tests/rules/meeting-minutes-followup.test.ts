@@ -22,6 +22,18 @@ describe('meeting minutes action deadlines and follow-up', () => {
     expect(scan(text + '\n次回確認：次回会議')).toEqual([])
   })
 
+  test('recognizes next-step wording inside an explicit pending-items field', () => {
+    const base = '# 議事録\n参加者：A\n決定事項：保留\n'
+    expect(scan(base + '未決事項：次回確認')).toEqual([])
+    expect(scan(base + '未決事項：次回判断')).toEqual([])
+    expect(scan(base + '- 未決事項：次回対応')).toEqual([])
+    expect(scan(base + '未決事項：方針検討').map(d => d.message))
+      .toEqual([expect.stringContaining('フォローアップ')])
+    // A follow-up word in unrelated prose is not a substitute for a section.
+    expect(scan(base + '未決事項：方針検討\n本文中で次回確認を言及').map(d => d.message))
+      .toEqual([expect.stringContaining('フォローアップ')])
+  })
+
   test('does not classify prose, masked code or another document as action sections', () => {
     expect(scan('# 議事録\n参加者：A\n決定事項：承認\n本文に対応事項：実装と書いてあります')).toEqual([])
     expect(scan('# 議事録\n参加者：A\n決定事項：承認\n\`\`\`md\n対応事項：実装\n\`\`\`')).toEqual([])
