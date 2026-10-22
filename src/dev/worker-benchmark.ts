@@ -24,6 +24,8 @@ export interface WorkerRequestMeasurement {
   /** Sum of reported own-rule duration; excludes textlint and transfer time. */
   workerDurationMs: number
   perTierMs: Record<RuleTier, number>
+  /** Elapsed since postMessage for the first successful response of each tier. */
+  perTierRoundTripMs: Record<RuleTier, number>
   diagnosticsCount: number
 }
 
@@ -40,6 +42,8 @@ export interface WorkerBenchmarkRow {
   utf16Length: number
   roundTrip: LatencySummary
   workerDuration: LatencySummary
+  /** Wall-clock postMessage -> each tier response; includes preceding tiers. */
+  perTierRoundTrip: Record<RuleTier, LatencySummary>
   totalDiagnostics: number
 }
 
@@ -70,6 +74,7 @@ export function measureWorkerRequest(
   const now = options.now ?? (() => performance.now())
   return new Promise((resolve, reject) => {
     const results = new Map<RuleTier, LintTierResult>()
+    const perTierRoundTripMs = { fast: 0, deep: 0, idle: 0 }
     const started = now()
     let done = false
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -94,6 +99,7 @@ export function measureWorkerRequest(
         roundTripMs: Math.max(0, now() - started),
         workerDurationMs: Object.values(perTierMs).reduce((sum, ms) => sum + ms, 0),
         perTierMs,
+        perTierRoundTripMs,
         diagnosticsCount
       })
     }
@@ -115,6 +121,7 @@ export function measureWorkerRequest(
         return
       }
       results.set(message.tier, message)
+      perTierRoundTripMs[message.tier] = Math.max(0, now() - started)
       if (results.size === wanted.size) finish()
     }
 
@@ -179,11 +186,13 @@ export async function runBrowserWorkerBenchmark(
       for (let i = 0; i < options.warmups; i++) await measure(workload, utf16Length)
       const roundTrips: number[] = []
       const ownDurations: number[] = []
+      const tierRoundTrips: Record<RuleTier, number[]> = { fast: [], deep: [], idle: [] }
       let totalDiagnostics = 0
       for (let i = 0; i < options.iterations; i++) {
         const sample = await measure(workload, utf16Length)
         roundTrips.push(sample.roundTripMs)
         ownDurations.push(sample.workerDurationMs)
+        for (const tier of ALL_TIERS) tierRoundTrips[tier].push(sample.perTierRoundTripMs[tier])
         totalDiagnostics += sample.diagnosticsCount
         completed++
         onProgress?.(completed, total)
@@ -193,6 +202,11 @@ export async function runBrowserWorkerBenchmark(
         utf16Length,
         roundTrip: summarizeLatency(roundTrips),
         workerDuration: summarizeLatency(ownDurations),
+        perTierRoundTrip: {
+          fast: summarizeLatency(tierRoundTrips.fast),
+          deep: summarizeLatency(tierRoundTrips.deep),
+          idle: summarizeLatency(tierRoundTrips.idle)
+        },
         totalDiagnostics
       })
     }
