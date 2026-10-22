@@ -50,7 +50,9 @@ function splitSentencesFallback(text: string): SentenceSpan[] {
       if (end > start) {
         spans.push({ start, end, text: text.slice(start, end) })
       }
-      start = end
+      // The newline is a separator, not part of the next sentence.
+      // Advancing only to i would expose a trailing standalone "\\n" span.
+      start = ch === '\\n' ? i + 1 : end
     }
   }
   if (start < text.length) {
