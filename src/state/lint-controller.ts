@@ -7,6 +7,8 @@
  */
 
 import type { LintRequest, LintTierResult, WorkerResponse } from '../worker/protocol'
+import { isTierCompletion } from '../worker/revision-gate'
+import { TierCompletionTracker, type TierCompletionMessage } from './tier-completion'
 import type { RuleTier } from '../core/types'
 import type { AppConfig } from '../core/config/schema'
 import { appState } from './app-state'
@@ -20,13 +22,12 @@ const MAX_RESTART_ATTEMPTS = 3
 const ALL_TIERS: RuleTier[] = ['fast', 'deep', 'idle']
 
 interface PendingWait {
-  tiers: Set<RuleTier>
-  results: Map<RuleTier, LintTierResult>
+  tracker: TierCompletionTracker
   resolve: (results: Map<RuleTier, LintTierResult>) => void
   timer: ReturnType<typeof setTimeout>
 }
 
-type MessageHandler = (message: LintTierResult | { type: 'error'; revision: number; message: string }) => void
+type MessageHandler = (message: TierCompletionMessage) => void
 
 class AnalysisWorkerClient {
   private worker: Worker | null = null
@@ -64,6 +65,7 @@ class AnalysisWorkerClient {
       this.restartAttempts = 0
       return
     }
+    if (!isTierCompletion(message)) return
     lintController.decrementInFlight()
     if (message.type === 'result') {
       // UIへの反映はrevision一致時のみ (§24: 最新revisionのみ表示)
@@ -137,11 +139,11 @@ const pendingWaits = new Map<number, PendingWait>()
 function resolveIfComplete(revision: number): void {
   const entry = pendingWaits.get(revision)
   if (entry === undefined) return
-  if (ALL_TIERS.every((t) => entry.tiers.has(t) === false || entry.results.has(t))) {
+  if (entry.tracker.complete) {
     clearTimeout(entry.timer)
     pendingWaits.delete(revision)
     messageHandlers.delete(revision)
-    entry.resolve(entry.results)
+    entry.resolve(entry.tracker.results)
   }
 }
 
@@ -152,21 +154,18 @@ function registerWait(
 ): Promise<Map<RuleTier, LintTierResult>> {
   return new Promise((resolve) => {
     const entry: PendingWait = {
-      tiers: new Set(tiers),
-      results: new Map(),
+      tracker: new TierCompletionTracker(tiers),
       resolve,
       timer: setTimeout(() => {
         pendingWaits.delete(revision)
         messageHandlers.delete(revision)
-        resolve(entry.results)
+        resolve(entry.tracker.results)
       }, WORKER_WATCHDOG_MS)
     }
     pendingWaits.set(revision, entry)
     messageHandlers.set(revision, (message) => {
       onMessage(message)
-      if (message.type === 'result') {
-        entry.results.set(message.tier, message)
-      }
+      entry.tracker.record(message)
       resolveIfComplete(revision)
     })
   })
@@ -245,7 +244,7 @@ class LintController {
   lintShadowText(text: string): Promise<Map<RuleTier, LintTierResult>> {
     const shadowRevision = -Date.now() - Math.floor(Math.random() * 1000) // 負のrevisionはUIへ反映されない (§24)
     const promise = registerWait(shadowRevision, ALL_TIERS, () => undefined)
-    this.inFlight++
+    this.inFlight += ALL_TIERS.length
     this.client.post({
       type: 'lint',
       revision: shadowRevision,
