@@ -79,3 +79,9 @@ generation gate and per-workspace preference handling.
 
 **6C:** expand vocabularies after evidence, licensing and positive/negative
 corpus review. A large corpus is not automatically safe to redistribute.
+
+## Integration note
+
+The unrelated meeting-minutes regression introduced by PR #49 was fixed in
+PR #57 before this dictionary pack was merged. Both independent test suites
+must remain green; do not weaken either gate to unblock a dictionary release.
