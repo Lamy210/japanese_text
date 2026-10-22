@@ -9,6 +9,7 @@
 
 import type { LintRequest, WorkerResponse } from './protocol'
 import { prepareOwnRuleExecution, runOwnRules, type PreparedOwnRuleExecution } from '../core/engine/engine'
+import { RevisionGate } from './revision-gate'
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope
 
@@ -42,6 +43,7 @@ async function loadTextlint(): Promise<typeof import('../core/engine/textlint-ad
 }
 
 let textlintLoadError: string | null = null
+const revisionGate = new RevisionGate()
 
 async function runLint(req: LintRequest): Promise<void> {
   const { revision, text, config, docType, tiers } = req
@@ -51,6 +53,12 @@ async function runLint(req: LintRequest): Promise<void> {
   let pendingPreparationMs = 0
 
   for (const tier of tiers) {
+    // A newer UI revision makes older work obsolete. Send one terminal
+    // response per tier so UI progress and manual waiters never get stuck.
+    if (revisionGate.isObsolete(revision)) {
+      post({ type: 'skipped', revision, tier, reason: 'superseded' })
+      continue
+    }
     try {
       if (prepared === null) {
         const started = performance.now()
@@ -65,6 +73,10 @@ async function runLint(req: LintRequest): Promise<void> {
         let textlintDiagnostics: typeof own.diagnostics = []
         const ruleErrors = [...own.ruleErrors]
         const adapter = await loadTextlint()
+        if (revisionGate.isObsolete(revision)) {
+          post({ type: 'skipped', revision, tier, reason: 'superseded' })
+          continue
+        }
         if (adapter !== null) {
           try {
             const result = await adapter.runTextlint(text, config, docType)
@@ -81,6 +93,10 @@ async function runLint(req: LintRequest): Promise<void> {
             ruleId: 'textlint',
             message: `textlintモジュールのロードに失敗しました。Deep解析の一部が無効になっています。${textlintLoadError ?? ''}`
           })
+        }
+        if (revisionGate.isObsolete(revision)) {
+          post({ type: 'skipped', revision, tier, reason: 'superseded' })
+          continue
         }
         const merged = [...own.diagnostics, ...textlintDiagnostics].sort(
           (a, b) => a.start - b.start || a.end - b.end || a.ruleId.localeCompare(b.ruleId)
@@ -110,6 +126,7 @@ async function runLint(req: LintRequest): Promise<void> {
       post({
         type: 'error',
         revision,
+        tier,
         message: `${tier}解析でエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`
       })
     }
@@ -123,6 +140,9 @@ function post(message: WorkerResponse): void {
 ctx.addEventListener('message', (event: MessageEvent<LintRequest>) => {
   const data = event.data
   if (data === undefined || data === null || data.type !== 'lint') return
+  // Track arrival before scheduling async work; negative formatter shadow
+  // requests must never obsolete positive UI requests or be cancelled.
+  revisionGate.receive(data.revision)
   void runLint(data)
 })
 
