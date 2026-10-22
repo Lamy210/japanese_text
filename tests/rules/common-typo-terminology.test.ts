@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { formatDocument } from '../../src/core/formatter/formatter'
 import { validateAppConfig } from '../../src/core/config/validate'
+import { CONFIG_SCHEMA_VERSION } from '../../src/core/config/schema'
 import { runSingleRule, runTier, testConfig } from '../helpers'
 
 const id = 'wording/common-typo'
@@ -98,7 +99,7 @@ describe('curated typo dictionary: extension and local terminology authority', (
     expect(check('デバックします。', config)).toHaveLength(1)
   })
 
-  test('applies overrides after a supported config import without migration', () => {
+  test('applies overrides after v1 import and normalization', () => {
     const config = validateAppConfig({
       schemaVersion: 1,
       terminology: [
@@ -108,7 +109,8 @@ describe('curated typo dictionary: extension and local terminology authority', (
     })
     expect(check('コミニュティとアクセサビリティを確認します。', config)).toEqual([])
     expect(check('デバックします。', config)).toHaveLength(1)
-    expect(config.schemaVersion).toBe(1)
+    expect(config.schemaVersion).toBe(CONFIG_SCHEMA_VERSION)
+    expect(config.schemaVersion).toBe(2)
   })
 
   test('the user can retain default typo rule behavior with the empty terminology list', () => {

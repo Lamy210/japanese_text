@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { validateAppConfig } from '../../src/core/config/validate'
+import { CONFIG_SCHEMA_VERSION } from '../../src/core/config/schema'
 import { createAllowedTypoTerm } from '../../src/core/rules/fast/common-typo'
 import { runSingleRule, runTier, testConfig } from '../helpers'
 import type { Diagnostic } from '../../src/core/types'
@@ -21,12 +22,13 @@ describe('allow a curated typo as an intentional local term', () => {
     })
   })
 
-  test('validates and round-trips a preferred-only term in schema v1', () => {
+  test('imports a v1 preferred-only term and normalizes to the latest schema', () => {
     const text = 'デバックを実行します。'
     const term = createAllowedTypoTerm(diagnostic(text), text, [], 'typo-allow-2')!
     const config = validateAppConfig({ schemaVersion: 1, terminology: [term] })
     expect(config.terminology).toContainEqual(term)
-    expect(config.schemaVersion).toBe(1)
+    expect(config.schemaVersion).toBe(CONFIG_SCHEMA_VERSION)
+    expect(config.schemaVersion).toBe(2)
     expect(runSingleRule('wording/common-typo', text, config)).toEqual([])
     expect(runSingleRule('wording/terminology', text, config)).toEqual([])
     expect(runTier(text, config, 'fast').ruleErrors).toEqual([])

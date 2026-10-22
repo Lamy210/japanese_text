@@ -1,5 +1,6 @@
 import { CONFIG_SCHEMA_VERSION, type AppConfig } from '../../core/config/schema'
 import type { GlobalPreferences, RuleProfile, Workspace } from '../../core/workspace/types'
+import { resolveProfileAnalysisSettings, validateProfileAnalysisSettings } from '../../core/analysis/profile-settings'
 
 export interface ProjectedStorageState {
   preferences: GlobalPreferences
@@ -22,6 +23,7 @@ function storageModeFromConfig(config: AppConfig): 'private-session' | 'local-li
 export function composeAppConfig(state: ProjectedStorageState): AppConfig {
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
+    analysis: resolveProfileAnalysisSettings(state.profile.analysis),
     preset: state.profile.sourcePresetId ?? 'custom',
     rules: structuredClone(state.profile.rules),
     ngWords: structuredClone(state.profile.ngWords),
@@ -62,9 +64,9 @@ function splitCommon(
       terminology: structuredClone(config.terminology),
       citation: structuredClone(config.citation),
       formatter: structuredClone(config.formatter),
-      // AppConfig v1 cannot represent Analysis flags. Preserve the optional
-      // Profile-local metadata during ordinary saves and legacy migrations.
-      ...(current.profile.analysis === undefined ? {} : { analysis: structuredClone(current.profile.analysis) }),
+      // V2 analysis metadata is now explicit in AppConfig. Validate before
+      // writing Profile records and never treat dictionary references as content.
+      analysis: validateProfileAnalysisSettings(config.analysis),
       customRules: structuredClone(current.profile.customRules),
       createdAt: current.profile.createdAt,
       updatedAt: now
