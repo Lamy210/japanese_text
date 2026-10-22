@@ -64,3 +64,8 @@ export function defaultAnalysisPackSelection(): Readonly<Record<AnalysisPackId, 
     [pack.id, pack.required || pack.defaultEnabledOnFreshInstall]
   )) as Record<AnalysisPackId, boolean>)
 }
+
+/** v1 compatibility: every previously configured own/textlint rule keeps its effective state. */
+export function legacyCompatiblePackSelection(): Readonly<Record<AnalysisPackId, boolean>> {
+  return { core: true, grammar: true, dictionary: true, morphology: false, technical: true, style: true }
+}
