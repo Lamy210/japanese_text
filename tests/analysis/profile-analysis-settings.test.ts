@@ -27,10 +27,12 @@ describe('AP-03a: non-destructive Profile analysis settings', () => {
   })
 
   test('validates strict Profile metadata and forces required core ON without changing input', () => {
-    const input = defaultProfileAnalysisSettings()
-    input.packs.core = false
-    input.packs.dictionary = false
-    input.dictionaries.enabledSharedAssetIds.push('test-ja-v1')
+    const defaults = defaultProfileAnalysisSettings()
+    const input = {
+      ...defaults,
+      packs: { ...defaults.packs, core: false, dictionary: false },
+      dictionaries: { ...defaults.dictionaries, enabledSharedAssetIds: ['test-ja-v1'] }
+    }
     const validated = validateProfileAnalysisSettings(input)
     expect(validated.packs).toMatchObject({ core: true, dictionary: false })
     expect(validated.dictionaries.enabledSharedAssetIds).toEqual(['test-ja-v1'])
@@ -70,8 +72,8 @@ describe('AP-03a: non-destructive Profile analysis settings', () => {
 
   test('preserves analysis options on legacy AppConfig v1 save without changing workspace privacy', () => {
     const state = createDefaultWorkspaceState(200)
-    state.profile.analysis = defaultProfileAnalysisSettings()
-    state.profile.analysis.packs.dictionary = false
+    const settings = defaultProfileAnalysisSettings()
+    state.profile.analysis = { ...settings, packs: { ...settings.packs, dictionary: false } }
     const config = composeAppConfig(state)
     const updated = splitAppConfigPreservingStorageMode({
       ...config,
@@ -88,8 +90,8 @@ describe('AP-03a: non-destructive Profile analysis settings', () => {
   test('preserves the optional Profile field on a real WorkspaceService.saveConfig path', async () => {
     const memory = createMemoryStorageContext()
     const seed = createDefaultWorkspaceState(100)
-    seed.profile.analysis = defaultProfileAnalysisSettings()
-    seed.profile.analysis.packs.dictionary = false
+    const settings = defaultProfileAnalysisSettings()
+    seed.profile.analysis = { ...settings, packs: { ...settings.packs, dictionary: false } }
     await memory.repositories.preferences.save(seed.preferences)
     await memory.atomicOperations.createWorkspaceAndActivate(seed.workspace, seed.profile)
     const service = createWorkspaceService({
@@ -133,10 +135,9 @@ describe('AP-03a: storage repository roundtrips', () => {
         a.id = 'profile-a'
         const b = createDefaultWorkspaceState(100).profile
         b.id = 'profile-b'
-        a.analysis = defaultProfileAnalysisSettings()
-        a.analysis.packs.dictionary = false
-        b.analysis = defaultProfileAnalysisSettings()
-        b.analysis.packs.morphology = true
+        const settings = defaultProfileAnalysisSettings()
+        a.analysis = { ...settings, packs: { ...settings.packs, dictionary: false } }
+        b.analysis = { ...settings, packs: { ...settings.packs, morphology: true } }
         await h.repositories.profiles.save(a)
         await h.repositories.profiles.save(b)
         const loadedA = await h.repositories.profiles.get(a.id)
@@ -146,7 +147,8 @@ describe('AP-03a: storage repository roundtrips', () => {
         expect(loadedB?.analysis?.packs.morphology).toBe(true)
         expect(loadedA?.analysis).not.toBe(a.analysis)
         // Changing the returned value must not modify durable records.
-        loadedA!.analysis!.packs.dictionary = true
+        const modified = loadedA as { analysis: { packs: { dictionary: boolean } } }
+        modified.analysis.packs.dictionary = true
         expect((await h.repositories.profiles.get(a.id))?.analysis?.packs.dictionary).toBe(false)
         const bad = { ...a, analysis: { ...a.analysis, secret: 'document contents' } }
         await expect(h.repositories.profiles.save(bad)).rejects.toThrow()
