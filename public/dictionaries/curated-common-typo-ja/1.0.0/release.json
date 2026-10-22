@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "pack": {
+    "schemaVersion": 1,
+    "packId": "curated-common-typo-ja",
+    "version": "1.0.0",
+    "locale": "ja-JP",
+    "kind": "typo",
+    "distribution": "bundled",
+    "entryCount": 8,
+    "provenance": {
+      "origin": "first-party",
+      "licenseId": "NOASSERTION",
+      "reviewStatus": "pending"
+    }
+  },
+  "asset": {
+    "path": "entries.json",
+    "mediaType": "application/json",
+    "encoding": "utf-8",
+    "byteLength": 620,
+    "sha256": "619835297f261cbb44305ddc05843366a1d0283f77c397d18b802373f248ed38"
+  }
+}
