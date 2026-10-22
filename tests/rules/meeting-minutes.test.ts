@@ -76,7 +76,7 @@ describe('meeting minutes sections', () => {
   })
 
   test('does not count deadline mentions in prose or code', () => {
-    const text = ['# 議事録', '参加者：A', '決定事項：保留', '対応事項：検証', '担当者：A', '期日：を確認する予定', ''].join('\n')
+    const text = ['# 議事録', '参加者：A', '決定事項：保留', '未決事項：次回確認', '対応事項：検証', '担当者：A', '期日：を確認する予定', ''].join('\n')
     expect(scan(text)).toEqual([])
     const withoutLabel = text.replace('期日：を確認する予定', '本文中に期日：を記載する')
     expect(scan(withoutLabel)).toHaveLength(1)
