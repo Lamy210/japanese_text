@@ -40,7 +40,7 @@ export const honorificRequestRule: CoreRule = {
       results.push({
         start: match.index,
         end: match.index + match[0].length,
-        message: `「${match[0]}」は、依頼先の行為を表す場合「${suggestion}」や「確認してください」などの表現を検討できます。誰の行為か、依頼の丁寧さに合わせて確認してください。`
+        message: `「${match[0]}」は、依頼先の行為を表す場合「${suggestion}」などの表現を検討できます。誰の行為か、依頼の丁寧さに合わせて確認してください。`
       })
     }
     return results
