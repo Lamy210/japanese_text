@@ -44,6 +44,7 @@
   <div class="panel">
     <p class="warning">これは開発環境専用の手動計測ページです。文書入力・UI描画遅延は測定しません。p99は少数サンプルの参考値です。共有CIの値と直接比較しないでください。</p>
     <p>サンプル文章はコード内で生成されます。編集中の本文、Local Library、Cookie、ブラウザ内の保存データにはアクセスしません。外部サービスへの送信はありません。結果には文章を含みません。</p>
+    <p>Fast / Deep / Idleの受信時刻はそれぞれ最初の要求送信からの経過時間です。Tier単独の処理時間ではなく、前段の処理・転送・Workerスケジューリングも含む累積の応答時間です。</p>
     <p>ブラウザDevToolsのネットワーク制限、CPUスロットリング、バックグラウンドタブ、拡張機能で数値が変わります。実測値を比較するときは条件を揃えてください。</p>
   </div>
   <section class="panel">
@@ -52,7 +53,7 @@
     <div class="scroll">
       <table>
         <thead>
-          <tr><th scope="col">文章種別</th><th scope="col">UTF-16文字数</th><th scope="col">RTT p50 (ms)</th><th scope="col">RTT p95 (ms)</th><th scope="col">RTT p99 (ms)</th><th scope="col">Worker own p50 (ms)</th></tr>
+          <tr><th scope="col">文章種別</th><th scope="col">UTF-16文字数</th><th scope="col">RTT p50 (ms)</th><th scope="col">RTT p95 (ms)</th><th scope="col">RTT p99 (ms)</th><th scope="col">Fast受信 p95 (ms)</th><th scope="col">Deep受信 p95 (ms)</th><th scope="col">Idle受信 p95 (ms)</th><th scope="col">Worker own p50 (ms)</th></tr>
         </thead>
         <tbody id="results"></tbody>
       </table>
