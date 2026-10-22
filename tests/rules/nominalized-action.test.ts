@@ -81,7 +81,8 @@ describe('nominalized-action writing guidance', () => {
     expect(scan(text)).toEqual([])
     const original = runSingleRule('wording/redundancy', text, testConfig())
     expect(original).toHaveLength(1)
-    expect(original[0]?.fixKind).toBe('suggestion')
+    expect(original[0]?.fixKind).toBe('none')
+    expect(original[0]?.replacement).toBeUndefined()
   })
 
   test('does not report quotes or literal examples in Markdown code and metadata', () => {
