@@ -180,6 +180,11 @@ class LintController {
   private tier2Timer: ReturnType<typeof setTimeout> | null = null
   private idleHandle: number | null = null
   private inFlight = 0
+  /** Consecutive manual Lint clicks for one revision share the same wait/Worker request. */
+  private manualLintInFlight: {
+    revision: number
+    promise: Promise<Map<RuleTier, LintTierResult>>
+  } | null = null
   private client = new AnalysisWorkerClient()
   private idleScheduler: {
     request: (cb: () => void, opts: { timeout: number }) => number
@@ -236,7 +241,16 @@ class LintController {
   lintAllNow(): Promise<Map<RuleTier, LintTierResult>> {
     this.cancelTimers()
     const rev = appState.revision()
+    // registerWait is revision-keyed. Registering it twice would overwrite the
+    // first Promise's handler and leave that caller blocked until watchdog.
+    const existing = this.manualLintInFlight
+    if (existing?.revision === rev) return existing.promise
     const promise = registerWait(rev, ALL_TIERS, () => undefined)
+    const entry = { revision: rev, promise }
+    this.manualLintInFlight = entry
+    void promise.then(() => {
+      if (this.manualLintInFlight === entry) this.manualLintInFlight = null
+    })
     this.postLint(ALL_TIERS)
     return promise
   }
