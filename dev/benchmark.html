@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Japanese Writing Toolkit — Local Worker Benchmark</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", sans-serif; background: #0d1421; color: #e6edf9 }
+    body { margin: 0; padding: clamp(1rem, 4vw, 3rem); }
+    main { max-width: 1100px; margin: auto; }
+    h1 { margin-top: 0; font-size: clamp(1.35rem, 3vw, 2.3rem) }
+    p, li { color: #b5c4dd; line-height: 1.7; }
+    a { color: #8dcdfb }
+    .panel { border: 1px solid #34455b; padding: 1.1rem; border-radius: 12px; margin: 1rem 0; }
+    label, button, select { font: inherit; }
+    label { display: inline-block; margin: .4rem 1rem .4rem 0 }
+    select, button { background: #203550; color: #fff; border: 1px solid #567394; border-radius: 8px; padding: .6rem .9rem; }
+    button { cursor: pointer; }
+    button:disabled { cursor: wait; opacity: .5 }
+    button:focus-visible, select:focus-visible { outline: 3px solid #9bd9ff; outline-offset: 3px }
+    table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: .92rem; }
+    th, td { text-align: right; border-bottom: 1px solid #35465e; padding: .6rem; }
+    th:first-child, td:first-child { text-align: left }
+    .scroll { overflow-x: auto; }
+    #status { min-height: 2rem; }
+    .warning { color: #f4c878 }
+  </style>
+</head>
+<body>
+<main>
+  <p><a href="/">← Japanese Writing Toolkit</a></p>
+  <h1>Local Browser Worker Benchmark</h1>
+  <p>日本語校正エンジンのWeb Workerについて、合成文章の送信から全Tier応答までの時間をブラウザ内で測定します。Worker内の処理時間と往復時間を区別します。</p>
+  <section class="panel">
+    <label for="scope">テスト範囲</label>
+    <select id="scope">
+      <option value="quick">通常：1,000 / 10,000文字、通常文・Markdown</option>
+      <option value="full">詳細：1,000〜100,000文字、4ジャンル</option>
+    </select>
+    <button id="start" type="button">計測を開始</button>
+    <button id="download" type="button" disabled>JSON結果を保存</button>
+    <p id="status" role="status" aria-live="polite">未実行</p>
+  </section>
+  <div class="panel">
+    <p class="warning">これは開発環境専用の手動計測ページです。文書入力・UI描画遅延は測定しません。p99は少数サンプルの参考値です。共有CIの値と直接比較しないでください。</p>
+    <p>サンプル文章はコード内で生成されます。編集中の本文、Local Library、Cookie、ブラウザ内の保存データにはアクセスしません。外部サービスへの送信はありません。結果には文章を含みません。</p>
+    <p>ブラウザDevToolsのネットワーク制限、CPUスロットリング、バックグラウンドタブ、拡張機能で数値が変わります。実測値を比較するときは条件を揃えてください。</p>
+  </div>
+  <section class="panel">
+    <h2>計測結果</h2>
+    <p id="cold">Cold Start: —</p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th scope="col">文章種別</th><th scope="col">UTF-16文字数</th><th scope="col">RTT p50 (ms)</th><th scope="col">RTT p95 (ms)</th><th scope="col">RTT p99 (ms)</th><th scope="col">Worker own p50 (ms)</th></tr>
+        </thead>
+        <tbody id="results"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script type="module" src="./benchmark-main.ts"></script>
+</body>
+</html>
