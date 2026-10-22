@@ -22,21 +22,21 @@ export const meetingMinutesSectionsRule: CoreRule = {
       const maskedLine = ctx.maskedText.slice(offset, offset + line.length)
       return maskedLine.includes('\uFFFF') ? '' : maskedLine
     })
-    const bodyLines = visibleLines.slice(first + 1).map(line => line.trim())
-    const hasSection = (labels: string) => bodyLines.some(line => new RegExp(`^(?:#{1,6}\\s+)?(?:${labels})[ \\t　]*[：:]`, 'u').test(line))
+    const bodyLines = visibleLines.slice(first + 1).map(line => line.trim().replace(/^#{1,6}[ \t]+/u, ''))
+    const hasSection = (pattern: RegExp) => bodyLines.some(line => pattern.test(line))
     const checks: Array<[RegExp, string]> = [
-      [/(?:参加者|出席者|出席メンバー)/u, '参加者'],
-      [/(?:決定事項|決議事項|決まったこと)/u, '決定事項']
+      [/^(?:参加者|出席者|出席メンバー)[ \t　]*[：:]/u, '参加者'],
+      [/^(?:決定事項|決議事項|決まったこと)[ \t　]*[：:]/u, '決定事項']
     ]
-    const diagnostics = checks.flatMap(([pattern, label]): RawDiagnostic[] =>
-      hasSection(pattern.source) ? [] : [{
+    const diagnostics: RawDiagnostic[] = checks.flatMap(([pattern, label]) =>
+      hasSection(pattern) ? [] : [{
         start, end: start + '議事録'.length,
         message: `議事録に「${label}」の項目が見当たりません。未決定・欠席・該当なしの場合も、その旨を明示してください。`,
-        fixKind: 'none'
+        fixKind: 'none' as const
       }]
     )
-    // Action ownership is requested only for minutes which actually contain a task section.
-    if (hasSection('対応事項|アクションアイテム|ToDo|TODO') && !hasSection('担当者|担当|オーナー')) {
+    if (hasSection(/^(?:対応事項|アクションアイテム|ToDo|TODO)[ \t　]*[：:]/u) &&
+        !hasSection(/^(?:担当者|担当|オーナー)[ \t　]*[：:]/u)) {
       diagnostics.push({ start, end: start + '議事録'.length,
         message: '対応事項が記載されています。担当者の欄も明示して、対応漏れを防いでください。', fixKind: 'none' })
     }
