@@ -30,7 +30,7 @@ export interface StaticDictionaryLoadOptions {
 
 function errorReason(error: unknown, signal?: AbortSignal): 'aborted' | 'fetch' | 'invalid-asset' {
   if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) return 'aborted'
-  if (error instanceof Error && error.message.startsWith('Invalid dictionary')) return 'invalid-asset'
+  if (error instanceof Error && /^(?:Invalid dictionary|Dictionary asset)/u.test(error.message)) return 'invalid-asset'
   return 'fetch'
 }
 
