@@ -11,6 +11,7 @@ import { replaceDocumentIgnores } from '../storage/document-ignore-store'
 import type { Workspace } from '../core/workspace/types'
 import type { EditableDocument } from '../document/types'
 import { formatDocument as formatDocumentCore } from '../core/formatter/formatter'
+import { checkCompleteFormatterLint } from '../core/formatter/lint-safety'
 import { migrateConfig } from '../core/config/validate'
 import { applyFixesTransaction, applyReplacement, jumpToPosition } from '../editor/editor-adapter'
 import { lintController } from './lint-controller'
@@ -192,7 +193,17 @@ export async function formatDocumentAction(): Promise<void> {
     return
   }
 
-  await lintController.lintAllNow()
+  const baselineRevision = appState.revision()
+  const baselineResults = await lintController.lintAllNow()
+  if (appState.revision() !== baselineRevision || appState.documentText() !== text) {
+    appState.pushToast('warning', '編集中に文書が変更されたためFormatを中止しました。')
+    return
+  }
+  const baseline = checkCompleteFormatterLint(baselineResults, baselineRevision)
+  if (!baseline.ok) {
+    appState.pushToast('warning', '全Tierの解析が正常終了しなかったためFormatを中止しました。')
+    return
+  }
   const diagnostics = appState.diagnostics()
   const plan = formatDocumentCore(text, diagnostics)
   if (plan.appliedCount === 0) {
@@ -200,23 +211,25 @@ export async function formatDocumentAction(): Promise<void> {
     return
   }
 
-  // Shadow lint returns the full diagnostics. Compare raw with raw so that
-  // deliberately hidden errors do not look like *new* errors after formatting.
-  const errorsBefore = appState.allDiagnostics().filter((d) => d.severity === 'error').length
+  // Compare complete raw lint runs (not the UI-filtered ignore state).
+  // Skipped, timed-out or failed Shadow tiers cannot prove safety.
   try {
-    const shadow = await lintController.lintShadowText(plan.text)
-    const shadowDiags: Diagnostic[] = []
-    for (const result of shadow.values()) shadowDiags.push(...result.diagnostics)
-    const errorsAfter = shadowDiags.filter((d) => d.severity === 'error').length
-    if (errorsAfter > errorsBefore) {
+    const shadowResults = await lintController.lintShadowText(plan.text)
+    const shadow = checkCompleteFormatterLint(shadowResults, 'shadow')
+    if (!shadow.ok) {
+      appState.pushToast('warning', 'Format後の全Tierを検証できなかったため変更を適用しませんでした。')
+      return
+    }
+    if (shadow.errorCount > baseline.errorCount) {
       appState.pushToast(
         'warning',
-        `Formatを中止しました (新規Errorが ${errorsAfter - errorsBefore} 件発生する可能性があります)。`
+        `Formatを中止しました (新規Errorが ${shadow.errorCount - baseline.errorCount} 件発生する可能性があります)。`
       )
       return
     }
   } catch {
-    // Safe Fix only: continue if shadow lint itself fails.
+    appState.pushToast('warning', 'Format後の安全性確認に失敗したため変更を適用しませんでした。')
+    return
   }
 
   if (!(await captureBeforeFormatCheckpoint(text))) return

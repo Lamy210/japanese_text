@@ -5,6 +5,7 @@ const applyFixesTransaction = vi.fn()
 const snapshotCapture = vi.fn()
 const snapshotAutosave = vi.fn()
 const documentSave = vi.fn()
+const mockRevision = vi.hoisted(() => ({ current: 0 }))
 
 const workspace: Workspace = {
   id: 'w1',
@@ -33,8 +34,14 @@ vi.mock('../../src/core/formatter/formatter', () => ({
 
 vi.mock('../../src/state/lint-controller', () => ({
   lintController: {
-    lintAllNow: vi.fn(async () => undefined),
-    lintShadowText: vi.fn(async () => new Map()),
+    lintAllNow: vi.fn(async () => new Map((['fast', 'deep', 'idle'] as const).map(tier => [
+      tier,
+      { type: 'result', revision: mockRevision.current, tier, diagnostics: [], ruleErrors: [], durationMs: 1 }
+    ]))),
+    lintShadowText: vi.fn(async () => new Map((['fast', 'deep', 'idle'] as const).map(tier => [
+      tier,
+      { type: 'result', revision: -1, tier, diagnostics: [], ruleErrors: [], durationMs: 1 }
+    ]))),
     relintAll: vi.fn(),
     scheduleLint: vi.fn()
   }
@@ -89,6 +96,7 @@ describe('history product integration', () => {
       createdAt: 1, updatedAt: 1, active: true
     }])
     appState.setDocument('before', 'd1.md', 'markdown')
+    mockRevision.current = appState.revision()
     appState.updateConfig((draft) => { draft.formatter.enabled = true })
   })
 

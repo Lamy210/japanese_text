@@ -9,6 +9,7 @@
 import type { LintRequest, LintTierResult, WorkerResponse } from '../worker/protocol'
 import { isTierCompletion } from '../worker/revision-gate'
 import { TierCompletionTracker, type TierCompletionMessage } from './tier-completion'
+import { nextShadowLintRevision } from './shadow-revisions'
 import type { RuleTier } from '../core/types'
 import type { AppConfig } from '../core/config/schema'
 import { appState } from './app-state'
@@ -242,7 +243,7 @@ class LintController {
 
   /** Format後テキストのShadow lint (§18.6: 新規Error確認。UIには反映しない) */
   lintShadowText(text: string): Promise<Map<RuleTier, LintTierResult>> {
-    const shadowRevision = -Date.now() - Math.floor(Math.random() * 1000) // 負のrevisionはUIへ反映されない (§24)
+    const shadowRevision = nextShadowLintRevision() // 負のrevisionはUIへ反映されない (§24)
     const promise = registerWait(shadowRevision, ALL_TIERS, () => undefined)
     this.inFlight += ALL_TIERS.length
     this.client.post({
