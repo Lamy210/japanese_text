@@ -18,7 +18,7 @@ const nativeRuleIds = [
   'wording/common-typo',
   'wording/nominalized-action',
   'wording/repeated-phrase',
-  'wording/double-honorific', 'wording/ambiguity',
+  'wording/double-honorific', 'wording/honorific-request', 'wording/ambiguity',
   'style/mixed-tone', 'style/cross-paragraph-tone', 'style/consecutive-conjunction',
   'style/additive-conjunction-density',
   'style/comma-count', 'style/paragraph-density', 'markdown/heading-order',
