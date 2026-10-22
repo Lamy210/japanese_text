@@ -60,7 +60,13 @@ export const meetingMinutesSectionsRule: CoreRule = {
         fixKind: 'none'
       })
     }
+    // A concrete follow-up can be stated directly in the pending-item field;
+    // do not require a duplicate separate section for that already-stated action.
+    const hasInlineFollowup = bodyLines.some(line =>
+      /^(?:未決事項|保留事項|未解決事項)[ \t　]*[：:][ \t　]*(?:次回確認|次回判断|次回対応|次回検討|フォローアップ)(?:[。． \t　]|$)/u.test(line)
+    )
     if (hasSection(/^(?:未決事項|保留事項|未解決事項)[ \t　]*[：:]/u) &&
+        !hasInlineFollowup &&
         !hasSection(/^(?:次回確認|次回アクション|確認予定|フォローアップ)[ \t　]*[：:]/u)) {
       diagnostics.push({
         start, end: start + '議事録'.length,
