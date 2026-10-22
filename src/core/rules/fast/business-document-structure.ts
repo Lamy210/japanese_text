@@ -48,7 +48,7 @@ export const businessDocumentStructureRule: CoreRule = {
     const lines = ctx.lines.slice(first + 1).map((line, offset) => {
       const start = ctx.lineStarts[first + 1 + offset]!
       const masked = ctx.maskedText.slice(start, start + line.length)
-      return masked.includes('\uFFFF') ? '' : line.trim()
+      return masked.includes('\uFFFF') ? '' : line.trim().replace(/^(?:[-*+]|\d+[.)])[ \t]+/u, '')
     })
     const diagnostics: RawDiagnostic[] = profile.requirements.filter(req => !lines.some(line => req.pattern.test(line)))
       .map(req => ({
