@@ -39,19 +39,19 @@ describe('meeting minutes sections', () => {
   })
 
   test('requires explicit section labels rather than mentions in prose', () => {
-    const ds = scan('# 議事録\\n本文に参加者：Aと決定事項：Bを記載。')
+    const ds = scan('# 議事録\n本文に参加者：Aと決定事項：Bを記載。')
     expect(ds).toHaveLength(2)
   })
 
   test('flags action items without an owner section', () => {
-    const ds = scan('# 議事録\\n参加者：A\\n決定事項：採用\\n対応事項：テスト')
+    const ds = scan('# 議事録\n参加者：A\n決定事項：採用\n対応事項：テスト')
     expect(ds).toHaveLength(1)
     expect(ds[0]!.message).toContain('担当者')
-    expect(scan('# 議事録\\n参加者：A\\n決定事項：採用\\n対応事項：テスト\\n担当者：A')).toEqual([])
+    expect(scan('# 議事録\n参加者：A\n決定事項：採用\n対応事項：テスト\n担当者：A')).toEqual([])
   })
 
   test('does not count a section inside inline code or fenced code', () => {
-    expect(scan('# 議事録\\n`参加者：A`\\n決定事項：B')).toHaveLength(1)
+    expect(scan('# 議事録\n`参加者：A`\n決定事項：B')).toHaveLength(1)
   })
 
   test('is informational in main presets only', () => {
