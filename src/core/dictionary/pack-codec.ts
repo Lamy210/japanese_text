@@ -106,6 +106,37 @@ export function validateDictionaryAssetIndex(input: unknown): DictionaryAssetInd
   })
 }
 
+/** Validate the exact shipped bytes before making a pack available to rules. */
+export async function verifyCuratedTypoPackBytes(
+  bytes: Uint8Array,
+  rawIndex: unknown
+): Promise<CuratedTypoPackV1> {
+  const index = validateDictionaryAssetIndex(rawIndex)
+  if (bytes.byteLength !== index.byteLength || bytes.byteLength > MAX_TYPO_PACK_BYTES) {
+    throw new Error('Dictionary asset size mismatch')
+  }
+  const sha256 = await hashSha256(bytes)
+  if (sha256 !== index.sha256) throw new Error('Dictionary asset digest mismatch')
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text) as unknown
+  } catch {
+    throw new Error('Invalid JSON dictionary asset')
+  }
+  const pack = validateCuratedTypoPack(parsed)
+  if (pack.manifest.packId !== index.packId || pack.manifest.version !== index.version ||
+      serializeCuratedTypoPack(pack) !== text) {
+    throw new Error('Dictionary asset manifest or canonical encoding mismatch')
+  }
+  return pack
+}
+
+async function hashSha256(bytes: Uint8Array): Promise<string> {
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+  return Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
 export async function buildCuratedPackArtifacts(): Promise<{
   readonly packText: string
   readonly indexText: string
@@ -114,8 +145,7 @@ export async function buildCuratedPackArtifacts(): Promise<{
   const packText = serializeCuratedTypoPack(pack)
   const bytes = new TextEncoder().encode(packText)
   if (bytes.byteLength > MAX_TYPO_PACK_BYTES) throw new Error('Dictionary pack exceeds size limit')
-  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
-  const sha256 = Array.from(hash, byte => byte.toString(16).padStart(2, '0')).join('')
+  const sha256 = await hashSha256(bytes)
   const index = validateDictionaryAssetIndex({
     schemaVersion: 1,
     packId: pack.manifest.packId,
