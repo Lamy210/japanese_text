@@ -40,10 +40,10 @@ const result = (tier: RuleTier, revision: number, diagnostics: Diagnostic[] = []
   type: 'result', tier, revision, diagnostics, durationMs: 1,
   ruleErrors: failure ? [{ ruleId: 'textlint', message: 'unavailable' }] : []
 })
-const baseline = (revision: number) => new Map<RuleTier, LintTierResult>(allTiers.map(t =>
+const baseline = (revision: number) => new Map<RuleTier, LintTierResult>(allTiers.map((t): [RuleTier, LintTierResult] =>
   [t, result(t, revision, t === 'fast' ? [fix] : [])]
 ))
-const shadow = () => new Map<RuleTier, LintTierResult>(allTiers.map(t =>
+const shadow = () => new Map<RuleTier, LintTierResult>(allTiers.map((t): [RuleTier, LintTierResult] =>
   [t, result(t, -42)]
 ))
 const configure = (b: Map<RuleTier, LintTierResult>, s: Map<RuleTier, LintTierResult>) => {
