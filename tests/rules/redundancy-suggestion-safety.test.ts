@@ -31,10 +31,12 @@ describe('review-only Japanese wording must not offer syntactically unsafe direc
     expect(safe[0]?.replacement).toBe('行います')
     expect(formatDocument('テストを行ないます。', safe).text).toBe('テストを行います。')
 
-    const suggestion = check('編集することができます。')
-    expect(suggestion).toHaveLength(1)
-    expect(suggestion[0]?.fixKind).toBe('suggestion')
-    expect(suggestion[0]?.replacement).toBe('できます')
+    const conditional = check('編集することができます。')
+    expect(conditional).toHaveLength(1)
+    expect(conditional[0]?.fixKind).toBe('none')
+    expect(conditional[0]?.replacement).toBeUndefined()
+    expect(formatDocument('編集することができます。', conditional).text)
+      .toBe('編集することができます。')
   })
 
   test('maintains original UTF-16 offsets and uses rule-level source classification', () => {
