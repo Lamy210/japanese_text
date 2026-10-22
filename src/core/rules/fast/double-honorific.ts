@@ -36,9 +36,10 @@ export const doubleHonorificRule: CoreRule = {
   defaultSeverity: 'info',
   run: (ctx): RawDiagnostic[] => {
     const results: RawDiagnostic[] = []
+    const text = maskHonorificQuotedExamples(ctx.maskedText)
     const regex = new RegExp(pattern.source, pattern.flags)
     let match: RegExpExecArray | null
-    while ((match = regex.exec(maskHonorificQuotedExamples(ctx.maskedText))) !== null) {
+    while ((match = regex.exec(text)) !== null) {
       if (isMarkdownBlockquoteAt(ctx, match.index)) continue
       const replacement = replacementByPhrase.get(match[0])
       if (replacement === undefined) continue
