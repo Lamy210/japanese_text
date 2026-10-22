@@ -22,7 +22,7 @@ export const meetingMinutesSectionsRule: CoreRule = {
       const maskedLine = ctx.maskedText.slice(offset, offset + line.length)
       return maskedLine.includes('\uFFFF') ? '' : maskedLine
     })
-    const bodyLines = visibleLines.slice(first + 1).map(line => line.trim().replace(/^#{1,6}[ \t]+/u, ''))
+    const bodyLines = visibleLines.slice(first + 1).map(line => line.trim().replace(/^(?:#{1,6}|[-*+]|\d+[.)])[ \t]+/u, ''))
     const hasSection = (pattern: RegExp) => bodyLines.some(line => pattern.test(line))
     const checks: Array<[RegExp, string]> = [
       [/^(?:参加者|出席者|出席メンバー)[ \t　]*[：:]/u, '参加者'],
