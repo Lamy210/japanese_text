@@ -62,6 +62,28 @@ describe('browser Worker end-to-end latency measurement', () => {
     expect(listeners()).toBe(0)
   })
 
+  test('records each tier response RTT separately, despite out-of-order and duplicate messages', async () => {
+    let clock = 0
+    const { worker } = fakeWorker((req, emit) => {
+      clock = 2
+      emit({ type: 'result', revision: req.revision, tier: 'fast',
+        diagnostics: [], ruleErrors: [], durationMs: 1 })
+      clock = 4
+      emit({ type: 'result', revision: req.revision, tier: 'fast',
+        diagnostics: [], ruleErrors: [], durationMs: 900 })
+      clock = 12
+      emit({ type: 'result', revision: req.revision, tier: 'idle',
+        diagnostics: [], ruleErrors: [], durationMs: 2 })
+      clock = 25
+      emit({ type: 'result', revision: req.revision, tier: 'deep',
+        diagnostics: [], ruleErrors: [], durationMs: 3 })
+    })
+    const result = await measureWorkerRequest(worker, request(-22), { now: () => clock })
+    expect(result.perTierRoundTripMs).toEqual({ fast: 2, deep: 25, idle: 12 })
+    expect(result.roundTripMs).toBe(25)
+    expect(result.perTierMs).toEqual({ fast: 1, deep: 3, idle: 2 })
+  })
+
   test('rejects terminal skip, error and rule failures without falsely reporting a latency sample', async () => {
     const modes = [
       (req: LintRequest, emit: Emit) => emit({ type: 'skipped', revision: req.revision, tier: 'fast', reason: 'superseded' }),
@@ -115,6 +137,10 @@ describe('browser Worker end-to-end latency measurement', () => {
     expect(JSON.stringify(report)).not.toContain('本日の作業')
     expect(JSON.stringify(report)).not.toContain('合成文書を確認')
     expect(report.rows.every(row => row.workerDuration.count === 2)).toBe(true)
+    expect(report.rows[0]?.perTierRoundTrip.fast.count).toBe(2)
+    expect(report.rows[0]?.perTierRoundTrip.deep.count).toBe(2)
+    expect(report.rows[0]?.perTierRoundTrip.idle.count).toBe(2)
+    expect(report.rows[0]?.perTierRoundTrip.fast.p95Ms).toBeGreaterThanOrEqual(0)
     expect(report.scope).toContain('Worker')
   })
 
