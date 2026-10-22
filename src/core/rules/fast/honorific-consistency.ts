@@ -14,7 +14,7 @@ export const honorificConsistencyRule: CoreRule = {
     const results: RawDiagnostic[] = []
     const seen = new Map<string, string>()
     // Two or more CJK characters reduces collisions with ordinary pronouns.
-    const pattern = /([\p{Script=Han}]{2,6})(さん|くん)(?![ぁ-んァ-ン])/gu
+    const pattern = /([\p{Script=Han}]{2,6})(さん|くん)/gu
     for (let i = 0; i < ctx.lines.length; i++) {
       const original = ctx.lines[i]!
       const offset = ctx.lineStarts[i]!
