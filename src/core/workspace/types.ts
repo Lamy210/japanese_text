@@ -8,6 +8,7 @@ import type {
   ThemeMode
 } from '../config/schema'
 import type { DocumentType, RuleSetting } from '../types'
+import type { AnalysisPackId } from '../analysis/contracts'
 
 export type StorageMode = 'private-session' | 'local-library' | 'file-backed'
 
@@ -36,6 +37,8 @@ export interface GlobalPreferences {
 }
 
 export interface RuleProfile {
+  /** Optional on legacy IDB records; normalized on AppConfig projection. */
+  analysisPacks?: Record<AnalysisPackId, boolean>
   id: string
   name: string
   sourcePresetId?: PresetId
