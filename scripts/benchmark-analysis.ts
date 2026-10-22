@@ -5,7 +5,7 @@
  * This is a baseline tool, not a hard performance gate on shared CI hardware.
  */
 import { createDefaultConfig } from '../src/core/config/validate'
-import { buildRuleContext, runOwnRules } from '../src/core/engine/engine'
+import { buildRuleContext, prepareOwnRuleExecution, runOwnRules } from '../src/core/engine/engine'
 import {
   BENCHMARK_LENGTHS,
   BENCHMARK_WORKLOADS,
@@ -15,7 +15,7 @@ import {
   type WorkloadKind
 } from '../tests/performance/workloads'
 
-type Stage = 'context' | 'fast' | 'deep-own' | 'idle'
+type Stage = 'context' | 'fast' | 'deep-own' | 'idle' | 'all-own-fresh' | 'all-own-shared'
 interface Row {
   workload: WorkloadKind
   utf16Length: number
@@ -53,7 +53,18 @@ for (const kind of BENCHMARK_WORKLOADS) {
       ['context', () => buildRuleContext(text).maskRegions.length],
       ['fast', () => runOwnRules(text, config, 'fast', 'markdown').diagnostics.length],
       ['deep-own', () => runOwnRules(text, config, 'deep', 'markdown').diagnostics.length],
-      ['idle', () => runOwnRules(text, config, 'idle', 'markdown').diagnostics.length]
+      ['idle', () => runOwnRules(text, config, 'idle', 'markdown').diagnostics.length],
+      ['all-own-fresh', () =>
+        (['fast', 'deep', 'idle'] as const).reduce(
+          (sum, tier) => sum + runOwnRules(text, config, tier, 'markdown').diagnostics.length, 0
+        )
+      ],
+      ['all-own-shared', () => {
+        const prepared = prepareOwnRuleExecution(text, config)
+        return (['fast', 'deep', 'idle'] as const).reduce(
+          (sum, tier) => sum + runOwnRules(text, config, tier, 'markdown', prepared).diagnostics.length, 0
+        )
+      }]
     ]
     for (const [stage, fn] of stages) {
       rows.push({ workload: kind, utf16Length, stage, ...measure(fn) })
