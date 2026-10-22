@@ -4,22 +4,7 @@
  */
 import type { CoreRule, RawDiagnostic, RuleContext, Diagnostic } from '../../types'
 import type { TermEntry } from '../../config/schema'
-
-interface TypoEntry {
-  wrong: string
-  preferred: string
-}
-
-const TYPO_ENTRIES: readonly TypoEntry[] = [
-  { wrong: 'シュミレーション', preferred: 'シミュレーション' },
-  { wrong: 'コミニュケーション', preferred: 'コミュニケーション' },
-  { wrong: 'デバック', preferred: 'デバッグ' },
-  { wrong: 'うる覚え', preferred: 'うろ覚え' },
-  { wrong: 'コミニュティ', preferred: 'コミュニティ' },
-  { wrong: 'アクセサビリティ', preferred: 'アクセシビリティ' },
-  { wrong: 'シュミレーター', preferred: 'シミュレーター' },
-  { wrong: 'シュミレータ', preferred: 'シミュレータ' }
-]
+import { listCuratedTypos, findCuratedTypo } from '../../dictionary/curated-typos'
 
 // Avoid changing proper-name-like Katakana extensions (e.g. a product name
 // containing the suspicious spelling). Also avoid attached ASCII product IDs.
@@ -57,7 +42,7 @@ export function createAllowedTypoTerm(
       diagnostic.start < 0 || diagnostic.end <= diagnostic.start || diagnostic.end > text.length) return null
 
   const spelling = text.slice(diagnostic.start, diagnostic.end)
-  const pair = TYPO_ENTRIES.find(entry => entry.wrong === spelling)
+  const pair = findCuratedTypo(spelling)
   if (!pair || diagnostic.replacement !== pair.preferred) return null
   if (terms.some(term => term.preferred === spelling || term.rejected.includes(spelling))) return null
 
@@ -87,7 +72,7 @@ export function createCommonTypoRule(terminology: () => readonly TermEntry[]): C
         if (isBlockQuote(sourceLine)) continue
         const line = text.slice(lineStart, lineStart + sourceLine.length)
 
-        for (const entry of TYPO_ENTRIES) {
+        for (const entry of listCuratedTypos()) {
           if (preferredOrManaged.has(entry.wrong)) continue
           let from = 0
           while (true) {
