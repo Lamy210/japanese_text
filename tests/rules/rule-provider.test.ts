@@ -17,6 +17,7 @@ const nativeRuleIds = [
   'wording/ng-word', 'wording/terminology', 'wording/redundancy',
   'wording/common-typo',
   'wording/nominalized-action',
+  'wording/request-cushion-review', 'markdown/blockquote-spacing',
   'wording/repeated-phrase',
   'wording/double-honorific', 'wording/honorific-request', 'wording/doubled-object-particle', 'wording/tautology', 'wording/ambiguity',
   'style/mixed-tone', 'style/cross-paragraph-tone', 'style/consecutive-conjunction',
