@@ -15,7 +15,7 @@ function uniqueStrings(values: readonly string[], name: string): void {
 }
 
 function validatePack(pack: PackManifestV1): void {
-  if (pack.manifestVersion !== 1 || !PACKS.has(pack.id) || !pack.label.trim() ||
+  if (pack.manifestVersion !== 1 || !PACKS.has(pack.id) || (typeof pack.label !== 'string' || !pack.label.trim()) ||
       typeof pack.required !== 'boolean' ||
       typeof pack.defaultEnabledOnFreshInstall !== 'boolean' ||
       !Array.isArray(pack.declaredRuleIds) ||
@@ -34,7 +34,7 @@ function validatePack(pack: PackManifestV1): void {
 }
 
 function validateProvider(provider: ProviderDescriptorV1): void {
-  if (!PROVIDERS.has(provider.id) || !provider.implementationVersion.trim() ||
+  if (!PROVIDERS.has(provider.id) || (typeof provider.implementationVersion !== 'string' || !provider.implementationVersion.trim()) ||
       !['analysis-worker', 'nlp-worker'].includes(provider.executionContext) ||
       !['never', 'explicit-download'].includes(provider.networkPolicy) ||
       !Array.isArray(provider.capabilities) || !Array.isArray(provider.needsAssets) ||
@@ -59,7 +59,8 @@ function validateRule(rule: AnalysisRuleManifestV1): void {
       rule.supportedDocTypes.some(doc => doc !== 'markdown' && doc !== 'text') ||
       rule.capabilitiesRequired.some(cap => !CAPABILITIES.has(cap)) ||
       typeof rule.enabledByDefault !== 'boolean' ||
-      (rule.diagnosticIssueFamily !== null && !rule.diagnosticIssueFamily?.trim()) ||
+      (rule.diagnosticIssueFamily !== null &&
+        (typeof rule.diagnosticIssueFamily !== 'string' || !rule.diagnosticIssueFamily.trim())) ||
       !['none', 'suggestion', 'safe'].includes(rule.fixKindCeiling) ||
       (rule.execution === 'nlp' && rule.fixKindCeiling === 'safe')) {
     throw new Error(`Invalid analysis rule: ${rule.id}`)
