@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "description": "Synthetic rule-level gold annotations for regression across 9 rules. Not independent real-world accuracy.",
+  "description": "Synthetic gold annotations for currently supported writing quality rules. These are NOT unbiased real-world precision or recall estimates.",
   "annotationPolicy": "Surface occurrence is 1-based in original UTF-16 text, including masked segments; explicit zero-diagnostic negatives are required.",
   "splits": [
     "development",
@@ -1709,6 +1709,125 @@
       "group": "masked",
       "split": "development",
       "text": "[資料](https://example.com/今現在)",
+      "expected": []
+    },
+    {
+      "id": "red-quote-representation",
+      "ruleId": "wording/redundancy",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "holdout",
+      "text": "「行ないます」という表記を紹介します。",
+      "expected": []
+    },
+    {
+      "id": "red-quote-katakana",
+      "ruleId": "wording/redundancy",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "holdout",
+      "text": "『色々』という表記を用いました。",
+      "expected": []
+    },
+    {
+      "id": "red-quote-multiline",
+      "ruleId": "wording/redundancy",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "holdout",
+      "text": "「行ないます\\n出来ます」と表記しています。",
+      "expected": []
+    },
+    {
+      "id": "red-blockquoted-example",
+      "ruleId": "wording/redundancy",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "holdout",
+      "text": "> 行ないます。\\n> 色々あります。",
+      "expected": []
+    },
+    {
+      "id": "red-mixed-prose",
+      "ruleId": "wording/redundancy",
+      "genre": "unicode",
+      "group": "positive",
+      "split": "holdout",
+      "text": "📚「行ないます」と書きますが、本文では行ないます。",
+      "expected": [
+        {
+          "surface": "行ないます",
+          "occurrence": 2
+        }
+      ]
+    },
+    {
+      "id": "red-mixed-types",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "色々調べ、行ないます。",
+      "expected": [
+        {
+          "surface": "色々",
+          "occurrence": 1
+        },
+        {
+          "surface": "行ないます",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-conditional-1",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "依頼をすることができます。",
+      "expected": [
+        {
+          "surface": "することができます",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-conditional-2",
+      "ruleId": "wording/redundancy",
+      "genre": "technical",
+      "group": "positive",
+      "split": "holdout",
+      "text": "編集することができる。",
+      "expected": [
+        {
+          "surface": "することができる",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-conditional-3",
+      "ruleId": "wording/redundancy",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "予約をすることが可能です。",
+      "expected": [
+        {
+          "surface": "することが可能です",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "red-normal-quote",
+      "ruleId": "wording/redundancy",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "holdout",
+      "text": "『することができます』という表現の例です。",
       "expected": []
     }
   ]
