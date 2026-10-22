@@ -1,5 +1,6 @@
 import { CONFIG_SCHEMA_VERSION, type AppConfig } from '../../core/config/schema'
 import type { GlobalPreferences, RuleProfile, Workspace } from '../../core/workspace/types'
+import { legacyCompatiblePackSelection } from '../../core/analysis/packs'
 
 export interface ProjectedStorageState {
   preferences: GlobalPreferences
@@ -22,6 +23,7 @@ function storageModeFromConfig(config: AppConfig): 'private-session' | 'local-li
 export function composeAppConfig(state: ProjectedStorageState): AppConfig {
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
+    analysisPacks: structuredClone(state.profile.analysisPacks ?? legacyCompatiblePackSelection()),
     preset: state.profile.sourcePresetId ?? 'custom',
     rules: structuredClone(state.profile.rules),
     ngWords: structuredClone(state.profile.ngWords),
@@ -57,6 +59,7 @@ function splitCommon(
       id: current.profile.id,
       name: current.profile.name,
       sourcePresetId: config.preset,
+      analysisPacks: structuredClone(config.analysisPacks),
       rules: structuredClone(config.rules),
       ngWords: structuredClone(config.ngWords),
       terminology: structuredClone(config.terminology),
