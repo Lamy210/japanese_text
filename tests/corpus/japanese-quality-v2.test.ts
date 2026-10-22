@@ -21,6 +21,7 @@ const supported = new Set([
   'wording/double-honorific',
   'wording/honorific-request',
   'wording/doubled-object-particle',
+  'wording/tautology',
   'wording/nominalized-action',
   'wording/repeated-phrase',
   'wording/redundancy',
