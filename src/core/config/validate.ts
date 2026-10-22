@@ -21,6 +21,8 @@ import {
   type ThemeMode
 } from './schema'
 import { getPreset } from './presets'
+import { ANALYSIS_PACK_IDS, type AnalysisPackId } from '../analysis/contracts'
+import { legacyCompatiblePackSelection } from '../analysis/packs'
 import { buildRuleRegistry, TEXTLINT_RULE_META } from '../rules/registry'
 
 export class ConfigValidationError extends Error {
@@ -56,6 +58,7 @@ export function createDefaultConfig(): AppConfig {
   }
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
+    analysisPacks: { ...legacyCompatiblePackSelection() },
     preset: 'general',
     rules: structuredClone(base.rules),
     ngWords: [],
@@ -90,7 +93,23 @@ export function validateAppConfig(input: unknown): AppConfig {
         `この設定はschema v${input.schemaVersion}です。現在のアプリはv${CONFIG_SCHEMA_VERSION}まで対応しています。`
       )
     }
-    config.schemaVersion = input.schemaVersion
+    // v1 imports normalize to v2; the legacy Pack selection preserves the old rule set.
+  }
+
+  // --- AP-03 Analysis Pack selection ---
+  if (input.analysisPacks !== undefined) {
+    if (!isRecord(input.analysisPacks)) {
+      throw new ConfigValidationError('analysisPacksはオブジェクトである必要があります。')
+    }
+    const allowed = new Set<string>(ANALYSIS_PACK_IDS)
+    for (const [id, value] of Object.entries(input.analysisPacks)) {
+      if (!allowed.has(id) || typeof value !== 'boolean') {
+        throw new ConfigValidationError(`analysisPacks.${id}は既知Packの真偽値である必要があります。`)
+      }
+      config.analysisPacks[id as AnalysisPackId] = value
+    }
+    // core is mandatory, even if a corrupted imported config attempts to disable it.
+    config.analysisPacks.core = true
   }
 
   // --- preset ---
@@ -244,10 +263,10 @@ export function validateAppConfig(input: unknown): AppConfig {
  * v1以降のスキーマ変更が発生した場合、ここに v1→v2 等の変換を追加する。
  */
 export function migrateConfig(raw: unknown): unknown {
-  if (isRecord(raw) && typeof raw.schemaVersion === 'number' && raw.schemaVersion < CONFIG_SCHEMA_VERSION) {
-    // 現時点で v1 のみのため変換不要。将来のバージョンアップで変換チェーンを追加する。
-    // 例: if (raw.schemaVersion === 1) { raw = migrateV1toV2(raw) }
-    return raw
+  if (isRecord(raw) && raw.schemaVersion === 1) {
+    // Preserve every legacy field without mutating the caller's object.
+    return { ...raw, schemaVersion: 2,
+      analysisPacks: { ...legacyCompatiblePackSelection() } }
   }
   return raw
 }
