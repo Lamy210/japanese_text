@@ -96,6 +96,32 @@ describe('Phase 6B-3 explicit bundled static pack loading', () => {
     expect(mock).not.toHaveBeenCalled()
   })
 
+  test('aborts a stalled response stream after the read has started', async () => {
+    useOrigin()
+    const controller = new AbortController()
+    let markPending!: () => void
+    const pendingRead = new Promise<void>((resolve) => { markPending = resolve })
+    const stalled = new ReadableStream<Uint8Array>({
+      pull() {
+        markPending()
+        // Simulate a peer that leaves the stream open without sending bytes.
+        return new Promise<void>(() => undefined)
+      }
+    })
+    const mock = vi.fn(async () => new Response(stalled))
+    const loading = loadBundledCuratedTypoPack({
+      basePath: '/',
+      signal: controller.signal,
+      fetcher: mock as typeof fetch
+    })
+    await pendingRead
+    // Give the consumer an opportunity to enter reader.read() on this stream.
+    await Promise.resolve()
+    controller.abort()
+    expect(await loading).toEqual({ status: 'unavailable', reason: 'aborted' })
+    expect(mock).toHaveBeenCalledTimes(1)
+  })
+
   test('does not trust redirects or server errors', async () => {
     useOrigin()
     const mock = vi.fn(async () => Response.redirect('https://example.test/something-else', 302))
