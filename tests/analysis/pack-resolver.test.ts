@@ -89,11 +89,11 @@ describe('AP-02: invalid configuration and NLP capability gating', () => {
     expect(() => validateAnalysisCatalog({ ...base, packs: [...base.packs, base.packs[0]!] }))
       .toThrow('Duplicate pack ID')
     const missing = clone(base)
-    ;(missing.packs.find(p => p.id === 'grammar') as { dependencyPackIds: string[] }).dependencyPackIds = ['missing']
+    ;(missing.packs.find(p => p.id === 'grammar') as unknown as { dependencyPackIds: string[] }).dependencyPackIds = ['missing']
     expect(() => validateAnalysisCatalog(missing)).toThrow('Missing Pack dependency')
     const cyclic = clone(base)
-    ;(cyclic.packs.find(p => p.id === 'grammar') as { dependencyPackIds: string[] }).dependencyPackIds = ['style']
-    ;(cyclic.packs.find(p => p.id === 'style') as { dependencyPackIds: string[] }).dependencyPackIds = ['grammar']
+    ;(cyclic.packs.find(p => p.id === 'grammar') as unknown as { dependencyPackIds: string[] }).dependencyPackIds = ['style']
+    ;(cyclic.packs.find(p => p.id === 'style') as unknown as { dependencyPackIds: string[] }).dependencyPackIds = ['grammar']
     expect(() => validateAnalysisCatalog(cyclic)).toThrow('cycle')
   })
 
@@ -105,7 +105,7 @@ describe('AP-02: invalid configuration and NLP capability gating', () => {
     ;(unknown.rules[0] as { providerId: string }).providerId = 'missing'
     expect(() => validateAnalysisCatalog(unknown)).toThrow('Invalid analysis rule manifest')
     const mismatch = clone(base)
-    ;(mismatch.rules[0] as { capabilitiesRequired: string[] }).capabilitiesRequired = ['pos']
+    ;(mismatch.rules[0] as unknown as { capabilitiesRequired: string[] }).capabilitiesRequired = ['pos']
     expect(() => validateAnalysisCatalog(mismatch)).toThrow('lacks declared capability')
   })
 
