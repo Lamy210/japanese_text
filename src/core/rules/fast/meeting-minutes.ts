@@ -40,6 +40,14 @@ export const meetingMinutesSectionsRule: CoreRule = {
       diagnostics.push({ start, end: start + '議事録'.length,
         message: '対応事項が記載されています。担当者の欄も明示して、対応漏れを防いでください。', fixKind: 'none' })
     }
+    if (hasSection(/^(?:対応事項|アクションアイテム|ToDo|TODO)[ \t　]*[：:]/u) &&
+        !hasSection(/^(?:期限|対応期限|締切|締め切り|期日)[ \t　]*[：:]/u)) {
+      diagnostics.push({
+        start, end: start + '議事録'.length,
+        message: '対応事項が記載されています。対応期限や期日の欄を明示してください。期限未定の場合もその旨を記載してください。',
+        fixKind: 'none'
+      })
+    }
     return diagnostics
   }
 }
