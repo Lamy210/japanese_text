@@ -17,6 +17,7 @@ const nativeRuleIds = [
   'wording/ng-word', 'wording/terminology', 'wording/redundancy',
   'wording/common-typo',
   'wording/nominalized-action',
+  'style/honorific-consistency',
   'style/meeting-minutes-sections',
   'style/business-document-structure',
   'wording/request-cushion-review', 'markdown/blockquote-spacing',
