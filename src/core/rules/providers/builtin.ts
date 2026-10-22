@@ -13,6 +13,7 @@ import { createCommonTypoRule } from '../fast/common-typo'
 import { nominalizedActionRule } from '../fast/nominalized-action'
 import { repeatedPhraseRule, consecutiveConjunctionRule, additiveConjunctionDensityRule } from '../fast/repeated-expression'
 import { doubleHonorificRule } from '../fast/double-honorific'
+import { honorificRequestRule } from '../fast/honorific-request'
 import { ambiguityRule } from '../fast/ambiguity'
 import { commaCountRule } from '../deep/comma-count'
 import { paragraphDensityRule } from '../fast/paragraph-density'
@@ -51,6 +52,7 @@ function buildBuiltinRules(config: RuntimeRulesConfig): CoreRule[] {
     nominalizedActionRule,
     repeatedPhraseRule,
     doubleHonorificRule,
+    honorificRequestRule,
     ambiguityRule,
     mixedToneRule,
     crossParagraphToneRule,

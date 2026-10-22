@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "description": "Synthetic rule-level gold annotations for regression. Created alongside implementation; not independent real-world precision or recall.",
+  "description": "Synthetic rule-level gold annotations for regression across 7 rules. Created alongside implementation, not independent real-world precision or recall.",
   "annotationPolicy": "Surface occurrence is 1-based in original UTF-16 text, including masked segments; explicit zero-diagnostic negatives are required.",
   "splits": [
     "development",
@@ -1142,6 +1142,212 @@
       "group": "masked",
       "split": "development",
       "text": "「また、確認します。さらに、共有します。加えて、評価します。」",
+      "expected": []
+    },
+    {
+      "id": "request-bad-1",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "お手数ですが、ご確認してください。",
+      "expected": [
+        {
+          "surface": "ご確認してください",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "request-bad-2",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "お手数ですが、ご連絡してください。",
+      "expected": [
+        {
+          "surface": "ご連絡してください",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "request-bad-3",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "お手数ですが、ご検討してください。",
+      "expected": [
+        {
+          "surface": "ご検討してください",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "request-bad-4",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "お手数ですが、ご回答してください。",
+      "expected": [
+        {
+          "surface": "ご回答してください",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "request-bad-5",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "お手数ですが、ご提出してください。",
+      "expected": [
+        {
+          "surface": "ご提出してください",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "request-bad-6",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "お手数ですが、ご参照してください。",
+      "expected": [
+        {
+          "surface": "ご参照してください",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "request-valid-1",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "ご確認ください。",
+      "expected": []
+    },
+    {
+      "id": "request-valid-2",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "確認してください。",
+      "expected": []
+    },
+    {
+      "id": "request-valid-3",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "ご連絡ください。",
+      "expected": []
+    },
+    {
+      "id": "request-valid-4",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "ご検討ください。",
+      "expected": []
+    },
+    {
+      "id": "request-valid-5",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "ご回答いただけますか。",
+      "expected": []
+    },
+    {
+      "id": "request-valid-6",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "ご提出をお願いします。",
+      "expected": []
+    },
+    {
+      "id": "request-valid-7",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "ご参照ください。",
+      "expected": []
+    },
+    {
+      "id": "request-valid-8",
+      "ruleId": "wording/honorific-request",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "ご確認してくださいませ。",
+      "expected": []
+    },
+    {
+      "id": "request-quote",
+      "ruleId": "wording/honorific-request",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "holdout",
+      "text": "「ご確認してください」という文字を示します。",
+      "expected": []
+    },
+    {
+      "id": "request-inline",
+      "ruleId": "wording/honorific-request",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "`ご連絡してください` と入力します。",
+      "expected": []
+    },
+    {
+      "id": "request-blockquote",
+      "ruleId": "wording/honorific-request",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "> ご回答してください",
+      "expected": []
+    },
+    {
+      "id": "request-emoji",
+      "ruleId": "wording/honorific-request",
+      "genre": "unicode",
+      "group": "positive",
+      "split": "holdout",
+      "text": "🎌本文ではご確認してください。",
+      "expected": [
+        {
+          "surface": "ご確認してください",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "hon-quoted-false-alarm-guard",
+      "ruleId": "wording/double-honorific",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "holdout",
+      "text": "「お読みになられる」『ご覧になられる』を例示します。",
       "expected": []
     }
   ]
