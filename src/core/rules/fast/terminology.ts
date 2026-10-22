@@ -9,6 +9,27 @@ import type { CoreRule, RawDiagnostic, RuleContext } from '../../types'
 import type { TermEntry } from '../../config/schema'
 import { escapeRegExp } from '../shared'
 
+/**
+ * A user term may be an entire identifier or Katakana product name.
+ * Do not apply a Safe Fix to a matching fragment inside a longer token.
+ * Deliberately conservative: prefer a missed suggestion to corrupting a name.
+ */
+const ASCII_TOKEN = /[A-Za-z0-9_]/u
+const KATAKANA_TOKEN = /[\\u30A0-\\u30FF\\u31F0-\\u31FFーA-Za-z0-9_]/u
+const KATAKANA = /[\\u30A0-\\u30FF\\u31F0-\\u31FFー]/u
+
+function isPartOfLongerToken(text: string, start: number, match: string): boolean {
+  const left = start > 0 ? text[start - 1]! : ''
+  const right = text[start + match.length] ?? ''
+  const first = match[0] ?? ''
+  const last = match[match.length - 1] ?? ''
+  if (ASCII_TOKEN.test(first) && ASCII_TOKEN.test(left)) return true
+  if (ASCII_TOKEN.test(last) && ASCII_TOKEN.test(right)) return true
+  if (KATAKANA.test(first) && KATAKANA_TOKEN.test(left)) return true
+  if (KATAKANA.test(last) && KATAKANA_TOKEN.test(right)) return true
+  return false
+}
+
 export function createTerminologyRule(entries: () => TermEntry[]): CoreRule {
   return {
     id: 'wording/terminology',
@@ -27,6 +48,7 @@ export function createTerminologyRule(entries: () => TermEntry[]): CoreRule {
           const re = new RegExp(escapeRegExp(rejected), `g${caseSensitive ? '' : 'i'}`)
           let m: RegExpExecArray | null
           while ((m = re.exec(ctx.maskedText)) !== null) {
+            if (isPartOfLongerToken(ctx.maskedText, m.index, m[0])) continue
             // すでにPreferred表記になっている位置はスキップ
             // (例: rejected=ユーザ は preferred=ユーザー の一部に誤一致する)
             if (ctx.maskedText.slice(m.index, m.index + entry.preferred.length) === entry.preferred) {
