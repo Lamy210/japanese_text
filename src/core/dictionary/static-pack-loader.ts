@@ -45,21 +45,31 @@ async function readBounded(response: Response, maxBytes: number, signal?: AbortS
   }
   if (!response.body) throw new Error('Invalid dictionary response body')
   const reader = response.body.getReader()
+  // Fetch signals normally cancel the body, but a stalled/custom stream may
+  // leave reader.read() pending. Cancel its reader explicitly on abort.
+  const cancelPendingRead = (): void => {
+    void reader.cancel().catch(() => undefined)
+  }
+  signal?.addEventListener('abort', cancelPendingRead, { once: true })
   const pieces: Uint8Array[] = []
   let total = 0
   try {
     while (true) {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       const { done, value } = await reader.read()
+      // Cancellation may resolve the pending read with done: true.
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       if (done) break
       total += value.byteLength
       if (total > maxBytes) throw new Error('Invalid dictionary asset size')
       pieces.push(value)
     }
   } catch (error) {
-    await reader.cancel().catch(() => undefined)
+    // Do not wait for a broken stream's asynchronous cancel algorithm.
+    cancelPendingRead()
     throw error
   } finally {
+    signal?.removeEventListener('abort', cancelPendingRead)
     reader.releaseLock()
   }
   const result = new Uint8Array(total)
@@ -115,6 +125,8 @@ export async function loadBundledCuratedTypoPack(
     if (packResponse.url && packResponse.url !== packUrl.href) throw new Error('Invalid dictionary response URL')
     const packBytes = await readBounded(packResponse, MAX_TYPO_PACK_BYTES, options.signal)
     const pack = await verifyCuratedTypoPackBytes(packBytes, index)
+    // A user may cancel while SHA-256 verification is in progress.
+    if (options.signal?.aborted) return { status: 'unavailable', reason: 'aborted' }
     return { status: 'ready', pack }
   } catch (error) {
     return { status: 'unavailable', reason: errorReason(error, options.signal) }
