@@ -78,6 +78,11 @@ describe('AP-01: sentence segmenter initialization and fallback', () => {
     const { splitSentences } = await import('../../src/core/text/segmenter')
     expect(splitSentences('')).toEqual([])
     expect(splitSentences('本文。\n')).toEqual([{ start: 0, end: 3, text: '本文。' }])
+    expect(splitSentences('\n\n')).toEqual([])
+    expect(splitSentences('\n\n本文。\n\n次。')).toEqual([
+      { start: 2, end: 5, text: '本文。' },
+      { start: 7, end: 9, text: '次。' }
+    ])
   })
 
   test('native segment offsets remain UTF-16 indexes after an emoji', async () => {
