@@ -14,7 +14,9 @@
     "test": "vitest run",
     "db:push": "echo 'no database required (frontend-only app)'",
     "bench:analysis": "bun scripts/benchmark-analysis.ts --json",
-    "bench:smoke": "bun scripts/benchmark-analysis.ts --smoke"
+    "bench:smoke": "bun scripts/benchmark-analysis.ts --smoke",
+    "dict:generate": "bun scripts/generate-dictionary-packs.ts",
+    "dict:check": "bun scripts/generate-dictionary-packs.ts --check"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

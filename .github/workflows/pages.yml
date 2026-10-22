@@ -34,6 +34,9 @@ jobs:
       - name: Typecheck
         run: bun run lint
 
+      - name: Verify reproducible dictionary artifacts
+        run: bun run dict:check
+
       - name: Unit tests
         run: bun run test
 
