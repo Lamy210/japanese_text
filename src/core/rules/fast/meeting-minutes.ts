@@ -60,6 +60,14 @@ export const meetingMinutesSectionsRule: CoreRule = {
         fixKind: 'none'
       })
     }
+    if (hasSection(/^(?:未決事項|保留事項|未解決事項)[ \t　]*[：:]/u) &&
+        !hasSection(/^(?:次回確認|次回アクション|確認予定|フォローアップ)[ \t　]*[：:]/u)) {
+      diagnostics.push({
+        start, end: start + '議事録'.length,
+        message: '未決事項があります。次回確認またはフォローアップの欄を設けることを検討してください。',
+        fixKind: 'none'
+      })
+    }
     return diagnostics
   }
 }
