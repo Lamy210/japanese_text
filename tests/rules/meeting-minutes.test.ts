@@ -50,17 +50,17 @@ describe('meeting minutes sections', () => {
     expect(scan('# 議事録\n参加者：A\n決定事項：採用\n対応事項：テスト\n担当者：A')).toEqual([])
   })
 
-  test('does not count a section inside inline code or fenced code', () => {
+  test('does not count a section inside inline code', () => {
     expect(scan('# 議事録\n`参加者：A`\n決定事項：B')).toHaveLength(1)
   })
 
   test('recognizes section labels formatted as Markdown bullets', () => {
-    const text = ['# 議事録', '- 参加者：A', '- 決定事項：採用', '- 対応事項：テスト', '- 担当者：A'].join('\\n')
+    const text = ['# 議事録', '- 参加者：A', '- 決定事項：採用', '- 対応事項：テスト', '- 担当者：A'].join('\n')
     expect(scan(text)).toEqual([])
   })
 
-  test('does not treat mere list mentions as required section headings', () => {
-    const text = ['# 議事録', '- 今回は参加者：Aと決定事項：Bを説明'].join('\\n')
+  test('does not treat list mentions as section headings', () => {
+    const text = ['# 議事録', '- 今回は参加者：Aと決定事項：Bを説明'].join('\n')
     expect(scan(text)).toHaveLength(2)
   })
 
