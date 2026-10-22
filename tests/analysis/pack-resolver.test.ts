@@ -112,6 +112,27 @@ describe('AP-02 metadata contracts and legacy compatibility', () => {
     })).toThrow('Invalid analysis pack')
   })
 
+
+  test('malformed runtime string metadata fails with domain errors, not TypeError', () => {
+    expect(() => compileAnalysisCatalog({
+      ...baseline,
+      packs: baseline.packs.map(pack => pack.id === 'grammar'
+        ? { ...pack, label: null as unknown as string } : pack)
+    })).toThrow('Invalid analysis pack')
+
+    expect(() => compileAnalysisCatalog({
+      ...baseline,
+      providers: baseline.providers.map(provider => provider.id === 'textlint'
+        ? { ...provider, implementationVersion: 7 as unknown as string } : provider)
+    })).toThrow('Invalid analysis provider')
+
+    expect(() => compileAnalysisCatalog({
+      ...baseline,
+      rules: baseline.rules.map(rule => rule.id === 'wording/common-typo'
+        ? { ...rule, diagnosticIssueFamily: 7 as unknown as string } : rule)
+    })).toThrow('Invalid analysis rule')
+  })
+
   test('required catalog completeness and dependency-free core cannot be bypassed', () => {
     expect(() => compileAnalysisCatalog({
       ...baseline, packs: baseline.packs.filter(pack => pack.id !== 'style')
