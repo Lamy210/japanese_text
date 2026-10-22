@@ -12,6 +12,7 @@ import { redundancyRule } from '../fast/redundancy'
 import { createCommonTypoRule } from '../fast/common-typo'
 import { nominalizedActionRule } from '../fast/nominalized-action'
 import { meetingMinutesSectionsRule } from '../fast/meeting-minutes'
+import { businessDocumentStructureRule } from '../fast/business-document-structure'
 import { blockquoteSpacingRule, unnecessaryCushionRule } from '../fast/business-writing'
 import { repeatedPhraseRule, consecutiveConjunctionRule, additiveConjunctionDensityRule, mixedConjunctionDensityRule } from '../fast/repeated-expression'
 import { doubleHonorificRule } from '../fast/double-honorific'
@@ -55,6 +56,7 @@ function buildBuiltinRules(config: RuntimeRulesConfig): CoreRule[] {
     createCommonTypoRule(() => config.terminology),
     nominalizedActionRule,
     meetingMinutesSectionsRule,
+    businessDocumentStructureRule,
     unnecessaryCushionRule,
     blockquoteSpacingRule,
     repeatedPhraseRule,
