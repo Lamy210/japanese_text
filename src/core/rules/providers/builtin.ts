@@ -15,6 +15,7 @@ import { repeatedPhraseRule, consecutiveConjunctionRule, additiveConjunctionDens
 import { doubleHonorificRule } from '../fast/double-honorific'
 import { honorificRequestRule } from '../fast/honorific-request'
 import { doubledObjectParticleRule } from '../fast/doubled-object-particle'
+import { tautologyRule } from '../fast/tautology'
 import { ambiguityRule } from '../fast/ambiguity'
 import { commaCountRule } from '../deep/comma-count'
 import { paragraphDensityRule } from '../fast/paragraph-density'
@@ -55,6 +56,7 @@ function buildBuiltinRules(config: RuntimeRulesConfig): CoreRule[] {
     doubleHonorificRule,
     honorificRequestRule,
     doubledObjectParticleRule,
+    tautologyRule,
     ambiguityRule,
     mixedToneRule,
     crossParagraphToneRule,

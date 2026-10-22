@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "description": "Synthetic rule-level gold annotations for regression across 8 rules. Authored alongside code; NOT independent field precision.",
+  "description": "Synthetic rule-level gold annotations for regression across 9 rules. Not independent real-world accuracy.",
   "annotationPolicy": "Surface occurrence is 1-based in original UTF-16 text, including masked segments; explicit zero-diagnostic negatives are required.",
   "splits": [
     "development",
@@ -1517,6 +1517,198 @@
       "group": "masked",
       "split": "development",
       "text": "> 資料をを確認します。",
+      "expected": []
+    },
+    {
+      "id": "tau-pos-1",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "資料ではまず最初に説明します。",
+      "expected": [
+        {
+          "surface": "まず最初に",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "tau-pos-2",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "資料ではあらかじめ事前に説明します。",
+      "expected": [
+        {
+          "surface": "あらかじめ事前に",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "tau-pos-3",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "資料では一番最初に説明します。",
+      "expected": [
+        {
+          "surface": "一番最初に",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "tau-pos-4",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "positive",
+      "split": "development",
+      "text": "資料では今現在説明します。",
+      "expected": [
+        {
+          "surface": "今現在",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "tau-pos-5",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "positive",
+      "split": "holdout",
+      "text": "資料では各々それぞれ説明します。",
+      "expected": [
+        {
+          "surface": "各々それぞれ",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "tau-valid-1",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "まず確認します。",
+      "expected": []
+    },
+    {
+      "id": "tau-valid-2",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "最初に確認します。",
+      "expected": []
+    },
+    {
+      "id": "tau-valid-3",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "事前に連絡します。",
+      "expected": []
+    },
+    {
+      "id": "tau-valid-4",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "あらかじめ確認します。",
+      "expected": []
+    },
+    {
+      "id": "tau-valid-5",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "現在の状況を説明します。",
+      "expected": []
+    },
+    {
+      "id": "tau-valid-6",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "それぞれを確認します。",
+      "expected": []
+    },
+    {
+      "id": "tau-valid-7",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "negative",
+      "split": "development",
+      "text": "まずは最初の課題から取り組みます。",
+      "expected": []
+    },
+    {
+      "id": "tau-valid-8",
+      "ruleId": "wording/tautology",
+      "genre": "business",
+      "group": "negative",
+      "split": "holdout",
+      "text": "今から現在までの期間を示します。",
+      "expected": []
+    },
+    {
+      "id": "tau-emoji",
+      "ruleId": "wording/tautology",
+      "genre": "unicode",
+      "group": "positive",
+      "split": "holdout",
+      "text": "📌今現在は検証中です。",
+      "expected": [
+        {
+          "surface": "今現在",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "id": "tau-quoted",
+      "ruleId": "wording/tautology",
+      "genre": "quotes",
+      "group": "masked",
+      "split": "holdout",
+      "text": "「まず最初に」と『今現在』を示します。",
+      "expected": []
+    },
+    {
+      "id": "tau-code",
+      "ruleId": "wording/tautology",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "`まず最初に` と入力します。",
+      "expected": []
+    },
+    {
+      "id": "tau-blockquote",
+      "ruleId": "wording/tautology",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "> 一番最初に",
+      "expected": []
+    },
+    {
+      "id": "tau-url",
+      "ruleId": "wording/tautology",
+      "genre": "markdown",
+      "group": "masked",
+      "split": "development",
+      "text": "[資料](https://example.com/今現在)",
       "expected": []
     }
   ]
