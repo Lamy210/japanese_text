@@ -18,11 +18,25 @@ describe('opt-in business document structure', () => {
   })
 
   test.each([
-    '# 問い合わせ回答\n質問：可能でしょうか？\n回答：可能です。',
+    '# 問い合わせ回答\n回答：可能です。\n質問：可能でしょうか？',
     '# 相談メモ\n相談内容: 実装方針\n前提条件: 期限内',
     '社内連絡\n連絡事項：休業日の案内'
   ])('accepts explicitly present sections', text => {
     expect(scan(text)).toEqual([])
+  })
+
+
+  test('provides an informational hint when a question precedes the answer', () => {
+    const results = scan('# 問い合わせ回答\n質問：対応できますか？\n回答：対応できます。')
+    expect(results).toHaveLength(1)
+    expect(results[0]!.message).toContain('結論')
+    expect(results[0]!.fixKind).toBe('none')
+  })
+
+  test('does not infer an ordering problem when only one section is present', () => {
+    const results = scan('# 問い合わせ回答\n質問：対応できますか？')
+    expect(results).toHaveLength(1)
+    expect(results[0]!.message).toContain('回答・結論')
   })
 
   test('does not guess a document kind from body mentions', () => {
