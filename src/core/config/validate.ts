@@ -21,6 +21,7 @@ import {
   type ThemeMode
 } from './schema'
 import { getPreset } from './presets'
+import { defaultProfileAnalysisSettings, validateProfileAnalysisSettings } from '../analysis/profile-settings'
 import { buildRuleRegistry, TEXTLINT_RULE_META } from '../rules/registry'
 
 export class ConfigValidationError extends Error {
@@ -56,6 +57,7 @@ export function createDefaultConfig(): AppConfig {
   }
   return {
     schemaVersion: CONFIG_SCHEMA_VERSION,
+    analysis: defaultProfileAnalysisSettings(),
     preset: 'general',
     rules: structuredClone(base.rules),
     ngWords: [],
@@ -90,7 +92,16 @@ export function validateAppConfig(input: unknown): AppConfig {
         `この設定はschema v${input.schemaVersion}です。現在のアプリはv${CONFIG_SCHEMA_VERSION}まで対応しています。`
       )
     }
-    config.schemaVersion = input.schemaVersion
+    // Accepted v1 imports are normalized to v2 below; never write a v1 config back.
+  }
+
+  // --- analysis settings (v2, optional on older imports) ---
+  if (input.analysis !== undefined) {
+    try {
+      config.analysis = validateProfileAnalysisSettings(input.analysis)
+    } catch (error) {
+      throw new ConfigValidationError(`analysis設定が不正です: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   // --- preset ---
@@ -244,10 +255,10 @@ export function validateAppConfig(input: unknown): AppConfig {
  * v1以降のスキーマ変更が発生した場合、ここに v1→v2 等の変換を追加する。
  */
 export function migrateConfig(raw: unknown): unknown {
-  if (isRecord(raw) && typeof raw.schemaVersion === 'number' && raw.schemaVersion < CONFIG_SCHEMA_VERSION) {
-    // 現時点で v1 のみのため変換不要。将来のバージョンアップで変換チェーンを追加する。
-    // 例: if (raw.schemaVersion === 1) { raw = migrateV1toV2(raw) }
-    return raw
+  if (isRecord(raw) && raw.schemaVersion === 1) {
+    // Legacy AppConfig never had the Profile-local analysis subtree. An explicit
+    // v2 copy prevents an imported v1 JSON from being re-exported as v1.
+    return { ...raw, schemaVersion: 2, analysis: defaultProfileAnalysisSettings() }
   }
   return raw
 }
