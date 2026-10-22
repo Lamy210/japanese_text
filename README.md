@@ -77,6 +77,12 @@ Local URL:
 http://localhost:3000/
 ```
 
+## Browser Worker benchmark (開発環境のみ)
+
+`bun run dev` で開発サーバーを起動し、<http://localhost:3000/dev/benchmark.html> を開くと、実ブラウザで合成文章を校正Workerへ送信して、Cold Start・RTTのp50/p95/p99を測定できます。実文書・Local Libraryは読み取らず、JSONに原文は含まれません。公開版には含めません。
+
+Bun上の独自ルールCPU処理だけを計測する場合は `bun run bench:analysis` を利用してください。両者は測定対象が違い、CodeMirrorの入力遅延も測定していません。測定の制約は [性能計測設計書](docs/superpowers/specs/2026-10-22-phase5g4-browser-worker-benchmark.md) に記載しています。
+
 ## Quality checks
 
 ```bash
