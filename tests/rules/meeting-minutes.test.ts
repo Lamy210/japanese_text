@@ -82,6 +82,22 @@ describe('meeting minutes sections', () => {
     expect(scan(withoutLabel)).toHaveLength(1)
   })
 
+
+  test('flags explicitly pending decisions without pending-items section', () => {
+    const base = ['# 議事録', '参加者：A', '決定事項：保留'].join('\n')
+    const ds = scan(base)
+    expect(ds).toHaveLength(1)
+    expect(ds[0]!.message).toContain('未決事項')
+    expect(ds[0]!.fixKind).toBe('none')
+    expect(scan(base + '\n未決事項：次回判断')).toEqual([])
+  })
+
+  test('does not infer pending status from normal decisions or body prose', () => {
+    expect(scan('# 議事録\n参加者：A\n決定事項：採用。保留なし')).toEqual([])
+    expect(scan('# 議事録\n参加者：A\n決定事項：採用\n本文では保留を説明')).toEqual([])
+    expect(scan('# 議事録\n参加者：A\n決定事項：保留解除')).toEqual([])
+  })
+
   test('is informational in main presets only', () => {
     for (const id of ['general', 'technical', 'strict'] as const) {
       expect(getPreset(id)?.rules['style/meeting-minutes-sections']).toEqual({enabled:true,severity:'info'})
