@@ -153,3 +153,56 @@ export const additiveConjunctionDensityRule: CoreRule = {
     return results
   }
 }
+
+
+/**
+ * Three sequential *distinct* conjunctions from different discourse roles.
+ * Excludes three all-additive words, which the existing additive density rule
+ * already handles. This is a structural review hint, not semantic validation.
+ */
+const ADDITIVE_WORDS = new Set(['また', 'さらに', '加えて', 'そのうえ', 'あわせて'])
+
+export const mixedConjunctionDensityRule: CoreRule = {
+  id: 'style/mixed-conjunction-density',
+  category: 'style',
+  tier: 'fast',
+  defaultSeverity: 'info',
+  description:
+    '異なる種類の接続詞が連続した3文の冒頭に現れる場合、論理構成を見直す情報を表示します。追加接続詞だけの連続や同じ接続詞の重複は既存ルールへ委ね、意味の正誤や自動修正は行いません。',
+  run(ctx: RuleContext): RawDiagnostic[] {
+    const results: RawDiagnostic[] = []
+    const text = withoutQuotedSpeech(ctx.maskedText)
+    let recent: string[] = []
+
+    for (let i = 0; i < ctx.lines.length; i++) {
+      const sourceLine = ctx.lines[i]!
+      if (shouldSkipLine(sourceLine)) {
+        recent = []
+        continue
+      }
+      const offset = ctx.lineStarts[i]!
+      const line = text.slice(offset, offset + sourceLine.length)
+      for (const sentence of line.matchAll(SENTENCES_IN_LINE)) {
+        const match = INITIAL_CONJUNCTION.exec(sentence[0])
+        if (match === null) {
+          recent = []
+          continue
+        }
+        const current = match[1]!
+        const group = [...recent, current].slice(-3)
+        const isDistinct = group.length === 3 && new Set(group).size === 3
+        if (isDistinct && !group.every(word => ADDITIVE_WORDS.has(word))) {
+          const start = offset + sentence.index + match[0].length - current.length - 1
+          results.push({
+            start,
+            end: start + current.length,
+            message: '種類の異なる接続詞が3文続いています。結論・理由・対比の関係や段落の分割を検討してください。'
+          })
+        }
+        recent = group.slice(-2)
+      }
+      if (!/[。！？!?][ \t　]*$/u.test(line)) recent = []
+    }
+    return results
+  }
+}
