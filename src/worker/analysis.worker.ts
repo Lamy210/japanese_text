@@ -8,7 +8,7 @@
  */
 
 import type { LintRequest, WorkerResponse } from './protocol'
-import { runOwnRules } from '../core/engine/engine'
+import { prepareOwnRuleExecution, runOwnRules, type PreparedOwnRuleExecution } from '../core/engine/engine'
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope
 
@@ -45,12 +45,23 @@ let textlintLoadError: string | null = null
 
 async function runLint(req: LintRequest): Promise<void> {
   const { revision, text, config, docType, tiers } = req
+  // Scope prepared structures to this individual message. Requests for newer
+  // revisions or shadow lint can interleave while textlint awaits imports.
+  let prepared: PreparedOwnRuleExecution | null = null
+  let pendingPreparationMs = 0
 
   for (const tier of tiers) {
     try {
+      if (prepared === null) {
+        const started = performance.now()
+        prepared = prepareOwnRuleExecution(text, config)
+        pendingPreparationMs = performance.now() - started
+      }
+      const setupChargeMs = pendingPreparationMs
+      pendingPreparationMs = 0
       if (tier === 'deep') {
         // Deep = 独自Deepルール + textlint
-        const own = runOwnRules(text, config, 'deep', docType)
+        const own = runOwnRules(text, config, 'deep', docType, prepared)
         let textlintDiagnostics: typeof own.diagnostics = []
         const ruleErrors = [...own.ruleErrors]
         const adapter = await loadTextlint()
@@ -80,18 +91,18 @@ async function runLint(req: LintRequest): Promise<void> {
           tier,
           diagnostics: merged,
           ruleErrors,
-          durationMs: own.durationMs
+          durationMs: own.durationMs + setupChargeMs
         })
       } else {
         // fast / idle
-        const result = runOwnRules(text, config, tier, docType)
+        const result = runOwnRules(text, config, tier, docType, prepared)
         post({
           type: 'result',
           revision,
           tier,
           diagnostics: result.diagnostics,
           ruleErrors: result.ruleErrors,
-          durationMs: result.durationMs
+          durationMs: result.durationMs + setupChargeMs
         })
       }
     } catch (error) {
