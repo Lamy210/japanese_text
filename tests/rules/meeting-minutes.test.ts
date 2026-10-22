@@ -44,10 +44,10 @@ describe('meeting minutes sections', () => {
   })
 
   test('flags action items without an owner section', () => {
-    const ds = scan('# 議事録\n参加者：A\n決定事項：採用\n対応事項：テスト')
+    const ds = scan('# 議事録\n参加者：A\n決定事項：採用\n対応事項：テスト\n期限：未定')
     expect(ds).toHaveLength(1)
     expect(ds[0]!.message).toContain('担当者')
-    expect(scan('# 議事録\n参加者：A\n決定事項：採用\n対応事項：テスト\n担当者：A')).toEqual([])
+    expect(scan('# 議事録\n参加者：A\n決定事項：採用\n対応事項：テスト\n担当者：A\n期限：未定')).toEqual([])
   })
 
   test('does not count a section inside inline code', () => {
@@ -55,13 +55,31 @@ describe('meeting minutes sections', () => {
   })
 
   test('recognizes section labels formatted as Markdown bullets', () => {
-    const text = ['# 議事録', '- 参加者：A', '- 決定事項：採用', '- 対応事項：テスト', '- 担当者：A'].join('\n')
+    const text = ['# 議事録', '- 参加者：A', '- 決定事項：採用', '- 対応事項：テスト', '- 担当者：A', '- 期限：未定'].join('\n')
     expect(scan(text)).toEqual([])
   })
 
   test('does not treat list mentions as section headings', () => {
     const text = ['# 議事録', '- 今回は参加者：Aと決定事項：Bを説明'].join('\n')
     expect(scan(text)).toHaveLength(2)
+  })
+
+
+  test('guides action deadlines but not documents with no action items', () => {
+    const base = ['# 議事録', '参加者：A', '決定事項：採用', '対応事項：検証', '担当者：A'].join('\n')
+    const results = scan(base)
+    expect(results).toHaveLength(1)
+    expect(results[0]!.message).toContain('対応期限')
+    expect(results[0]!.fixKind).toBe('none')
+    expect(scan(base + '\n期限：未定')).toEqual([])
+    expect(scan('# 議事録\n参加者：A\n決定事項：なし')).toEqual([])
+  })
+
+  test('does not count deadline mentions in prose or code', () => {
+    const text = ['# 議事録', '参加者：A', '決定事項：保留', '対応事項：検証', '担当者：A', '期日：を確認する予定', ''].join('\n')
+    expect(scan(text)).toEqual([])
+    const withoutLabel = text.replace('期日：を確認する予定', '本文中に期日：を記載する')
+    expect(scan(withoutLabel)).toHaveLength(1)
   })
 
   test('is informational in main presets only', () => {
