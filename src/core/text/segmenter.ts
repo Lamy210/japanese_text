@@ -52,7 +52,7 @@ function splitSentencesFallback(text: string): SentenceSpan[] {
       }
       // The newline is a separator, not part of the next sentence.
       // Advancing only to i would expose a trailing standalone "\\n" span.
-      start = ch === '\\n' ? i + 1 : end
+      start = ch === '\n' ? i + 1 : end
     }
   }
   if (start < text.length) {
