@@ -73,7 +73,7 @@ describe('Phase 6B-2 reproducible dictionary assets', () => {
 
   test('rejects malformed integrity metadata and traversal-like filenames', () => {
     expect(() => validateDictionaryAssetIndex({ ...bundledIndex, assetFile: '../pack.json' })).toThrow()
-    expect(() => validateDictionaryAssetIndex({ ...bundledIndex, sha256: '00'.repeat(32).toUpperCase() })).toThrow()
+    expect(() => validateDictionaryAssetIndex({ ...bundledIndex, sha256: 'ab'.repeat(32).toUpperCase() })).toThrow()
     expect(() => validateDictionaryAssetIndex({ ...bundledIndex, byteLength: 0 })).toThrow()
     expect(() => validateDictionaryAssetIndex({ ...bundledIndex, packId: '../test' })).toThrow()
     expect(() => validateDictionaryAssetIndex({ ...bundledIndex, additional: true })).toThrow()
