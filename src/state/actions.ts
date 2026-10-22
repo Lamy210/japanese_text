@@ -12,7 +12,7 @@ import type { Workspace } from '../core/workspace/types'
 import type { EditableDocument } from '../document/types'
 import { formatDocument as formatDocumentCore } from '../core/formatter/formatter'
 import { checkCompleteFormatterLint } from '../core/formatter/lint-safety'
-import { migrateConfig } from '../core/config/validate'
+import { prepareConfigImport } from '../core/config/transfer'
 import { applyFixesTransaction, applyReplacement, jumpToPosition } from '../editor/editor-adapter'
 import { lintController } from './lint-controller'
 import { appState } from './app-state'
@@ -309,13 +309,9 @@ export async function importConfigFile(file: File): Promise<void> {
   try {
     const raw = await file.text()
     const parsed: unknown = JSON.parse(raw)
-    const migrated = migrateConfig(parsed)
-    const currentPrivacy = structuredClone(appState.config.privacy)
-    const importCandidate =
-      typeof migrated === 'object' && migrated !== null && !Array.isArray(migrated)
-        ? { ...(migrated as Record<string, unknown>), privacy: currentPrivacy }
-        : migrated
-    const result = appState.loadConfigFrom(importCandidate)
+    const current = JSON.parse(JSON.stringify(appState.config)) as AppConfig
+    const validated = prepareConfigImport(parsed, current)
+    const result = appState.loadConfigFrom(validated)
     if (!result.ok) {
       appState.pushToast('error', `設定のImportに失敗しました: ${result.error}`)
       return
