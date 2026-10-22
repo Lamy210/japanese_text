@@ -50,11 +50,23 @@ export const businessDocumentStructureRule: CoreRule = {
       const masked = ctx.maskedText.slice(start, start + line.length)
       return masked.includes('\uFFFF') ? '' : line.trim()
     })
-    return profile.requirements.filter(req => !lines.some(line => req.pattern.test(line)))
+    const diagnostics: RawDiagnostic[] = profile.requirements.filter(req => !lines.some(line => req.pattern.test(line)))
       .map(req => ({
         start: titleStart, end: titleStart + profile.title.length,
         message: `「${profile.title}」に「${req.label}」の項目が見当たりません。必要に応じて追加してください。`,
         fixKind: 'none' as const
       }))
+    if (profile.title === '問い合わせ回答') {
+      const question = lines.findIndex(line => /^(?:#{1,6}[ \t]+)?(?:質問|問い合わせ内容|お問い合わせ内容)[ \t　]*[：:]/u.test(line))
+      const answer = lines.findIndex(line => /^(?:#{1,6}[ \t]+)?(?:回答|結論)[ \t　]*[：:]/u.test(line))
+      if (question !== -1 && answer !== -1 && question < answer) {
+        diagnostics.push({
+          start: titleStart, end: titleStart + profile.title.length,
+          message: '問い合わせ回答では、質問の引用に先立って結論・回答を示す構成も検討してください。原文の引用順が必要な場合はそのままで構いません。',
+          fixKind: 'none'
+        })
+      }
+    }
+    return diagnostics
   }
 }
