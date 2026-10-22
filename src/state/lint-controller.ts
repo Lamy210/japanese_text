@@ -33,6 +33,7 @@ type MessageHandler = (message: TierCompletionMessage) => void
 class AnalysisWorkerClient {
   private worker: Worker | null = null
   private restartAttempts = 0
+  private recoveryTimer: ReturnType<typeof setTimeout> | null = null
 
   start(): void {
     if (this.worker !== null) return
@@ -41,11 +42,15 @@ class AnalysisWorkerClient {
         type: 'module'
       })
       worker.addEventListener('message', (event: MessageEvent<WorkerResponse>) => {
+        // Events from a retired instance must not mutate the new worker's
+        // progress or resolve its revision-keyed manual/Shadow waiters.
+        if (this.worker !== worker) return
         this.handleMessage(event.data)
       })
       worker.addEventListener('error', (event) => {
         // §26: 1. UIをクラッシュさせない 2. Worker Errorを表示 3. 解析機能のみ停止 5. 再生成を試行
         event.preventDefault()
+        if (this.worker !== worker) return
         this.handleWorkerFailure(`Workerでエラーが発生しました: ${event.message || 'unknown error'}`)
       })
       this.worker = worker
@@ -89,15 +94,18 @@ class AnalysisWorkerClient {
     appState.setWorkerErrorMessage(message)
     appState.setAnalysisStatus('error')
     this.terminate()
+    lintController.abortPendingWorkerRequests()
     if (this.restartAttempts < MAX_RESTART_ATTEMPTS) {
       this.restartAttempts++
       appState.pushToast(
         'warning',
         `解析Workerを再生成します (試行 ${this.restartAttempts}/${MAX_RESTART_ATTEMPTS})`
       )
-      setTimeout(() => {
+      if (this.recoveryTimer !== null) clearTimeout(this.recoveryTimer)
+      this.recoveryTimer = setTimeout(() => {
+        this.recoveryTimer = null
         this.start()
-        lintController.relintAll()
+        if (this.running) lintController.relintAll()
       }, 250)
     } else {
       appState.pushToast('error', '解析Workerの再生成に失敗しました。Editorは引き続き利用できます。')
@@ -113,7 +121,12 @@ class AnalysisWorkerClient {
 
   restart(): void {
     this.restartAttempts = 0
+    if (this.recoveryTimer !== null) {
+      clearTimeout(this.recoveryTimer)
+      this.recoveryTimer = null
+    }
     this.terminate()
+    lintController.abortPendingWorkerRequests()
     appState.setWorkerStatus('starting')
     this.start()
   }
@@ -121,9 +134,17 @@ class AnalysisWorkerClient {
   post(request: LintRequest): void {
     if (this.worker === null) {
       this.start()
-      if (this.worker === null) return
+      if (this.worker === null) {
+        // The constructor failed. No Worker exists to fulfil registered waits.
+        lintController.abortPendingWorkerRequests()
+        return
+      }
     }
-    this.worker.postMessage(request)
+    try {
+      this.worker.postMessage(request)
+    } catch (error) {
+      this.handleWorkerFailure(`Workerへ解析要求を送信できませんでした: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   get running(): boolean {
@@ -170,6 +191,19 @@ function registerWait(
       resolveIfComplete(revision)
     })
   })
+}
+
+/**
+ * Terminated workers cannot complete any of their revision waiters.
+ * Return no results, not a partial result map, so Formatter fails closed.
+ */
+function abandonAllPendingWaits(): void {
+  for (const [revision, entry] of pendingWaits) {
+    clearTimeout(entry.timer)
+    pendingWaits.delete(revision)
+    messageHandlers.delete(revision)
+    entry.resolve(new Map())
+  }
 }
 
 // ----------------------------------------------------------------
@@ -297,6 +331,14 @@ class LintController {
       this.idleScheduler.cancel(this.idleHandle)
       this.idleHandle = null
     }
+  }
+
+  /** Crash/restart: drop obsolete in-flight counts, timers and all blocked waiters. */
+  abortPendingWorkerRequests(): void {
+    this.cancelTimers()
+    abandonAllPendingWaits()
+    this.manualLintInFlight = null
+    this.inFlight = 0
   }
 
   decrementInFlight(): void {
