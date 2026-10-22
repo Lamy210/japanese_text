@@ -60,6 +60,9 @@ start.addEventListener('click', async () => {
         row.roundTrip.p50Ms.toFixed(2),
         row.roundTrip.p95Ms.toFixed(2),
         row.roundTrip.p99Ms.toFixed(2),
+        row.perTierRoundTrip.fast.p95Ms.toFixed(2),
+        row.perTierRoundTrip.deep.p95Ms.toFixed(2),
+        row.perTierRoundTrip.idle.p95Ms.toFixed(2),
         row.workerDuration.p50Ms.toFixed(2)
       ]
       const tr = document.createElement('tr')
