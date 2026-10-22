@@ -18,6 +18,7 @@ const nativeRuleIds = [
   'wording/common-typo',
   'wording/nominalized-action',
   'style/meeting-minutes-sections',
+  'style/business-document-structure',
   'wording/request-cushion-review', 'markdown/blockquote-spacing',
   'wording/repeated-phrase',
   'wording/double-honorific', 'wording/honorific-request', 'wording/doubled-object-particle', 'wording/tautology', 'wording/ambiguity',
