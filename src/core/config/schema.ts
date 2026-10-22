@@ -6,8 +6,9 @@
  */
 
 import type { Severity } from '../types'
+import type { ProfileAnalysisSettingsV2 } from '../analysis/profile-settings'
 
-export const CONFIG_SCHEMA_VERSION = 1
+export const CONFIG_SCHEMA_VERSION = 2
 
 export type PresetId = 'general' | 'technical' | 'strict' | 'minimal' | 'custom'
 export type ThemeMode = 'light' | 'dark' | 'system'
@@ -61,6 +62,8 @@ export interface PrivacyPolicy {
 
 export interface AppConfig {
   schemaVersion: number
+  /** Analysis settings are imported/exported with the active RuleProfile. */
+  analysis: ProfileAnalysisSettingsV2
   preset: PresetId
   /** ruleId → 設定 (仕様書 §3.1: ルールON/OFF, severity変更) */
   rules: Record<string, import('../types').RuleSetting>
