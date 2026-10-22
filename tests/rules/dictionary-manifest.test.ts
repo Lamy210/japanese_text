@@ -59,7 +59,7 @@ describe('dictionary pack manifest validation (Phase 6B-1)', () => {
     [{ ...valid(), provenance: { origin: 'third-party', licenseId: 'Apache-2.0', reviewStatus: 'pending' } }, 'third party without source'],
     [null, 'null manifest'],
     [[], 'array manifest']
-  ])('rejects %s (%s)', (input) => {
+  ])('rejects %s (%s)', (input, _reason) => {
     expect(() => validateDictionaryPackManifest(input)).toThrow()
   })
 
