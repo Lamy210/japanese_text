@@ -82,6 +82,7 @@ export function compileAnalysisCatalog(input: AnalysisCatalogV1): AnalysisCatalo
     packs.set(raw.id, raw)
   }
   if (!packs.get('core')?.required) throw new Error('The required core analysis pack is missing')
+  if (packs.size !== ANALYSIS_PACK_IDS.length) throw new Error('Analysis catalog must include all six packs')
   for (const raw of input.providers) {
     validateProvider(raw)
     if (providers.has(raw.id)) throw new Error(`Duplicate analysis provider ID: ${raw.id}`)
@@ -120,6 +121,10 @@ export function compileAnalysisCatalog(input: AnalysisCatalogV1): AnalysisCatalo
     visited.add(id)
   }
   for (const pack of packs.values()) checkDependencies(pack.id)
+  const core = packs.get('core')!
+  if (!core.defaultEnabledOnFreshInstall || core.dependencyPackIds.length !== 0) {
+    throw new Error('Core analysis pack must be enabled by default and have no dependencies')
+  }
 
   for (const pack of packs.values()) {
     const claimed = new Set(pack.declaredRuleIds)
@@ -186,6 +191,10 @@ export function resolveAnalysisRules(
       if (!enabled('morphology') || input.activeProviderId !== rule.providerId) {
         return skipped('provider-disabled')
       }
+    }
+    // Builtin rules are locally available; all other Providers must report readiness,
+    // including the lazily imported textlint adapter (not only NLP Providers).
+    if (provider.id !== 'builtin') {
       if (input.failedProviderIds?.has(rule.providerId)) return skipped('runtime-failed')
       if (!input.readyProviderIds.has(rule.providerId)) return skipped('provider-not-ready')
     }
