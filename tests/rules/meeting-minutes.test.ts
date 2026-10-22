@@ -38,6 +38,32 @@ describe('meeting minutes sections', () => {
     expect(ds[0]?.start).toBe(4)
   })
 
+  test('requires explicit section labels rather than mentions in prose', () => {
+    const ds = scan('# 議事録\n本文に参加者：Aと決定事項：Bを記載。')
+    expect(ds).toHaveLength(2)
+  })
+
+  test('flags action items without an owner section', () => {
+    const ds = scan('# 議事録\n参加者：A\n決定事項：採用\n対応事項：テスト')
+    expect(ds).toHaveLength(1)
+    expect(ds[0]!.message).toContain('担当者')
+    expect(scan('# 議事録\n参加者：A\n決定事項：採用\n対応事項：テスト\n担当者：A')).toEqual([])
+  })
+
+  test('does not count a section inside inline code', () => {
+    expect(scan('# 議事録\n`参加者：A`\n決定事項：B')).toHaveLength(1)
+  })
+
+  test('recognizes section labels formatted as Markdown bullets', () => {
+    const text = ['# 議事録', '- 参加者：A', '- 決定事項：採用', '- 対応事項：テスト', '- 担当者：A'].join('\n')
+    expect(scan(text)).toEqual([])
+  })
+
+  test('does not treat list mentions as section headings', () => {
+    const text = ['# 議事録', '- 今回は参加者：Aと決定事項：Bを説明'].join('\n')
+    expect(scan(text)).toHaveLength(2)
+  })
+
   test('is informational in main presets only', () => {
     for (const id of ['general', 'technical', 'strict'] as const) {
       expect(getPreset(id)?.rules['style/meeting-minutes-sections']).toEqual({enabled:true,severity:'info'})
