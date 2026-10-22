@@ -125,7 +125,7 @@ describe('AP-02 metadata contracts and legacy compatibility', () => {
       ...baseline,
       packs: baseline.packs.map(p => p.id === pack.id ? { ...p, required: true } : p),
       rules: baseline.rules.map(rule => rule.id === 'wording/common-typo'
-        ? { ...rule, execution: 'nlp' as const } : rule)
+        ? { ...rule, execution: 'nlp' as const, fixKindCeiling: 'suggestion' as const } : rule)
     })).toThrow('Incompatible provider')
   })
 })
