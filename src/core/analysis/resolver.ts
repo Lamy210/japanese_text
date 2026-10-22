@@ -99,6 +99,11 @@ export function compileAnalysisCatalog(input: AnalysisCatalogV1): AnalysisCatalo
         raw.supportedDocTypes.some(doc => !provider.supportedDocTypes.includes(doc))) {
       throw new Error(`Incompatible provider for rule: ${raw.id}`)
     }
+    // A Provider descriptor must not claim a Rule whose required capability
+    // it can never supply. Runtime readiness is a separate, later gate.
+    if (raw.capabilitiesRequired.some(cap => !provider.capabilities.includes(cap))) {
+      throw new Error(`Provider lacks declared capability for rule: ${raw.id}`)
+    }
     rules.set(raw.id, raw)
   }
   const visiting = new Set<AnalysisPackId>()
