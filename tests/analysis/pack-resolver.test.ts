@@ -112,6 +112,45 @@ describe('AP-02 metadata contracts and legacy compatibility', () => {
     })).toThrow('Invalid analysis pack')
   })
 
+  test('required catalog completeness and dependency-free core cannot be bypassed', () => {
+    expect(() => compileAnalysisCatalog({
+      ...baseline, packs: baseline.packs.filter(pack => pack.id !== 'style')
+    })).toThrow('all six packs')
+
+    // Removing grammar's core dependency avoids a cycle: core still must not depend on grammar.
+    expect(() => compileAnalysisCatalog({
+      ...baseline,
+      packs: baseline.packs.map(pack => {
+        if (pack.id === 'core') return { ...pack, dependencyPackIds: ['grammar' as AnalysisPackId] }
+        if (pack.id === 'grammar') return { ...pack, dependencyPackIds: [] }
+        return pack
+      })
+    })).toThrow('Core analysis pack must')
+
+    expect(() => compileAnalysisCatalog({
+      ...baseline,
+      packs: baseline.packs.map(pack => pack.id === 'core'
+        ? { ...pack, defaultEnabledOnFreshInstall: false } : pack)
+    })).toThrow('Core analysis pack must')
+  })
+
+  test('non-NLP textlint Provider must be ready to report runnable', () => {
+    expect(resolve('typography/nfd')).toEqual({
+      status: 'skipped', ruleId: 'typography/nfd', reason: 'provider-not-ready'
+    })
+    expect(resolve('typography/nfd', {
+      failedProviderIds: new Set<AnalysisProviderId>(['textlint']),
+      readyProviderIds: new Set<AnalysisProviderId>(['textlint'])
+    })).toEqual({ status: 'skipped', ruleId: 'typography/nfd', reason: 'runtime-failed' })
+    expect(resolve('typography/nfd', {
+      readyProviderIds: new Set<AnalysisProviderId>(['textlint'])
+    })).toEqual({ status: 'runnable', ruleId: 'typography/nfd', providerId: 'textlint' })
+    // Builtin rules are always local and do not need an async readiness flag.
+    expect(resolve('typography/full-width-space')).toMatchObject({
+      status: 'runnable', providerId: 'builtin'
+    })
+  })
+
   test('catalog is cloned before use and provider mismatch is rejected', () => {
     const pack = baseline.packs.find(x => x.id === 'grammar')!
     const a = compileAnalysisCatalog(baseline)
