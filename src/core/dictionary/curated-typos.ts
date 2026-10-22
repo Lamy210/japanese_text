@@ -5,6 +5,8 @@
  * The original eight spellings and their ordering are part of the regression
  * contract. A new pair requires reviewed positive AND negative corpus cases.
  */
+import { validateDictionaryPackManifest } from './manifest'
+
 export interface CuratedTypoEntry {
   readonly wrong: string
   readonly preferred: string
@@ -22,6 +24,25 @@ const entries: readonly CuratedTypoEntry[] = Object.freeze([
   Object.freeze({ wrong: 'シュミレーター', preferred: 'シミュレーター' }),
   Object.freeze({ wrong: 'シュミレータ', preferred: 'シミュレータ' })
 ])
+
+/**
+ * Metadata only: the repository's overall redistribution license has not been
+ * independently verified, so NOASSERTION/pending must not imply approval.
+ */
+export const CURATED_TYPO_MANIFEST = validateDictionaryPackManifest({
+  schemaVersion: 1,
+  packId: 'curated-common-typo-ja',
+  version: `${CURATED_TYPO_DICTIONARY_VERSION}.0.0`,
+  locale: 'ja-JP',
+  kind: 'typo',
+  distribution: 'bundled',
+  entryCount: entries.length,
+  provenance: {
+    origin: 'first-party',
+    licenseId: 'NOASSERTION',
+    reviewStatus: 'pending'
+  }
+})
 
 const byWrong = new Map<string, CuratedTypoEntry>()
 for (const entry of entries) {
