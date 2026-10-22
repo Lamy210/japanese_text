@@ -19,6 +19,7 @@ type Sample = {
 const samples: Sample[] = data.cases as Sample[]
 const supported = new Set([
   'wording/double-honorific',
+  'wording/honorific-request',
   'wording/nominalized-action',
   'wording/repeated-phrase',
   'wording/redundancy',
