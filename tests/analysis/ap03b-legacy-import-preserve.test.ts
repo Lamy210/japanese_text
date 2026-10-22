@@ -4,10 +4,14 @@ import { prepareConfigImport } from '../../src/core/config/transfer'
 
 function activeProfileConfig() {
   const config = createDefaultConfig()
-  config.analysis.packs.dictionary = false
-  config.analysis.packs.style = true
-  config.analysis.morphology.showEvidence = true
-  return config
+  return {
+    ...config,
+    analysis: {
+      ...config.analysis,
+      packs: { ...config.analysis.packs, dictionary: false, style: true },
+      morphology: { ...config.analysis.morphology, showEvidence: true }
+    }
+  }
 }
 
 describe('AP-03b legacy JSON import preserves active Analysis settings', () => {
@@ -42,11 +46,15 @@ describe('AP-03b legacy JSON import preserves active Analysis settings', () => {
 
   test('explicit v2 analysis settings are imported and validated', () => {
     const current = activeProfileConfig()
-    const incoming = createDefaultConfig()
-    incoming.analysis.packs.dictionary = true
-    incoming.analysis.packs.style = false
-    incoming.privacy.autoSave = true
-    incoming.privacy.privacyMode = false
+    const initial = createDefaultConfig()
+    const incoming = {
+      ...initial,
+      analysis: {
+        ...initial.analysis,
+        packs: { ...initial.analysis.packs, dictionary: true, style: false }
+      },
+      privacy: { autoSave: true, privacyMode: false }
+    }
     const result = prepareConfigImport(JSON.parse(JSON.stringify(incoming)), current)
     expect(result.analysis.packs.dictionary).toBe(true)
     expect(result.analysis.packs.style).toBe(false)
