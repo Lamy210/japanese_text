@@ -52,6 +52,18 @@ describe('Phase 6B-3 explicit bundled static pack loading', () => {
     expect(result).toEqual({ status: 'unavailable', reason: 'invalid-asset' })
   })
 
+  test('does not download a pack when the index version does not match', async () => {
+    useOrigin()
+    const { indexText, packText } = await buildCuratedPackArtifacts()
+    const wrongIndex = JSON.stringify({ ...JSON.parse(indexText), version: '1.0.1' })
+    const mock = vi.fn(async (input: RequestInfo | URL) =>
+      new Response(String(input).endsWith('/index.json') ? wrongIndex : packText)
+    )
+    expect(await loadBundledCuratedTypoPack({ basePath: '/', fetcher: mock as typeof fetch }))
+      .toEqual({ status: 'unavailable', reason: 'invalid-asset' })
+    expect(mock).toHaveBeenCalledTimes(1)
+  })
+
   test('rejects oversized index before fetching the pack', async () => {
     useOrigin()
     const mock = vi.fn(async () => new Response('X'.repeat(17_000)))
