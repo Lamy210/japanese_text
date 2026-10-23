@@ -230,8 +230,17 @@ export async function formatDocumentAction(): Promise<void> {
     return
   }
 
+  // A config change can occur while Shadow lint is pending. Its result
+  // validates the OLD lint policy, not the current one. Reject it before
+  // capturing a history checkpoint or mutating the editor.
+  if (appState.revision() !== baselineRevision) {
+    appState.pushToast('warning', '校正設定または文書が変更されたためFormatを中止しました。')
+    return
+  }
+
   if (!(await captureBeforeFormatCheckpoint(text))) return
   if (
+    appState.revision() !== baselineRevision ||
     appState.activeWorkspaceId() !== originalWorkspaceId ||
     appState.activeDocumentId() !== originalDocumentId ||
     appState.documentText() !== text
