@@ -9,6 +9,7 @@
 import type { Diagnostic, DocumentType, RawDiagnostic, RuleContext, RuleError, RuleTier, Severity } from '../types'
 import type { AppConfig } from '../config/schema'
 import { buildRuleRegistry } from '../rules/registry'
+import { runnableLegacyBuiltinRuleIds } from '../analysis/legacy-runtime-gate'
 import { maskDocument } from '../text/mask'
 import { splitLines, computeLineStarts, LineIndex } from '../text/positions'
 
@@ -101,7 +102,6 @@ export function runOwnRules(
   docType: DocumentType,
   prepared?: PreparedOwnRuleExecution
 ): EngineResult {
-  void docType // 独自ルールはMarkdown/Text共通 (§5: Markdown構文検査はmarkdownルールが担う)
   if (prepared !== undefined && (prepared.text !== text || prepared.config !== config)) {
     throw new Error('Prepared analysis does not match the current text and config')
   }
@@ -112,11 +112,12 @@ export function runOwnRules(
   const registry = execution.registry
   const ctx = execution.context
   const lineIndex = execution.lineIndex
+  const runnable = runnableLegacyBuiltinRuleIds(config, docType)
 
   for (const rule of registry.values()) {
     if (rule.tier !== tier) continue
     const setting = config.rules[rule.id]
-    if (setting === undefined || !setting.enabled) continue
+    if (setting === undefined || !setting.enabled || !runnable.has(rule.id)) continue
     try {
       const raws = rule.run(ctx, setting)
       const normalized = normalizeDiagnostics(
