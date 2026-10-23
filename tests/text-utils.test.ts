@@ -4,6 +4,8 @@
 
 import { describe, expect, it } from 'vitest'
 import { LineIndex } from '../src/core/text/positions'
+import { normalizeDiagnostics } from '../src/core/engine/engine'
+import type { RawDiagnostic } from '../src/core/types'
 import { maskDocument } from '../src/core/text/mask'
 import { splitSentences, isSegmenterAvailable } from '../src/core/text/segmenter'
 import { Slugger } from '../src/core/text/slug'
@@ -38,6 +40,33 @@ describe('LineIndex', () => {
     const index = new LineIndex('')
     expect(index.posFromOffset(0)).toEqual({ line: 1, column: 1 })
     expect(new LineIndex('a').posFromOffset(1)).toEqual({ line: 1, column: 2 })
+  })
+})
+
+describe('diagnostic normalization boundaries', () => {
+  const index = new LineIndex('🎉本文')
+  const raw = (start: number, end: number): RawDiagnostic => ({
+    start, end, message: 'test', fixKind: 'none'
+  })
+
+  it('retains exact UTF-16 offsets for valid ranges, including document end', () => {
+    expect(normalizeDiagnostics([raw(2, 4), raw(4, 4)], 'style/test', 'core', index))
+      .map(({ start, end }) => [start, end])).toEqual([[2, 4], [4, 4]])
+    expect(index.length).toBe(4)
+  })
+
+  it.each([
+    [Number.NaN, 2],
+    [0, Number.NaN],
+    [Number.POSITIVE_INFINITY, 2],
+    [-1, 2],
+    [2, 1],
+    [0, 5],
+    [1.5, 2],
+    [0, Number.MAX_SAFE_INTEGER]
+  ])('rejects invalid offsets %s to %s', (start, end) => {
+    expect(() => normalizeDiagnostics([raw(start, end)], 'style/test', 'core', index))
+      .toThrow('Invalid diagnostic range')
   })
 })
 
