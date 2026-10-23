@@ -59,7 +59,10 @@ describe('AP-03c stale Worker result regression', () => {
     // Switching Pack metadata must not rewrite each legacy Rule's own setting.
     const wasEnabled = appState.config.rules['wording/common-typo']?.enabled
     appState.updateConfig(config => {
-      config.analysis.packs.dictionary = false
+      config.analysis = {
+        ...config.analysis,
+        packs: { ...config.analysis.packs, dictionary: false }
+      }
     })
     persistAndRelint()
 
