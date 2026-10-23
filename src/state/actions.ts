@@ -43,8 +43,6 @@ export function allowDiagnosticSpelling(diagnostic: Diagnostic): boolean {
     return false
   }
   appState.addTerm(entry)
-  // A previous asynchronous Worker result is invalid after the vocabulary change.
-  appState.invalidateAnalysisForConfigChange()
   persistAndRelint()
   appState.pushToast('success', `「${entry.preferred}」を許可しました。設定の用語集から解除できます。`)
   return true
@@ -466,7 +464,9 @@ export function persistWorkspaceDocumentDebounced(workspaceId: string, document:
   }, 800)
 }
 
+/** Invalidate previous config's Worker result generation before scheduling a new lint. */
 export function persistAndRelint(): void {
+  appState.invalidateAnalysisForConfigChange()
   persistConfigDebounced()
   lintController.relintAll()
 }
