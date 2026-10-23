@@ -66,8 +66,14 @@ export function normalizeDiagnostics(
 ): Diagnostic[] {
   const seen = new Map<string, number>()
   return raws.map((raw) => {
-    const start = Math.max(0, Math.min(raw.start, Number.MAX_SAFE_INTEGER))
-    const end = Math.max(start, raw.end)
+    // Rule output is not trusted to supply finite, ordered UTF-16 offsets.
+    // Reject invalid coordinates rather than handing NaN/out-of-range spans to the editor.
+    if (!Number.isSafeInteger(raw.start) || !Number.isSafeInteger(raw.end) ||
+        raw.start < 0 || raw.end < raw.start || raw.end > lineIndex.length) {
+      throw new Error(`Invalid diagnostic range for ${ruleId}`)
+    }
+    const start = raw.start
+    const end = raw.end
     const pos = lineIndex.posFromOffset(start)
     const baseId = `${ruleId}@${start}-${end}`
     const occurrence = seen.get(baseId) ?? 0
