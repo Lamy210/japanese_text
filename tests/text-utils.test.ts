@@ -27,6 +27,13 @@ describe('LineIndex', () => {
     expect(index.posFromOffset(8)).toEqual({ line: 2, column: 4 }) // '2'
   })
 
+  it('NaN and infinity offsets map to valid bounded positions', () => {
+    const index = new LineIndex('a\nb')
+    expect(index.posFromOffset(Number.NaN)).toEqual({ line: 1, column: 1 })
+    expect(index.posFromOffset(Number.NEGATIVE_INFINITY)).toEqual({ line: 1, column: 1 })
+    expect(index.posFromOffset(Number.POSITIVE_INFINITY)).toEqual({ line: 2, column: 2 })
+  })
+
   it('空文字列・境界値', () => {
     const index = new LineIndex('')
     expect(index.posFromOffset(0)).toEqual({ line: 1, column: 1 })
