@@ -50,7 +50,7 @@ describe('diagnostic normalization boundaries', () => {
   })
 
   it('retains exact UTF-16 offsets for valid ranges, including document end', () => {
-    expect(normalizeDiagnostics([raw(2, 4), raw(4, 4)], 'style/test', 'core', index))
+    expect(normalizeDiagnostics([raw(2, 4), raw(4, 4)], 'style/test', 'core', index)
       .map(({ start, end }) => [start, end])).toEqual([[2, 4], [4, 4]])
     expect(index.length).toBe(4)
   })
