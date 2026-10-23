@@ -252,6 +252,48 @@ describe('AP-02 NLP readiness and consent precedence', () => {
     })).toEqual({ status: 'skipped', ruleId: 'grammar/check-pos', reason: 'runtime-failed' })
   })
 
+
+  test('provider switch never reuses a different provider readiness flag', () => {
+    const oldProviderReady = new Set<AnalysisProviderId>(['lindera-ipadic'])
+    const oldAssets = new Set(['ja-ipadic-test'])
+    const capabilities = new Set<AnalysisCapability>(['pos'])
+    const oldResult = check({ readyProviderIds: oldProviderReady, assetReadyIds: oldAssets, runtimeCapabilities: capabilities })
+    expect(oldResult).toMatchObject({ status: 'runnable', providerId: 'lindera-ipadic' })
+
+    // Selecting an absent Provider must fail closed even if the previous one is ready.
+    expect(check({
+      activeProviderId: 'kuromojin-ipadic', readyProviderIds: oldProviderReady,
+      assetReadyIds: oldAssets, runtimeCapabilities: capabilities
+    })).toEqual({ status: 'skipped', ruleId: 'grammar/check-pos', reason: 'provider-disabled' })
+
+    // Switching back restores operation only while readiness/assets/capability remain valid.
+    expect(check({ readyProviderIds: new Set(), assetReadyIds: oldAssets, runtimeCapabilities: capabilities }))
+      .toMatchObject({ status: 'skipped', reason: 'provider-not-ready' })
+    expect(check({ readyProviderIds: oldProviderReady, assetReadyIds: oldAssets, runtimeCapabilities: capabilities }))
+      .toMatchObject({ status: 'runnable' })
+  })
+
+  test('dependency disabling and Provider failures recover in a deterministic order', () => {
+    const ready = new Set<AnalysisProviderId>(['lindera-ipadic'])
+    const assets = new Set(['ja-ipadic-test'])
+    const capabilities = new Set<AnalysisCapability>(['pos'])
+    const packEnabled = { ...base.packEnabled, core: false, grammar: false }
+    expect(check({ packEnabled, readyProviderIds: ready, assetReadyIds: assets,
+      runtimeCapabilities: capabilities })).toMatchObject({ status: 'skipped', reason: 'pack-disabled' })
+
+    packEnabled.grammar = true
+    expect(check({ packEnabled, failedProviderIds: new Set<AnalysisProviderId>(['lindera-ipadic']),
+      readyProviderIds: ready, assetReadyIds: assets, runtimeCapabilities: capabilities }))
+      .toMatchObject({ status: 'skipped', reason: 'runtime-failed' })
+
+    expect(check({ packEnabled, readyProviderIds: ready, assetReadyIds: new Set(),
+      runtimeCapabilities: capabilities })).toMatchObject({ status: 'skipped', reason: 'asset-not-ready' })
+    expect(check({ packEnabled, readyProviderIds: ready, assetReadyIds: assets,
+      runtimeCapabilities: new Set() })).toMatchObject({ status: 'skipped', reason: 'capability-missing' })
+    expect(check({ packEnabled, readyProviderIds: ready, assetReadyIds: assets,
+      runtimeCapabilities: capabilities })).toMatchObject({ status: 'runnable' })
+  })
+
   test('rejects impossible Provider capability declarations before runtime', () => {
     expect(() => compileAnalysisCatalog({
       ...catalog,
