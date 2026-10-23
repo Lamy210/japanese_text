@@ -79,8 +79,11 @@ describe('AP-03c stale Worker result regression', () => {
       config: { analysis: { packs: { dictionary: false } } },
       tiers: ['fast', 'deep', 'idle']
     })
-    worker.emit(oldRevision, 'fast', [oldDiagnostic])
-    expect(appState.diagnostics()).toEqual([])
+    for (const tier of ['fast', 'deep', 'idle'] as const) {
+      worker.emit(oldRevision, tier, [oldDiagnostic])
+      expect(appState.diagnostics()).toEqual([])
+      expect(appState.activeRuleErrors()).toEqual([])
+    }
 
     for (const tier of ['fast', 'deep', 'idle'] as const) worker.emit(currentRevision, tier)
     expect(appState.diagnostics()).toEqual([])
