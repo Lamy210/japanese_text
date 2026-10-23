@@ -103,6 +103,45 @@ describe('format document action fails closed on incomplete safety checks', () =
     expect(applyFixesTransaction).not.toHaveBeenCalled()
   })
 
+  test('rejects a complete shadow result from a previous Pack configuration generation', async () => {
+    configure(baseline(appState.revision()), shadow())
+    let finishShadow!: (value: Map<RuleTier, LintTierResult>) => void
+    vi.mocked(lintController.lintShadowText).mockImplementation(() =>
+      new Promise(resolve => { finishShadow = resolve })
+    )
+    const formatting = formatDocumentAction()
+    await vi.waitFor(() => expect(lintController.lintShadowText).toHaveBeenCalledTimes(1))
+    const originalText = appState.documentText()
+    // Switching a Pack can change the set of eligible Safe Fixes without
+    // touching the document. The old implementation applied the stale plan.
+    appState.updateConfig(draft => {
+      draft.analysis = {
+        ...draft.analysis,
+        packs: { ...draft.analysis.packs, dictionary: false }
+      }
+    })
+    appState.invalidateAnalysisForConfigChange()
+    expect(appState.documentText()).toBe(originalText)
+    finishShadow(shadow())
+    await formatting
+    expect(applyFixesTransaction).not.toHaveBeenCalled()
+  })
+
+  test('rejects a stale shadow after a new revision with exactly the same text', async () => {
+    configure(baseline(appState.revision()), shadow())
+    let finishShadow!: (value: Map<RuleTier, LintTierResult>) => void
+    vi.mocked(lintController.lintShadowText).mockImplementation(() =>
+      new Promise(resolve => { finishShadow = resolve })
+    )
+    const formatting = formatDocumentAction()
+    await vi.waitFor(() => expect(lintController.lintShadowText).toHaveBeenCalledTimes(1))
+    appState.onDocumentEdited(source)
+    expect(appState.documentText()).toBe(source)
+    finishShadow(shadow())
+    await formatting
+    expect(applyFixesTransaction).not.toHaveBeenCalled()
+  })
+
   test('allows safe fix only after complete current and shadow lint validation', async () => {
     configure(baseline(appState.revision()), shadow())
     await formatDocumentAction()
