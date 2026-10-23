@@ -32,7 +32,7 @@ export class LineIndex {
   /** offset → 1-origin (line, column) */
   posFromOffset(offset: number): Position {
     // 文書末尾位置 (== textLength) を許容する
-    const clamped = Math.max(0, Math.min(offset, this.textLength))
+    const clamped = Number.isNaN(offset) ? 0 : Math.max(0, Math.min(offset, this.textLength))
     // 二分探索で offset を含む行を特定
     let lo = 0
     let hi = this.lineStarts.length - 1
