@@ -14,7 +14,7 @@ describe('textlint diagnostic vs fix coordinates (UTF-16)', () => {
   test('uses FixCommand.range, not the broader diagnostic report range', () => {
     const text = '📚手順を行なう。'
     const offset = text.indexOf('行なう')
-    expect(offset).toBe(6) // emoji occupies two UTF-16 code units
+    expect(offset).toBe(5) // emoji occupies two UTF-16 code units
     const result = normalizeTextlintMessageSpan({
       range: [0, text.length],
       fix: { range: [offset, offset + 3], text: '行う' }
