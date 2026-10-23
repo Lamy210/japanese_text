@@ -338,7 +338,7 @@ export function applyPresetAction(presetId: PresetId): void {
 export function setDictionaryPackEnabled(enabled: boolean): void {
   if (appState.config.analysis.packs.dictionary === enabled) return
   appState.updateConfig(draft => {
-    draft.analysis.packs.dictionary = enabled
+    draft.analysis = { ...draft.analysis, packs: { ...draft.analysis.packs, dictionary: enabled } }
   })
   persistAndRelint()
 }
