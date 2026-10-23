@@ -30,10 +30,11 @@ export function normalizeTextlintMessageSpan(
   documentLength: number
 ): TextlintMessageSpan | null {
   if (!Number.isSafeInteger(documentLength) || documentLength < 0) return null
+  const index = message.index
   const range = message.range === undefined || message.range === null
-    ? Number.isSafeInteger(message.index) && message.index! >= 0 &&
-      message.index! <= documentLength
-      ? [message.index!, Math.min(documentLength, message.index! + 1)]
+    ? typeof index === 'number' && Number.isSafeInteger(index) &&
+      index >= 0 && index <= documentLength
+      ? [index, Math.min(documentLength, index + 1)]
       : null
     : message.range
   if (!validRange(range, documentLength)) return null
