@@ -10,6 +10,7 @@ import { For, Show, createMemo, createSignal, onMount, onCleanup } from 'solid-j
 import { appState } from '../state/app-state'
 import {
   updateRuleSetting,
+  setDictionaryPackEnabled,
   exportConfigFile,
   importConfigFile,
   onPrivacyModeChanged,
@@ -19,6 +20,7 @@ import {
 import { generateId, type NgWordEntry } from '../core/config/schema'
 import type { Severity, RuleCategory } from '../core/types'
 import { listRuleManifests, RULE_CATEGORY_LABELS } from '../core/rules/registry'
+import { isLegacyDictionaryOwnedRule } from '../core/analysis/packs'
 
 const SEVERITIES: Severity[] = ['error', 'warning', 'info']
 const SEVERITY_LABELS: Record<Severity, string> = { error: 'Error', warning: 'Warning', info: 'Info' }
@@ -144,18 +146,36 @@ export function SettingsDialog() {
                 <p class="settings-note">
                   ルールのON/OFFとseverity (Error = ルール違反 / Warning = 確認推奨 / Info = 改善候補) を変更できます。変更は即座に反映されます (§13)。
                 </p>
+                <fieldset class="field-group" aria-describedby="dictionary-pack-note">
+                  <legend>辞書解析 (Dictionary Pack)</legend>
+                  <label class="checkbox-label">
+                    <input
+                      type="checkbox"
+                      aria-label="辞書解析を有効にする"
+                      checked={appState.config.analysis.packs.dictionary}
+                      onChange={(e) => setDictionaryPackEnabled(e.currentTarget.checked)}
+                    />
+                    誤字検出・用語統一・NGワード検出を有効にする
+                  </label>
+                  <p id="dictionary-pack-note" class="settings-note">
+                    OFFの間は上記3種類の診断を停止します。個別ルールのON/OFFと用語集は保持され、
+                    再びONにすると元の設定で解析します。この選択は現在のRuleProfileに保存されます。
+                  </p>
+                </fieldset>
                 <For each={groupedRules()}>
                   {([category, entries]) => (
                     <section class="rule-group">
                       <h3 class="rule-group-title">{RULE_CATEGORY_LABELS[category] ?? category}</h3>
                       <For each={entries}>
                         {(entry) => (
-                          <div class={`rule-item ${entry.setting?.enabled === false ? 'rule-disabled' : ''}`}>
+                          <div class={`rule-item ${entry.setting?.enabled === false || (!appState.config.analysis.packs.dictionary && isLegacyDictionaryOwnedRule(entry.id)) ? 'rule-disabled' : ''}`}>
                             <div class="rule-item-main">
                               <label class="rule-name">
                                 <input
                                   type="checkbox"
                                   checked={entry.setting?.enabled !== false}
+                                  disabled={!appState.config.analysis.packs.dictionary && isLegacyDictionaryOwnedRule(entry.id)}
+                                  aria-describedby={!appState.config.analysis.packs.dictionary && isLegacyDictionaryOwnedRule(entry.id) ? 'dictionary-pack-note' : undefined}
                                   onChange={(e) =>
                                     updateRuleSetting(entry.id, { enabled: e.currentTarget.checked })
                                   }
@@ -167,6 +187,7 @@ export function SettingsDialog() {
                                   <span class="visually-hidden">{entry.id} のseverity</span>
                                   <select
                                     value={entry.setting?.severity ?? 'warning'}
+                                    disabled={!appState.config.analysis.packs.dictionary && isLegacyDictionaryOwnedRule(entry.id)}
                                     onChange={(e) => updateRuleSetting(entry.id, { severity: e.currentTarget.value })}
                                   >
                                     <For each={SEVERITIES}>
@@ -188,6 +209,7 @@ export function SettingsDialog() {
                                         <input
                                           type="checkbox"
                                           checked={Boolean(entry.setting?.options?.[opt.key] ?? opt.defaultValue)}
+                                          disabled={!appState.config.analysis.packs.dictionary && isLegacyDictionaryOwnedRule(entry.id)}
                                           onChange={(e) =>
                                             updateRuleSetting(entry.id, {
                                               options: { [opt.key]: e.currentTarget.checked }
@@ -202,6 +224,7 @@ export function SettingsDialog() {
                                         <input
                                           type="number"
                                           class="option-number"
+                                          disabled={!appState.config.analysis.packs.dictionary && isLegacyDictionaryOwnedRule(entry.id)}
                                           value={Number(entry.setting?.options?.[opt.key] ?? opt.defaultValue)}
                                           min={opt.min}
                                           max={opt.max}
