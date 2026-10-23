@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
 
 // Verify the real AppState revision handling, without creating a browser Worker.
-const relint = vi.fn()
+const { relint } = vi.hoisted(() => ({ relint: vi.fn() }))
 vi.mock('../../src/state/lint-controller', () => ({
   lintController: { relintAll: relint }
 }))
