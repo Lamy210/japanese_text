@@ -347,6 +347,18 @@ export function applyPresetAction(presetId: PresetId): void {
   appState.pushToast('success', `プリセット「${presetId}」を適用しました。`)
 }
 
+/**
+ * Dictionary Pack is the only optional Pack currently connected to the
+ * builtin engine. Its switch leaves all individual Rule flags unchanged.
+ */
+export function setDictionaryPackEnabled(enabled: boolean): void {
+  if (appState.config.analysis.packs.dictionary === enabled) return
+  appState.updateConfig(draft => {
+    draft.analysis = { ...draft.analysis, packs: { ...draft.analysis.packs, dictionary: enabled } }
+  })
+  persistAndRelint()
+}
+
 export function updateRuleSetting(ruleId: string, patch: { enabled?: boolean; severity?: string; options?: Record<string, number | boolean | string> }): void {
   appState.updateConfig((draft) => {
     const current = draft.rules[ruleId] ?? { enabled: true, severity: 'warning' as const }
