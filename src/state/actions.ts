@@ -230,11 +230,27 @@ export async function formatDocumentAction(): Promise<void> {
     return
   }
 
-  if (!(await captureBeforeFormatCheckpoint(text))) return
+  // The Shadow lint may finish after a RuleProfile or Pack change without
+  // a single character edit. Its successful result only certifies the config
+  // generation captured at the beginning of this Format operation.
   if (
+    appState.revision() !== baselineRevision ||
     appState.activeWorkspaceId() !== originalWorkspaceId ||
     appState.activeDocumentId() !== originalDocumentId ||
-    appState.documentText() !== text
+    appState.documentText() !== text ||
+    !appState.config.formatter.enabled
+  ) {
+    appState.pushToast('warning', '解析設定または文書が変更されたためFormatを中止しました。')
+    return
+  }
+
+  if (!(await captureBeforeFormatCheckpoint(text))) return
+  if (
+    appState.revision() !== baselineRevision ||
+    appState.activeWorkspaceId() !== originalWorkspaceId ||
+    appState.activeDocumentId() !== originalDocumentId ||
+    appState.documentText() !== text ||
+    !appState.config.formatter.enabled
   ) {
     appState.pushToast('warning', '編集中に文書が変更されたためFormatを中止しました。')
     return
