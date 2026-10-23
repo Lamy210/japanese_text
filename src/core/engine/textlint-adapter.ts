@@ -158,6 +158,9 @@ export async function runTextlint(
     })
 
     const lineIndex = new LineIndex(text)
+    // Builtin normalizeDiagnostics already disambiguates repeated
+    // rule/range IDs. Keep textlint's selected-diagnostic identity unique too.
+    const seenDiagnosticIds = new Map<string, number>()
     for (const message of result.messages) {
       if (message.severity === 0) continue // none
       const ruleId = message.ruleId
@@ -172,8 +175,11 @@ export async function runTextlint(
       const { start, end } = span
       const pos = lineIndex.posFromOffset(start)
       const meta = TEXTLINT_RULE_META[ruleId]
+      const baseId = `${ruleId}@${start}-${end}`
+      const occurrence = seenDiagnosticIds.get(baseId) ?? 0
+      seenDiagnosticIds.set(baseId, occurrence + 1)
       diagnostics.push({
-        id: `${ruleId}@${start}-${end}`,
+        id: occurrence === 0 ? baseId : `${baseId}#${occurrence}`,
         ruleId,
         severity: mapSeverity(message.severity),
         message: message.message,
