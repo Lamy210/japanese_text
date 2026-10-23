@@ -25,7 +25,24 @@ import {
 } from '../storage/storage'
 
 export function quickFix(diagnostic: Diagnostic): void {
-  if (diagnostic.replacement === undefined) return
+  if (diagnostic.replacement === undefined || diagnostic.fixKind === 'none') return
+
+  // A button can retain an older Diagnostic while a document is edited or
+  // settings change. Never apply its UTF-16 offsets to a different revision.
+  const stillCurrent = appState.diagnostics().some((active) =>
+    active.id === diagnostic.id &&
+    active.ruleId === diagnostic.ruleId &&
+    active.start === diagnostic.start &&
+    active.end === diagnostic.end &&
+    active.replacement === diagnostic.replacement &&
+    active.fixKind === diagnostic.fixKind &&
+    active.source === diagnostic.source
+  )
+  if (!stillCurrent) {
+    appState.pushToast('warning', '古い診断結果のため修正を適用できません。再解析結果を確認してください。')
+    return
+  }
+
   applyReplacement(diagnostic.start, diagnostic.end, diagnostic.replacement, 'input.quickfix')
   appState.pushToast('success', '修正を適用しました。')
 }
