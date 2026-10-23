@@ -14,6 +14,7 @@ import type { AppConfig } from '../config/schema'
 import { TEXTLINT_RULE_META } from '../rules/registry'
 import { sortDiagnostics } from './engine'
 import { LineIndex } from '../text/positions'
+import { normalizeTextlintMessageSpan } from './textlint-span'
 
 /** kernel severity (数値) → 当アプリseverity */
 function mapSeverity(level: number): Severity {
@@ -160,9 +161,15 @@ export async function runTextlint(
     for (const message of result.messages) {
       if (message.severity === 0) continue // none
       const ruleId = message.ruleId
-      const range = message.range ?? [message.index ?? 0, (message.index ?? 0) + 1]
-      const start = Math.max(0, Math.min(range[0], text.length))
-      const end = Math.max(start, Math.min(range[1], text.length))
+      const span = normalizeTextlintMessageSpan(message, text.length)
+      if (span === null) {
+        ruleErrors.push({ ruleId, message: 'textlint診断のUTF-16位置が不正なため無視しました。' })
+        continue
+      }
+      if (span.invalidFix) {
+        ruleErrors.push({ ruleId, message: 'textlint修正候補のUTF-16範囲が不正なため候補を無効化しました。' })
+      }
+      const { start, end } = span
       const pos = lineIndex.posFromOffset(start)
       const meta = TEXTLINT_RULE_META[ruleId]
       diagnostics.push({
@@ -174,9 +181,9 @@ export async function runTextlint(
         end,
         line: pos.line,
         column: pos.column,
-        // textlintのfixは人間判断を要求するため Suggestion 扱い (§17)
-        fixKind: message.fix ? 'suggestion' : 'none',
-        replacement: message.fix?.text,
+        // Only validated FixCommand ranges are actionable suggestions.
+        fixKind: span.fixKind,
+        replacement: span.replacement,
         documentation: meta?.description,
         source: 'textlint'
       })
