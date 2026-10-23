@@ -48,7 +48,8 @@ beforeEach(() => {
 describe('Quick Fix only applies current, verified diagnostic replacements', () => {
   test('preserves the original one-transaction Quick Fix for current suggestions', () => {
     quickFix(diagnostic)
-    expect(applyReplacement).toHaveBeenCalledExactlyOnceWith(
+    expect(applyReplacement).toHaveBeenCalledTimes(1)
+    expect(applyReplacement).toHaveBeenCalledWith(
       offset, offset + 4, 'デバッグ', 'input.quickfix'
     )
   })
