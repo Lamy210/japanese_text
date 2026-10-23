@@ -16,6 +16,7 @@ export class LineIndex {
   private readonly lineStarts: number[]
   private readonly textLength: number
   readonly lineCount: number
+  get length(): number { return this.textLength }
 
   constructor(text: string) {
     const starts: number[] = [0]
