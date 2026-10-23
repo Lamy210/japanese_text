@@ -25,7 +25,16 @@ import {
 } from '../storage/storage'
 
 export function quickFix(diagnostic: Diagnostic): void {
-  if (diagnostic.replacement === undefined) return
+  // A diagnostic retained by an old UI event may refer to a previous Profile,
+  // Pack, or document revision. Never apply that replacement to fresh content.
+  if (
+    diagnostic.fixKind === 'none' ||
+    diagnostic.replacement === undefined ||
+    !isCurrentDiagnostic(diagnostic)
+  ) {
+    appState.pushToast('warning', '診断結果が古くなったため修正できません。再解析結果を確認してください。')
+    return
+  }
   applyReplacement(diagnostic.start, diagnostic.end, diagnostic.replacement, 'input.quickfix')
   appState.pushToast('success', '修正を適用しました。')
 }
@@ -74,7 +83,8 @@ async function durableIgnoreContext(): Promise<
 function isCurrentDiagnostic(d: Diagnostic): boolean {
   return appState.diagnostics().some(item =>
     item.id === d.id && item.ruleId === d.ruleId && item.source === d.source &&
-    item.start === d.start && item.end === d.end
+    item.start === d.start && item.end === d.end &&
+    item.fixKind === d.fixKind && item.replacement === d.replacement
   )
 }
 
