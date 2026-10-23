@@ -13,6 +13,11 @@ const LEGACY_DICTIONARY_RULES = new Set([
   'wording/common-typo', 'wording/terminology', 'wording/ng-word'
 ])
 
+/** Shared Rule ownership for runtime gates and Settings; never reset per-rule flags. */
+export function isLegacyDictionaryOwnedRule(ruleId: string): boolean {
+  return LEGACY_DICTIONARY_RULES.has(ruleId)
+}
+
 const DESCRIPTORS: readonly ProviderDescriptorV1[] = [
   {
     id: 'builtin', implementationVersion: '1.0.0', capabilities: [],
