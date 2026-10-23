@@ -10,6 +10,7 @@
 import type { LintRequest, WorkerResponse } from './protocol'
 import { prepareOwnRuleExecution, runOwnRules, type PreparedOwnRuleExecution } from '../core/engine/engine'
 import { RevisionGate } from './revision-gate'
+import { configForEnabledAnalysisPacks } from '../core/analysis/lint-config'
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope
 
@@ -47,6 +48,8 @@ const revisionGate = new RevisionGate()
 
 async function runLint(req: LintRequest): Promise<void> {
   const { revision, text, config, docType, tiers } = req
+  // One consistent gated config per request, including Formatter Shadow revisions.
+  const lintConfig = configForEnabledAnalysisPacks(config)
   // Scope prepared structures to this individual message. Requests for newer
   // revisions or shadow lint can interleave while textlint awaits imports.
   let prepared: PreparedOwnRuleExecution | null = null
@@ -62,14 +65,14 @@ async function runLint(req: LintRequest): Promise<void> {
     try {
       if (prepared === null) {
         const started = performance.now()
-        prepared = prepareOwnRuleExecution(text, config)
+        prepared = prepareOwnRuleExecution(text, lintConfig)
         pendingPreparationMs = performance.now() - started
       }
       const setupChargeMs = pendingPreparationMs
       pendingPreparationMs = 0
       if (tier === 'deep') {
         // Deep = 独自Deepルール + textlint
-        const own = runOwnRules(text, config, 'deep', docType, prepared)
+        const own = runOwnRules(text, lintConfig, 'deep', docType, prepared)
         let textlintDiagnostics: typeof own.diagnostics = []
         const ruleErrors = [...own.ruleErrors]
         const adapter = await loadTextlint()
@@ -79,7 +82,7 @@ async function runLint(req: LintRequest): Promise<void> {
         }
         if (adapter !== null) {
           try {
-            const result = await adapter.runTextlint(text, config, docType)
+            const result = await adapter.runTextlint(text, lintConfig, docType)
             textlintDiagnostics = result.diagnostics
             ruleErrors.push(...result.ruleErrors)
           } catch (error) {
@@ -111,7 +114,7 @@ async function runLint(req: LintRequest): Promise<void> {
         })
       } else {
         // fast / idle
-        const result = runOwnRules(text, config, tier, docType, prepared)
+        const result = runOwnRules(text, lintConfig, tier, docType, prepared)
         post({
           type: 'result',
           revision,
