@@ -25,7 +25,7 @@ vi.mock('../../src/storage/storage', () => ({
 import { appState } from '../../src/state/app-state'
 import { lintController } from '../../src/state/lint-controller'
 import { applyFixesTransaction } from '../../src/editor/editor-adapter'
-import { formatDocumentAction } from '../../src/state/actions'
+import { formatDocumentAction, persistAndRelint } from '../../src/state/actions'
 
 const source = '手順を行なう。'
 const fix: Diagnostic = {
@@ -100,6 +100,51 @@ describe('format document action fails closed on incomplete safety checks', () =
     s.set('deep', result('deep', -42, [error]))
     configure(baseline(appState.revision()), s)
     await formatDocumentAction()
+    expect(applyFixesTransaction).not.toHaveBeenCalled()
+  })
+
+  test('aborts if Dictionary Pack is disabled while Shadow analysis is pending', async () => {
+    const originalRevision = appState.revision()
+    configure(baseline(originalRevision), shadow())
+
+    let signalShadowStarted!: () => void
+    const shadowStarted = new Promise<void>(resolve => { signalShadowStarted = resolve })
+    let finishShadow!: (value: Map<RuleTier, LintTierResult>) => void
+    const pendingShadow = new Promise<Map<RuleTier, LintTierResult>>(resolve => { finishShadow = resolve })
+    vi.mocked(lintController.lintShadowText).mockImplementation(() => {
+      signalShadowStarted()
+      return pendingShadow
+    })
+
+    const formatting = formatDocumentAction()
+    await shadowStarted
+    // Document and document ID are unchanged: only the analysis policy changes.
+    appState.updateConfig(config => {
+      config.analysis = {
+        ...config.analysis,
+        packs: { ...config.analysis.packs, dictionary: false }
+      }
+    })
+    persistAndRelint()
+    expect(appState.revision()).toBe(originalRevision + 1)
+    expect(appState.documentText()).toBe(source)
+    finishShadow(shadow())
+    await formatting
+
+    expect(lintController.lintShadowText).toHaveBeenCalledTimes(1)
+    expect(applyFixesTransaction).not.toHaveBeenCalled()
+  })
+
+  test('aborts when identical document content is reloaded during Shadow analysis', async () => {
+    const originalRevision = appState.revision()
+    configure(baseline(originalRevision), shadow())
+    vi.mocked(lintController.lintShadowText).mockImplementation(async () => {
+      appState.setDocument(source)
+      return shadow()
+    })
+    await formatDocumentAction()
+    expect(appState.documentText()).toBe(source)
+    expect(appState.revision()).toBe(originalRevision + 1)
     expect(applyFixesTransaction).not.toHaveBeenCalled()
   })
 
