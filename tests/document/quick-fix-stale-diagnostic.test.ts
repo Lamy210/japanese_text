@@ -51,7 +51,8 @@ describe('Quick Fix rejects stale diagnostic locations', () => {
   test('applies a current, valid suggestion exactly once', () => {
     showDiagnostic()
     quickFix(original)
-    expect(applyReplacement).toHaveBeenCalledExactlyOnceWith(
+    expect(applyReplacement).toHaveBeenCalledTimes(1)
+    expect(applyReplacement).toHaveBeenCalledWith(
       original.start, original.end, original.replacement, 'input.quickfix'
     )
   })
