@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { LintRequest, WorkerResponse } from '../../src/worker/protocol'
+import { createDefaultConfig } from '../../src/core/config/validate'
+import { TEXTLINT_RULE_IDS } from '../../src/core/rules/providers/textlint'
 
 const mock = vi.hoisted(() => ({
   onMessage: null as null | ((event: { data: LintRequest }) => void),
@@ -31,9 +33,16 @@ vi.mock('../../src/core/engine/textlint-adapter', () => {
 })
 
 let revision = 100
-const enabledTextlintConfig = () => ({
-  rules: { 'style/sentence-length': { enabled: true, severity: 'warning' } }
-}) as LintRequest['config']
+const enabledTextlintConfig = (): LintRequest['config'] => createDefaultConfig()
+
+const disabledTextlintConfig = (): LintRequest['config'] => {
+  const config = createDefaultConfig()
+  for (const ruleId of TEXTLINT_RULE_IDS) {
+    const setting = config.rules[ruleId]
+    if (setting !== undefined) config.rules[ruleId] = { ...setting, enabled: false }
+  }
+  return config
+}
 
 const dispatch = (
   tiers: LintRequest['tiers'],
@@ -80,7 +89,7 @@ describe('real analysis Worker message protocol for obsolete revisions', () => {
   test('does not load textlint when every textlint rule is disabled, yet completes builtin Deep/Idle', async () => {
     const importsBefore = mock.textlintModuleImports
     expect(importsBefore).toBe(0) // First worker Deep request should remain truly lazy.
-    const rev = dispatch(['deep', 'idle'], undefined, { rules: {} } as LintRequest['config'])
+    const rev = dispatch(['deep', 'idle'], undefined, disabledTextlintConfig())
     await vi.waitFor(() => expect(completion(rev)).toHaveLength(2))
     expect(completion(rev).map(x => x.type)).toEqual(['result', 'result'])
     expect(mock.ownRuleTiers).toEqual(['deep', 'idle'])
@@ -96,7 +105,7 @@ describe('real analysis Worker message protocol for obsolete revisions', () => {
     expect(mock.textlintStarted).toBe(1)
 
     mock.textlintStarted = 0
-    const second = dispatch(['deep'], undefined, { rules: {} } as LintRequest['config'])
+    const second = dispatch(['deep'], undefined, disabledTextlintConfig())
     await vi.waitFor(() => expect(completion(second)).toHaveLength(1))
     expect(mock.textlintModuleImports).toBe(1)
     expect(mock.textlintStarted).toBe(0)
