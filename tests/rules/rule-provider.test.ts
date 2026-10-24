@@ -13,6 +13,7 @@ import type { CoreRule } from '../../src/core/types'
 
 const nativeRuleIds = [
   'typography/full-width-space', 'typography/unnecessary-space',
+  'typography/invisible-separator',
   'typography/punctuation', 'typography/brackets', 'typography/alnum-width',
   'wording/ng-word', 'wording/terminology', 'wording/redundancy',
   'wording/common-typo',
