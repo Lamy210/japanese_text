@@ -34,7 +34,7 @@ export interface NlpRunIdentity {
 
 export type NlpTerminal<T> =
   | { readonly status: 'completed'; readonly identity: NlpRunIdentity; readonly value: T }
-  | { readonly status: 'failed'; readonly identity: NlpRunIdentity; readonly reason: 'provider-error' | 'timeout' }
+  | { readonly status: 'failed'; readonly identity: NlpRunIdentity; readonly reason: 'provider-error' | 'timeout' | 'invalid-payload' | 'worker-unavailable' }
   | { readonly status: 'skipped'; readonly identity: NlpRunIdentity; readonly reason: 'superseded' | 'cancelled' | 'snapshot-stale' | 'worker-restarted' }
 
 export type NlpWorkerReply<T> =
@@ -158,6 +158,13 @@ export class NlpSessionCoordinator<T> {
     if (this.active === null || !sameRun(this.active, identity)) return null
     this.active = null
     return { status: 'failed', identity, reason: 'timeout' }
+  }
+
+  /** Runtime failures are distinct from ordinary cancellation or empty analysis. */
+  fail(identity: NlpRunIdentity, reason: Extract<NlpTerminal<T>, {status: 'failed'}>['reason']): NlpTerminal<T> | null {
+    if (this.active === null || !sameRun(this.active, identity)) return null
+    this.active = null
+    return { status: 'failed', identity, reason }
   }
 
   /** Invalidate the old Worker epoch before a new Worker is available. */
