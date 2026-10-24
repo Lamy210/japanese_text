@@ -30,9 +30,6 @@ function isUncertainMarkdownLine(line: string): boolean {
   if (line.includes('|')) return true
   // Raw HTML and ambiguous markup must not be assumed to be prose.
   if (/<\/?[A-Za-z!][^>]*>/u.test(line) || /<\/?[A-Za-z!][^>]*$/u.test(line)) return true
-  // The mask handles matched inline code; an unmatched backtick is ambiguous.
-  // Conservatively skip the line instead of treating dangling code as prose.
-  if (line.includes('`') && !/^(?:[^\x60]*\x60[^\x60]*\x60)*[^\x60]*$/u.test(line)) return true
   return hasUnpairedSurrogate(line)
 }
 
@@ -93,7 +90,22 @@ export function extractProseRegions(
     const contentEnd = lineEnd > lineStart && source[lineEnd - 1] === '\r'
       ? lineEnd - 1 : lineEnd
     const line = source.slice(lineStart, contentEnd)
-    const plan = planLine(line, documentType)
+    // The existing masker is authoritative for paired inline backtick runs.
+    // If any backtick is not protected, the construct is ambiguous and the
+    // entire line is excluded rather than parsing potentially executable code.
+    let unmaskedBacktick = false
+    if (documentType === 'markdown' && line.includes('`')) {
+      let probe = maskIndex
+      for (let tick = line.indexOf('`'); tick >= 0; tick = line.indexOf('`', tick + 1)) {
+        const absolute = lineStart + tick
+        while (probe < masked.length && masked[probe]!.end <= absolute) probe++
+        if (probe >= masked.length || masked[probe]!.start > absolute) {
+          unmaskedBacktick = true
+          break
+        }
+      }
+    }
+    const plan = unmaskedBacktick ? null : planLine(line, documentType)
     if (plan !== null) {
       const linkLabels = documentType === 'markdown'
         ? [...line.matchAll(/!?\[([^\]\[\r\n]+)\]\(/gu)]
