@@ -10,6 +10,7 @@
 import type { LintRequest, WorkerResponse } from './protocol'
 import { prepareOwnRuleExecution, runOwnRules, type PreparedOwnRuleExecution } from '../core/engine/engine'
 import { RevisionGate } from './revision-gate'
+import { TEXTLINT_RULE_IDS } from '../core/rules/providers/textlint'
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope
 
@@ -72,27 +73,33 @@ async function runLint(req: LintRequest): Promise<void> {
         const own = runOwnRules(text, config, 'deep', docType, prepared)
         let textlintDiagnostics: typeof own.diagnostics = []
         const ruleErrors = [...own.ruleErrors]
-        const adapter = await loadTextlint()
-        if (revisionGate.isObsolete(revision)) {
-          post({ type: 'skipped', revision, tier, reason: 'superseded' })
-          continue
-        }
-        if (adapter !== null) {
-          try {
-            const result = await adapter.runTextlint(text, config, docType)
-            textlintDiagnostics = result.diagnostics
-            ruleErrors.push(...result.ruleErrors)
-          } catch (error) {
+        // Only import the asynchronous textlint adapter when at least one
+        // of its rules is enabled. Deep builtin rules continue independently.
+        // This also prevents a missing optional chunk from producing an error
+        // for a Profile which does not use any textlint rules.
+        if (TEXTLINT_RULE_IDS.some(ruleId => config.rules[ruleId]?.enabled === true)) {
+          const adapter = await loadTextlint()
+          if (revisionGate.isObsolete(revision)) {
+            post({ type: 'skipped', revision, tier, reason: 'superseded' })
+            continue
+          }
+          if (adapter !== null) {
+            try {
+              const result = await adapter.runTextlint(text, config, docType)
+              textlintDiagnostics = result.diagnostics
+              ruleErrors.push(...result.ruleErrors)
+            } catch (error) {
+              ruleErrors.push({
+                ruleId: 'textlint',
+                message: `textlint実行に失敗しました: ${error instanceof Error ? error.message : String(error)}`
+              })
+            }
+          } else {
             ruleErrors.push({
               ruleId: 'textlint',
-              message: `textlint実行に失敗しました: ${error instanceof Error ? error.message : String(error)}`
+              message: `textlintモジュールのロードに失敗しました。Deep解析の一部が無効になっています。${textlintLoadError ?? ''}`
             })
           }
-        } else {
-          ruleErrors.push({
-            ruleId: 'textlint',
-            message: `textlintモジュールのロードに失敗しました。Deep解析の一部が無効になっています。${textlintLoadError ?? ''}`
-          })
         }
         if (revisionGate.isObsolete(revision)) {
           post({ type: 'skipped', revision, tier, reason: 'superseded' })

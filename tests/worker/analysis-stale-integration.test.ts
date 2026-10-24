@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { LintRequest, WorkerResponse } from '../../src/worker/protocol'
+import { createDefaultConfig } from '../../src/core/config/validate'
+import { TEXTLINT_RULE_IDS } from '../../src/core/rules/providers/textlint'
 
 const mock = vi.hoisted(() => ({
   onMessage: null as null | ((event: { data: LintRequest }) => void),
   responses: [] as WorkerResponse[],
   textlintStarted: 0,
+  textlintModuleImports: 0,
   waitForTextlint: null as null | (() => Promise<void>),
   throwTier: null as null | string,
   ownRuleTiers: [] as string[]
@@ -18,21 +21,39 @@ vi.mock('../../src/core/engine/engine', () => ({
     return { diagnostics: [], ruleErrors: [], durationMs: 1 }
   }
 }))
-vi.mock('../../src/core/engine/textlint-adapter', () => ({
-  runTextlint: async () => {
-    mock.textlintStarted++
-    await mock.waitForTextlint?.()
-    return { diagnostics: [], ruleErrors: [] }
+vi.mock('../../src/core/engine/textlint-adapter', () => {
+  mock.textlintModuleImports++
+  return {
+    runTextlint: async () => {
+      mock.textlintStarted++
+      await mock.waitForTextlint?.()
+      return { diagnostics: [], ruleErrors: [] }
+    }
   }
-}))
+})
 
 let revision = 100
-const dispatch = (tiers: LintRequest['tiers'], requestedRevision = ++revision) => {
+const enabledTextlintConfig = (): LintRequest['config'] => createDefaultConfig()
+
+const disabledTextlintConfig = (): LintRequest['config'] => {
+  const config = createDefaultConfig()
+  for (const ruleId of TEXTLINT_RULE_IDS) {
+    const setting = config.rules[ruleId]
+    if (setting !== undefined) config.rules[ruleId] = { ...setting, enabled: false }
+  }
+  return config
+}
+
+const dispatch = (
+  tiers: LintRequest['tiers'],
+  requestedRevision = ++revision,
+  config: LintRequest['config'] = enabledTextlintConfig()
+) => {
   const request: LintRequest = {
     type: 'lint',
     revision: requestedRevision,
     text: '資料を確認します。',
-    config: {} as LintRequest['config'],
+    config,
     docType: 'markdown',
     tiers
   }
@@ -64,6 +85,36 @@ describe('real analysis Worker message protocol for obsolete revisions', () => {
   })
 
   afterAll(() => vi.unstubAllGlobals())
+
+  test('does not load textlint when every textlint rule is disabled, yet completes builtin Deep/Idle', async () => {
+    const importsBefore = mock.textlintModuleImports
+    expect(importsBefore).toBe(0) // First worker Deep request should remain truly lazy.
+    const rev = dispatch(['deep', 'idle'], undefined, disabledTextlintConfig())
+    await vi.waitFor(() => expect(completion(rev)).toHaveLength(2))
+    expect(completion(rev).map(x => x.type)).toEqual(['result', 'result'])
+    expect(mock.ownRuleTiers).toEqual(['deep', 'idle'])
+    expect(mock.textlintModuleImports).toBe(importsBefore)
+    expect(mock.textlintStarted).toBe(0)
+    expect(completion(rev)[0]).toMatchObject({ ruleErrors: [] })
+  })
+
+  test('loads textlint after it becomes enabled and retains the lazy-loaded adapter', async () => {
+    const first = dispatch(['deep'])
+    await vi.waitFor(() => expect(completion(first)).toHaveLength(1))
+    expect(mock.textlintModuleImports).toBe(1)
+    expect(mock.textlintStarted).toBe(1)
+
+    mock.textlintStarted = 0
+    const second = dispatch(['deep'], undefined, disabledTextlintConfig())
+    await vi.waitFor(() => expect(completion(second)).toHaveLength(1))
+    expect(mock.textlintModuleImports).toBe(1)
+    expect(mock.textlintStarted).toBe(0)
+
+    const third = dispatch(['deep'])
+    await vi.waitFor(() => expect(completion(third)).toHaveLength(1))
+    expect(mock.textlintModuleImports).toBe(1)
+    expect(mock.textlintStarted).toBe(1)
+  })
 
   test('skips a deep analysis paused in textlint and all its remaining tiers', async () => {
     let release: (() => void) | undefined
