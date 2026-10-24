@@ -70,7 +70,7 @@ export class NlpWorkerClient {
       const terminal = reason === 'timeout'
         ? this.coordinator.timeout(pending.identity)
         : this.coordinator.fail(pending.identity, 'worker-unavailable')
-      if (terminal !== null) this.finish(terminal)
+      if (terminal !== null && terminal.status === 'failed') this.finish(terminal)
     }
     this.retireWorker()
   }
@@ -157,7 +157,7 @@ export class NlpWorkerClient {
     const current = this.pending
     if (current !== null) {
       const terminal = this.coordinator.cancel(current.identity)
-      if (terminal !== null) this.finish(terminal)
+      if (terminal !== null && terminal.status === 'skipped') this.finish(terminal)
     }
     this.retireWorker()
   }
