@@ -98,10 +98,11 @@ export function extractProseRegions(
       const linkLabels = documentType === 'markdown'
         ? [...line.matchAll(/!?\[([^\]\[\r\n]+)\]\(/gu)]
           .map(match => {
-            const labelStart = match.index + match[0].indexOf('[') + 1
+            const labelStart = (match.index ?? 0) + match[0].indexOf('[') + 1
             return { start: labelStart, end: labelStart + match[1].length }
           })
         : []
+      let labelIndex = 0
       const start = lineStart + plan.start
       const end = lineStart + plan.end
       let runStart = -1
@@ -131,8 +132,10 @@ export function extractProseRegions(
           masked[maskIndex]!.start <= pos && pos < masked[maskIndex]!.end
         const local = pos - lineStart
         const ch = source[pos]!
-        const label = linkLabels.find(span => span.start <= local && local < span.end)
-        const kind = label === undefined ? plan.kind : 'link-label'
+        while (labelIndex < linkLabels.length && linkLabels[labelIndex]!.end <= local) labelIndex++
+        const label = linkLabels[labelIndex]
+        const kind = label !== undefined && label.start <= local && local < label.end
+          ? 'link-label' : plan.kind
         const isMarkup = documentType === 'markdown' &&
           (HARD_MARKUP.has(ch) || (ch === '!' && line[local + 1] === '['))
         if (isMasked || isMarkup) {
