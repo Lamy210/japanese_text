@@ -23,7 +23,7 @@ describe('textlint adapter does not forward malformed third-party coordinates', 
         },
         {
           ruleId: 'style/sentence-length', severity: 1, message: 'invalid replacement',
-          index: 0, range: [0, 1],
+          index: 0, range: [0, 2],
           fix: { range: [0, Number.POSITIVE_INFINITY], text: 'unsafe' }
         }
       ]
@@ -43,7 +43,7 @@ describe('textlint adapter does not forward malformed third-party coordinates', 
     })
     const invalidFix = outcome.diagnostics.find(x => x.message === 'invalid replacement')
     expect(invalidFix).toMatchObject({
-      start: 0, end: 1, fixKind: 'none'
+      start: 0, end: 2, fixKind: 'none'
     })
     expect(invalidFix?.replacement).toBeUndefined()
     expect(outcome.diagnostics.every(x =>
