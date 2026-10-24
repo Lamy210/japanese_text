@@ -13,12 +13,19 @@ export interface Position {
 
 /** 行開始offsetを事前計算した索引 (lint 1回あたりO(1)変換) */
 export class LineIndex {
+  private readonly sourceText: string
   private readonly lineStarts: number[]
   private readonly textLength: number
   readonly lineCount: number
   get length(): number { return this.textLength }
 
+  /** Check a diagnostic/edit offset against the actual source UTF-16 string. */
+  isCodePointBoundary(offset: number): boolean {
+    return isUtf16CodePointBoundary(this.sourceText, offset)
+  }
+
   constructor(text: string) {
+    this.sourceText = text
     const starts: number[] = [0]
     for (let i = 0; i < text.length; i++) {
       if (text.charCodeAt(i) === 10 /* \n */) {
