@@ -164,7 +164,7 @@ export async function runTextlint(
     for (const message of result.messages) {
       if (message.severity === 0) continue // none
       const ruleId = message.ruleId
-      const span = normalizeTextlintMessageSpan(message, text.length)
+      const span = normalizeTextlintMessageSpan(message, text)
       if (span === null) {
         ruleErrors.push({ ruleId, message: 'textlint診断のUTF-16位置が不正なため無視しました。' })
         continue

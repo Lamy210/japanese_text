@@ -82,3 +82,18 @@ export function computeLineStarts(lines: string[]): number[] {
   }
   return starts
 }
+
+/**
+ * Whether a UTF-16 offset lies between Unicode scalar values.
+ *
+ * CodeMirror and diagnostics use UTF-16 offsets; an index inside a surrogate
+ * pair is numerically in range but editing there corrupts the character.
+ */
+export function isUtf16CodePointBoundary(text: string, offset: number): boolean {
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > text.length) return false
+  if (offset === 0 || offset === text.length) return true
+  const previous = text.charCodeAt(offset - 1)
+  const current = text.charCodeAt(offset)
+  return !(previous >= 0xD800 && previous <= 0xDBFF &&
+    current >= 0xDC00 && current <= 0xDFFF)
+}

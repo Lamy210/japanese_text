@@ -1,3 +1,5 @@
+import { isUtf16CodePointBoundary } from '../text/positions'
+
 /**
  * textlint's reporting range and optional FixCommand.range can differ.
  * Never fabricate a clickable range from an invalid third-party offset.
@@ -13,11 +15,12 @@ export type TextlintMessageSpan =
   | { readonly start: number; readonly end: number; readonly fixKind: 'none'; readonly invalidFix: boolean; readonly replacement?: undefined }
   | { readonly start: number; readonly end: number; readonly fixKind: 'suggestion'; readonly invalidFix: false; readonly replacement: string }
 
-function validRange(range: readonly number[] | null | undefined, length: number): range is readonly [number, number] {
+function validRange(range: readonly number[] | null | undefined, text: string): range is readonly [number, number] {
   if (!Array.isArray(range) || range.length !== 2) return false
   const [start, end] = range
   return Number.isSafeInteger(start) && Number.isSafeInteger(end) &&
-    start >= 0 && end >= start && end <= length
+    start >= 0 && end >= start && end <= text.length &&
+    isUtf16CodePointBoundary(text, start) && isUtf16CodePointBoundary(text, end)
 }
 
 /**
@@ -27,9 +30,9 @@ function validRange(range: readonly number[] | null | undefined, length: number)
  */
 export function normalizeTextlintMessageSpan(
   message: TextlintMessageSpanInput,
-  documentLength: number
+  text: string
 ): TextlintMessageSpan | null {
-  if (!Number.isSafeInteger(documentLength) || documentLength < 0) return null
+  const documentLength = text.length
   const index = message.index
   const range = message.range === undefined || message.range === null
     ? typeof index === 'number' && Number.isSafeInteger(index) &&
@@ -37,13 +40,13 @@ export function normalizeTextlintMessageSpan(
       ? [index, Math.min(documentLength, index + 1)]
       : null
     : message.range
-  if (!validRange(range, documentLength)) return null
+  if (!validRange(range, text)) return null
 
   const fix = message.fix
   if (fix === undefined || fix === null) {
     return { start: range[0], end: range[1], fixKind: 'none', invalidFix: false }
   }
-  if (typeof fix.text !== 'string' || !validRange(fix.range, documentLength)) {
+  if (typeof fix.text !== 'string' || !validRange(fix.range, text)) {
     return { start: range[0], end: range[1], fixKind: 'none', invalidFix: true }
   }
   // TextlintFixCommand.range is the actual replacement target. The report
