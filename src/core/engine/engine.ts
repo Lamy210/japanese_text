@@ -69,7 +69,9 @@ export function normalizeDiagnostics(
     // Rule output is not trusted to supply finite, ordered UTF-16 offsets.
     // Reject invalid coordinates rather than handing NaN/out-of-range spans to the editor.
     if (!Number.isSafeInteger(raw.start) || !Number.isSafeInteger(raw.end) ||
-        raw.start < 0 || raw.end < raw.start || raw.end > lineIndex.length) {
+        raw.start < 0 || raw.end < raw.start || raw.end > lineIndex.length ||
+        !lineIndex.isCodePointBoundary(raw.start) ||
+        !lineIndex.isCodePointBoundary(raw.end)) {
       throw new Error(`Invalid diagnostic range for ${ruleId}`)
     }
     const start = raw.start
