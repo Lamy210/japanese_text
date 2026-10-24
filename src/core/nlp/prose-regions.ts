@@ -29,7 +29,11 @@ function isUncertainMarkdownLine(line: string): boolean {
   // (including their header/delimiter rows) instead of merging columns.
   if (line.includes('|')) return true
   // Raw HTML and ambiguous markup must not be assumed to be prose.
-  if (/<\/?[A-Za-z!][^>]*>/u.test(line) || /<\/?[A-Za-z!][^>]*$/u.test(line)) return true
+  // HTML comments are already masked by maskDocument. Their trailing
+  // visible prose is still eligible if there is no other HTML markup.
+  const withoutComments = line.replace(/<!--[\s\S]*?-->/gu, '')
+  if (/<\/?[A-Za-z!][^>]*>/u.test(withoutComments) ||
+      /<\/?[A-Za-z!][^>]*$/u.test(withoutComments)) return true
   return hasUnpairedSurrogate(line)
 }
 
