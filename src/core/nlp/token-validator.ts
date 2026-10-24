@@ -13,7 +13,8 @@ export type RegionTokenValidation =
   | { readonly status: 'invalid'; readonly reason: 'invalid-region' | 'invalid-token' | 'overlap' }
 
 function isOriginalRegion(source: string, region: ProseRegion): boolean {
-  return typeof region.id === 'string' && region.id.length > 0 &&
+  return typeof source === 'string' && region !== null && typeof region === 'object' &&
+    typeof region.id === 'string' && region.id.length > 0 &&
     typeof region.text === 'string' &&
     Number.isSafeInteger(region.sourceStartUtf16) &&
     Number.isSafeInteger(region.sourceEndUtf16) &&
@@ -36,6 +37,7 @@ export function validateByteTokenSequence(
     Object.freeze({ status: 'invalid', reason })
 
   if (!isOriginalRegion(source, region)) return invalid('invalid-region')
+  if (!Array.isArray(rawTokens)) return invalid('invalid-token')
   let mapping: Utf8OffsetMap
   try {
     mapping = new Utf8OffsetMap(region.text)
