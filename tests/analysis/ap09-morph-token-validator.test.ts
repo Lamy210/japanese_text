@@ -27,8 +27,12 @@ function token(surface: string, relativeStart: number, changes: Partial<MorphTok
 
 describe('AP-09 complete MorphToken contract validation', () => {
   test('accepts exact, ordered UTF-16 spans for repeated Japanese words and emoji', () => {
+    const mutableFeatures = ['名詞', '一般']
     const input = [
-      token('猫', 0, { lemma: '猫', reading: 'ネコ', isUnknown: false }),
+      token('猫', 0, {
+        lemma: '猫', reading: 'ネコ', isUnknown: false,
+        posDetails: mutableFeatures
+      }),
       token('と', 1, { pos: 'particle', posDetails: ['助詞'] }),
       token('猫', 2),
       token('📚', 3, { pos: 'symbol', sentenceId: 'sentence-1' }),
@@ -48,7 +52,7 @@ describe('AP-09 complete MorphToken contract validation', () => {
     expect(Object.isFrozen(result.tokens[0]?.posDetails)).toBe(true)
     expect(Object.isFrozen(result.tokens[0]?.originalFeatures)).toBe(true)
     expect(result.tokens[0]?.posDetails).not.toBe(input[0]?.posDetails)
-    input[0]!.posDetails = ['changed'] as never
+    mutableFeatures[0] = 'changed'
     expect(result.tokens[0]?.posDetails).toEqual(['名詞', '一般'])
   })
 
