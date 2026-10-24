@@ -3,6 +3,7 @@ import type { CoreRule } from '../../types'
 import type { RuleManifest, RuleProvider } from './types'
 
 import { fullWidthSpaceRule, unnecessarySpaceRule } from '../fast/whitespace'
+import { invisibleSeparatorRule } from '../fast/invisible-separator'
 import { punctuationRule } from '../fast/punctuation'
 import { bracketsRule } from '../fast/brackets'
 import { alnumWidthRule } from '../fast/alnum-width'
@@ -49,6 +50,7 @@ function buildBuiltinRules(config: RuntimeRulesConfig): CoreRule[] {
   return [
     fullWidthSpaceRule,
     unnecessarySpaceRule,
+    invisibleSeparatorRule,
     punctuationRule,
     bracketsRule,
     alnumWidthRule,
