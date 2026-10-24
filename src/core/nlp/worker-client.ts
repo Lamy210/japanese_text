@@ -7,7 +7,7 @@
  * the caller can observe a successful MorphToken batch.
  */
 import { NlpSessionCoordinator, type NlpRunIdentity, type NlpSnapshotIdentity, type NlpTerminal } from './session-coordinator'
-import { validateNlpWorkerBatch, type NlpAnalyzeRequest, type NlpWorkerResponse } from './worker-protocol'
+import { validateNlpWorkerBatch, type NlpAnalyzeRequest, type NlpWorkerResponse, type NlpRegionTokens } from './worker-protocol'
 import type { MorphToken } from './types'
 
 export type NlpClientOutcome =
@@ -30,7 +30,7 @@ interface Pending {
 }
 
 export class NlpWorkerClient {
-  private readonly coordinator: NlpSessionCoordinator<readonly MorphToken[]>
+  private readonly coordinator: NlpSessionCoordinator<readonly NlpRegionTokens[]>
   private readonly workerFactory: () => Worker
   private readonly timeoutMs: number
   private worker: Worker | null = null
