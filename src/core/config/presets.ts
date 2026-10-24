@@ -45,6 +45,7 @@ export const BUILTIN_PRESETS: PresetDefinition[] = [
     rules: rules(
       'typography/full-width-space',
       'typography/unnecessary-space',
+      ['typography/invisible-separator', 'info'],
       'typography/punctuation',
       ['typography/brackets', 'warning'],
       'typography/alnum-width',
@@ -96,6 +97,7 @@ export const BUILTIN_PRESETS: PresetDefinition[] = [
     rules: rules(
       'typography/full-width-space',
       'typography/unnecessary-space',
+      ['typography/invisible-separator', 'warning'],
       'typography/punctuation',
       ['typography/brackets', 'warning'],
       'typography/alnum-width',
@@ -147,6 +149,7 @@ export const BUILTIN_PRESETS: PresetDefinition[] = [
     rules: rules(
       ['typography/full-width-space', 'error'],
       ['typography/unnecessary-space', 'error'],
+      ['typography/invisible-separator', 'warning'],
       ['typography/punctuation', 'error'],
       ['typography/brackets', 'error'],
       ['typography/alnum-width', 'error'],
