@@ -26,23 +26,36 @@ function write32(buffer: Uint8Array, offset: number, value: number): void {
 
 interface GeneratedEntry { readonly name: string; readonly central: number; readonly local: number }
 
-function zip(paths: readonly string[] = names, opts: { directory?: string } = {}) {
+function zip(paths: readonly string[] = names, opts: { directory?: string; descriptor?: 'signed' | 'unsigned' } = {}) {
   const pathsToWrite = opts.directory ? [opts.directory, ...paths] : [...paths]
   let current = 0
   const locals: Uint8Array[] = []
-  const centralFiles: Array<{name: string; local: number; data: Uint8Array}> = []
+  const centralFiles: Array<{name: string; local: number; data: Uint8Array; descriptor: boolean}> = []
   for (const name of pathsToWrite) {
     const fileName = new TextEncoder().encode(name)
     const data = name.endsWith('/') ? new Uint8Array() : new Uint8Array([1, 2, 3])
-    const local = new Uint8Array(30 + fileName.length + data.length)
+    const descriptor = Boolean(opts.descriptor && !name.endsWith('/'))
+    const trailerSize = descriptor ? (opts.descriptor === 'signed' ? 16 : 12) : 0
+    const local = new Uint8Array(30 + fileName.length + data.length + trailerSize)
     write32(local, 0, 0x04034b50)
     write16(local, 4, 20)
+    write16(local, 6, descriptor ? 0x0008 : 0)
     write16(local, 26, fileName.length)
-    write32(local, 18, data.length)
-    write32(local, 22, data.length)
+    write32(local, 18, descriptor ? 0 : data.length)
+    write32(local, 22, descriptor ? 0 : data.length)
     local.set(fileName, 30)
     local.set(data, 30 + fileName.length)
-    centralFiles.push({name, local: current, data})
+    if (descriptor) {
+      let at = 30 + fileName.length + data.length
+      if (opts.descriptor === 'signed') {
+        write32(local, at, 0x08074b50)
+        at += 4
+      }
+      write32(local, at, 0)
+      write32(local, at + 4, data.length)
+      write32(local, at + 8, data.length)
+    }
+    centralFiles.push({name, local: current, data, descriptor})
     current += local.length
     locals.push(local)
   }
@@ -55,6 +68,7 @@ function zip(paths: readonly string[] = names, opts: { directory?: string } = {}
     write32(header, 0, 0x02014b50)
     write16(header, 4, (3 << 8) | 20)
     write16(header, 6, 20)
+    write16(header, 8, file.descriptor ? 0x0008 : 0)
     write16(header, 28, fileName.length)
     write32(header, 20, file.data.length)
     write32(header, 24, file.data.length)
@@ -84,6 +98,56 @@ describe('AP-11b Lindera IPADIC ZIP structural gate', () => {
     expect(result.index.entries.every(x => x.method === 'stored')).toBe(true)
     expect(result.index.totalUncompressedBytes).toBe(27)
     expect(result.index.entries[0]?.dataOffset).toBe(valid.entries[0]!.local + 30 + names[0].length)
+  })
+
+  test.each(['signed', 'unsigned'] as const)(
+    'accepts a correctly sized %s ZIP data descriptor',
+    (descriptor) => {
+      const archive = zip(names, { descriptor })
+      const result = inspectIpadicZip(archive.bytes)
+      expect(result.status).toBe('valid')
+    }
+  )
+
+  test('rejects bit 3 without a physical data descriptor (regression)', () => {
+    const archive = zip()
+    const entry = archive.entries[0]!
+    write16(archive.bytes, entry.local + 6, 0x0008)
+    write16(archive.bytes, entry.central + 8, 0x0008)
+    expect(inspectIpadicZip(archive.bytes))
+      .toEqual({ status: 'invalid', reason: 'data-descriptor' })
+  })
+
+  test('rejects a tampered signed data descriptor, even when central sizes are valid', () => {
+    const archive = zip(names, { descriptor: 'signed' })
+    const entry = archive.entries[0]!
+    const descriptorOffset = entry.local + 30 + entry.name.length + 3
+    write32(archive.bytes, descriptorOffset + 8, 0x7fffffff)
+    expect(inspectIpadicZip(archive.bytes))
+      .toEqual({ status: 'invalid', reason: 'data-descriptor' })
+  })
+
+  test('rejects unindexed padding between local files and the central directory', () => {
+    const archive = zip()
+    const padded = combine([
+      archive.bytes.subarray(0, archive.centralStart),
+      new Uint8Array([0xab]),
+      archive.bytes.subarray(archive.centralStart)
+    ])
+    write32(padded, archive.eocd + 1 + 16, archive.centralStart + 1)
+    expect(inspectIpadicZip(padded))
+      .toEqual({ status: 'invalid', reason: 'local-layout' })
+  })
+
+  test('rejects a hidden prefix before the first local file record', () => {
+    const archive = zip()
+    const prefixed = combine([new Uint8Array([0x55]), archive.bytes])
+    write32(prefixed, archive.eocd + 1 + 16, archive.centralStart + 1)
+    for (const entry of archive.entries) {
+      write32(prefixed, entry.central + 1 + 42, entry.local + 1)
+    }
+    expect(inspectIpadicZip(prefixed))
+      .toEqual({ status: 'invalid', reason: 'local-layout' })
   })
 
   test('accepts a single matching root directory with nested dictionary files', () => {
