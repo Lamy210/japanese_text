@@ -62,6 +62,16 @@ Backend、サーバー側Database、認証、LLM API は使用しません。Loc
 
 旧Workspaceは従来の単一Profileのまま読み込めます。Profileの名前変更・削除は未実装です。**Workspaceを削除してもRuleProfileの設定レコードは互換性のため残ります**。NGワード等に個人情報を入力する場合は、この保持仕様に注意してください。
 
+## Lindera IPADICのオフライン受入検証（開発者向け）
+
+IPADICは現在、**本番サイトへ配布・ロードしていません**。上流Lindera v6.2.0の公開SHA-256とサイズを固定した受入検証コマンドを用意しています。公式Releaseから辞書ZIPを**手動で**取得した後、ローカルで以下を実行してください。
+
+```bash
+bun run dict:release:verify /path/to/lindera-ipadic-6.2.0.zip
+```
+
+検証内容：ファイルサイズ・SHA-256・ZIP構造・Stored/Deflate展開・CRC-32・`metadata.json`の辞書形式。**ネットワーク通信、OPFSインストール、WASM実行、ファイル展開保存は行いません。** 成功した場合でも辞書の再配布ライセンス/NOTICEとWASM互換性は未承認です。詳細は `docs/analysis-packs/ap11b-offline-release-acceptance.md` を参照してください。
+
 ## Development
 
 Bun 1.4.3 を使用します。
