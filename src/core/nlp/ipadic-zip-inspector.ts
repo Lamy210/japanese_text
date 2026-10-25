@@ -25,6 +25,7 @@ const ALLOWED_FLAGS = 0x080e // UTF-8, descriptor, deflate-option bits
 const EOCD_SIGNATURE = 0x06054b50
 const CENTRAL_SIGNATURE = 0x02014b50
 const LOCAL_SIGNATURE = 0x04034b50
+const DESCRIPTOR_SIGNATURE = 0x08074b50
 
 export interface IpadicZipEntry {
   readonly name: IpadicFile
@@ -173,11 +174,27 @@ export function inspectIpadicZip(bytes: Uint8Array): IpadicZipInspection {
          u32(localOffset + 18) !== compressed ||
          u32(localOffset + 22) !== uncompressed)) return invalid('local-size')
 
-    localRanges.push({start: localOffset, end: dataOffset + compressed})
+    // ZIP flag bit 3 means CRC and sizes follow the data in a descriptor.
+    // A central-directory entry is not sufficient evidence that it exists:
+    // verify the physical record, with or without its optional signature.
+    let localEnd = dataOffset + compressed
+    if ((flags & 0x0008) !== 0) {
+      const signed = range(centralOffset, localEnd, 4) &&
+        u32(localEnd) === DESCRIPTOR_SIGNATURE
+      if (signed) localEnd += 4
+      if (!range(centralOffset, localEnd, 12) ||
+          u32(localEnd) !== crc ||
+          u32(localEnd + 4) !== compressed ||
+          u32(localEnd + 8) !== uncompressed) {
+        return invalid('data-descriptor')
+      }
+      localEnd += 12
+    }
+    localRanges.push({start: localOffset, end: localEnd})
     const directory = zipPath.endsWith('/')
     if (directory) {
       directoryEntries++
-      if (directoryEntries !== 1 || compressed !== 0 || uncompressed !== 0 ||
+      if (directoryEntries !== 1 || (flags & 0x0008) !== 0 || compressed !== 0 || uncompressed !== 0 ||
           !/^[a-z0-9][a-z0-9._-]*\/$/u.test(zipPath) || fileType === 0x8000) return invalid('unsafe-directory')
       directoryPath = zipPath
     } else {
@@ -207,10 +224,16 @@ export function inspectIpadicZip(bytes: Uint8Array): IpadicZipInspection {
   if (directoryPath !== undefined && directoryPath !== prefix + '/') {
     return invalid('unsafe-directory')
   }
+  // Reject prepended stubs and unindexed bytes between files or before
+  // the central directory. All local records must cover the payload exactly.
+  // This is an intentionally strict constraint for static IPADIC archives.
   localRanges.sort((a,b) => a.start - b.start)
-  for (let i = 1; i < localRanges.length; i++) {
-    if (localRanges[i]!.start < localRanges[i - 1]!.end) return invalid('overlapping-file-data')
+  let nextOffset = 0
+  for (const span of localRanges) {
+    if (span.start !== nextOffset) return invalid('local-layout')
+    nextOffset = span.end
   }
+  if (nextOffset !== centralOffset) return invalid('local-layout')
   return {
     status: 'valid',
     index: Object.freeze({
