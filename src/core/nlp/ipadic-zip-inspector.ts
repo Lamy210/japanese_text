@@ -99,6 +99,7 @@ export function inspectIpadicZip(bytes: Uint8Array): IpadicZipInspection {
   let prefix: string | undefined
   const localRanges: Array<{start: number; end: number}> = []
   let directoryEntries = 0
+  let directoryPath: string | undefined
   for (let i = 0; i < count; i++) {
     if (!range(eocd, cursor, 46) || u32(cursor) !== CENTRAL_SIGNATURE) {
       return invalid('central-entry')
@@ -141,8 +142,10 @@ export function inspectIpadicZip(bytes: Uint8Array): IpadicZipInspection {
     if (directory) {
       directoryEntries++
       if (directoryEntries !== 1 || compressed !== 0 || uncompressed !== 0 ||
-          !/^[a-z0-9][a-z0-9._-]*\/$/u.test(zipPath)) return invalid('unsafe-directory')
+          !/^[a-z0-9][a-z0-9._-]*\/$/u.test(zipPath) || fileType === 0x8000) return invalid('unsafe-directory')
+      directoryPath = zipPath
     } else {
+      if (fileType === 0x4000) return invalid('unsafe-file-type')
       const parts = zipPath.split('/')
       if (parts.length > 2 || parts.some(s => s.length === 0)) return invalid('unsafe-path')
       const root = parts.length === 2 ? parts[0]! : ''
@@ -183,9 +186,9 @@ export function inspectIpadicZip(bytes: Uint8Array): IpadicZipInspection {
   }
   if (cursor !== eocd || found.size !== REQUIRED.length ||
       REQUIRED.some(name => !found.has(name))) return invalid('missing-dictionary-file')
-  if (directoryEntries === 1 && prefix !== undefined &&
-      // Root directory entry must be the same root used by its files.
-      !Array.from({length: count}).some(() => true)) return invalid('unsafe-directory')
+  if (directoryPath !== undefined && directoryPath !== prefix + '/') {
+    return invalid('unsafe-directory')
+  }
   localRanges.sort((a,b) => a.start - b.start)
   for (let i = 1; i < localRanges.length; i++) {
     if (localRanges[i]!.start < localRanges[i - 1]!.end) return invalid('overlapping-file-data')
