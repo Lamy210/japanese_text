@@ -65,6 +65,21 @@ function asciiPath(bytes: Uint8Array, offset: number, length: number): string | 
   return new TextDecoder('ascii').decode(raw)
 }
 
+/** Reject malformed extra fields and ZIP64, even when 32-bit fields look valid. */
+function validExtras(view: DataView, offset: number, length: number): boolean {
+  if (!range(view.byteLength, offset, length)) return false
+  let cursor = offset
+  const end = offset + length
+  while (cursor < end) {
+    if (end - cursor < 4) return false
+    const id = view.getUint16(cursor, true)
+    const bytes = view.getUint16(cursor + 2, true)
+    if (id === 1 || bytes > end - cursor - 4) return false
+    cursor += 4 + bytes
+  }
+  return cursor === end
+}
+
 /** Small, fail-closed central-directory inspector. No decompression is done. */
 export function inspectIpadicZip(bytes: Uint8Array): IpadicZipInspection {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength > MAX_ZIP_BYTES || bytes.byteLength < 22) {
@@ -133,11 +148,32 @@ export function inspectIpadicZip(bytes: Uint8Array): IpadicZipInspection {
     if (fileType !== 0 && fileType !== 0x8000 && fileType !== 0x4000) {
       return invalid('unsafe-file-type')
     }
+    if (!validExtras(view, cursor + 46 + nameLength, extraLength)) return invalid('extra-field')
     const zipPath = asciiPath(bytes, cursor + 46, nameLength)
     if (zipPath === null || zipPath.startsWith('/') || zipPath.includes('//') ||
         zipPath.split('/').some(s => s === '..' || s === '.') ||
         zipPath.includes(':')) return invalid('unsafe-path')
 
+    // Check the matching local file header and its exact byte range.
+    if (!range(centralOffset, localOffset, 30) || u32(localOffset) !== LOCAL_SIGNATURE) {
+      return invalid('local-header')
+    }
+    const localFlags = u16(localOffset + 6)
+    const localMethod = u16(localOffset + 8)
+    const localNameLength = u16(localOffset + 26)
+    const localExtraLength = u16(localOffset + 28)
+    const dataOffset = localOffset + 30 + localNameLength + localExtraLength
+    if (localFlags !== flags || localMethod !== method || localNameLength !== nameLength ||
+        !range(centralOffset, localOffset, 30 + localNameLength + localExtraLength) ||
+        !range(centralOffset, dataOffset, compressed)) return invalid('local-entry')
+    if (!validExtras(view, localOffset + 30 + localNameLength, localExtraLength)) return invalid('extra-field')
+    if (asciiPath(bytes, localOffset + 30, localNameLength) !== zipPath) return invalid('local-name')
+    if ((flags & 0x0008) === 0 &&
+        (u32(localOffset + 14) !== crc ||
+         u32(localOffset + 18) !== compressed ||
+         u32(localOffset + 22) !== uncompressed)) return invalid('local-size')
+
+    localRanges.push({start: localOffset, end: dataOffset + compressed})
     const directory = zipPath.endsWith('/')
     if (directory) {
       directoryEntries++
@@ -157,24 +193,6 @@ export function inspectIpadicZip(bytes: Uint8Array): IpadicZipInspection {
       totalBytes += uncompressed
       if (totalBytes > MAX_TOTAL_BYTES || uncompressed === 0) return invalid('unpacked-size')
 
-      // Check the matching local file header and its exact byte range.
-      if (!range(centralOffset, localOffset, 30) || u32(localOffset) !== LOCAL_SIGNATURE) {
-        return invalid('local-header')
-      }
-      const localFlags = u16(localOffset + 6)
-      const localMethod = u16(localOffset + 8)
-      const localNameLength = u16(localOffset + 26)
-      const localExtraLength = u16(localOffset + 28)
-      const dataOffset = localOffset + 30 + localNameLength + localExtraLength
-      if (localFlags !== flags || localMethod !== method || localNameLength !== nameLength ||
-          !range(centralOffset, localOffset, 30 + localNameLength + localExtraLength) ||
-          !range(centralOffset, dataOffset, compressed)) return invalid('local-entry')
-      if (asciiPath(bytes, localOffset + 30, localNameLength) !== zipPath) return invalid('local-name')
-      if ((flags & 0x0008) === 0 &&
-          (u32(localOffset + 14) !== crc ||
-           u32(localOffset + 18) !== compressed ||
-           u32(localOffset + 22) !== uncompressed)) return invalid('local-size')
-      localRanges.push({start: localOffset, end: dataOffset + compressed})
       found.set(name, {
         name: name as IpadicFile, zipPath,
         method: method === 0 ? 'stored' : 'deflate',
