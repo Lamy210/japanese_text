@@ -142,9 +142,15 @@ async function boundedBytes(response: Response, spec: NlpArchiveSpec, signal?: A
 async function loadArchive(spec: NlpArchiveSpec, options: NlpArchiveOptions): Promise<Uint8Array> {
   checkAbort(options.signal)
   const url = archiveUrl(spec, options.basePath ?? import.meta.env.BASE_URL)
-  const response = await (options.fetcher ?? fetch)(url.href, {
-    credentials: 'omit', redirect: 'error', cache: 'no-store', signal: options.signal
-  })
+  let response: Response
+  try {
+    response = await (options.fetcher ?? fetch)(url.href, {
+      credentials: 'omit', redirect: 'error', cache: 'no-store', signal: options.signal
+    })
+  } catch {
+    checkAbort(options.signal)
+    throw new ArchiveError('fetch')
+  }
   if (response.url && response.url !== url.href) throw new ArchiveError('fetch')
   const bytes = await boundedBytes(response, spec, options.signal)
   await verify(bytes, spec)
@@ -212,7 +218,7 @@ async function committedBytes(dir: FileSystemDirectoryHandle, spec: NlpArchiveSp
   return bytes
 }
 
-function classify(error: unknown): NlpArchiveInstallResult['reason'] {
+function classify(error: unknown): Extract<NlpArchiveInstallResult, {status: 'unavailable'}>['reason'] {
   if (error instanceof ArchiveError) {
     return error.reason === 'not-installed' ? 'storage' : error.reason
   }
