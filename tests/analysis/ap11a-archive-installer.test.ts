@@ -52,7 +52,13 @@ class FakeDirectory {
   }
 
   at(...names: string[]): FakeDirectory {
-    return names.reduce((dir, name) => dir.dirs.get(name)!, this)
+    let directory: FakeDirectory = this
+    for (const name of names) {
+      const child = directory.dirs.get(name)
+      if (!child) throw new Error('Missing fake directory: ' + name)
+      directory = child
+    }
+    return directory
   }
 }
 
