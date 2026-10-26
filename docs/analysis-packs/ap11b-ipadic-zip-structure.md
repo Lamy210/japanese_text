@@ -31,7 +31,13 @@
 - 既存のエントリ名/パス/ZIP64/上限/CRC展開APIは維持し、形態素解析の自動有効化は行わない。
 - 回帰テスト: 正常な署名付き/なしDescriptor、bit 3だけの不完全ZIP、改ざんDescriptor、中央ディレクトリ前の1byteパディング、ローカルヘッダー前の1byte SFX prefix。
 
-参考：<https://support.pkware.com/pkzip/appnote> のlocal file header / data descriptor定義。CRCの衝突等で署名有無を一意に判定できない稀な入力は安全側に拒否する。
+参考：<https://support.pkware.com/pkzip/appnote> のlocal file header / data descriptor定義。
+
+### 追加回帰：CRC-32とDescriptor署名が一致する場合
+
+署名なし12byte DescriptorのCRC-32自体が署名値 `0x08074b50` と一致する合法なZIPでは、先頭の4byteだけで「署名付き」と判断すると正常な入力を誤拒否する。修正後は、**12byte/16byte双方についてCRC-32・格納サイズ・展開サイズすべてを中央ディレクトリに照合**してDescriptor形式を判定する。どちらにも一致しない場合はFail-Closed。物理ローカル領域の完全連続性検証は従来どおり維持する。
+
+回帰テストは実際にCRC-32が `0x08074b50` となる4byte `ac 0a 7a d5` を使用し、署名なし／署名付き双方の正常受理と、サイズ改ざんの拒否を検証する。これは合成ZIPの構造検証であり、公式Lindera辞書の実物受入完了を意味しない。
 
 ## 設計上の制約・未完了
 
