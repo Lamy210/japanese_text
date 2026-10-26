@@ -179,16 +179,20 @@ export function inspectIpadicZip(bytes: Uint8Array): IpadicZipInspection {
     // verify the physical record, with or without its optional signature.
     let localEnd = dataOffset + compressed
     if ((flags & 0x0008) !== 0) {
-      const signed = range(centralOffset, localEnd, 4) &&
-        u32(localEnd) === DESCRIPTOR_SIGNATURE
-      if (signed) localEnd += 4
-      if (!range(centralOffset, localEnd, 12) ||
-          u32(localEnd) !== crc ||
-          u32(localEnd + 4) !== compressed ||
-          u32(localEnd + 8) !== uncompressed) {
-        return invalid('data-descriptor')
-      }
-      localEnd += 12
+      // The first DWORD of an unsigned descriptor is CRC-32. It can be
+      // numerically equal to the optional descriptor signature, so never
+      // infer the encoding from that DWORD alone. Match all fields instead.
+      const unsignedMatches = range(centralOffset, localEnd, 12) &&
+        u32(localEnd) === crc &&
+        u32(localEnd + 4) === compressed &&
+        u32(localEnd + 8) === uncompressed
+      const signedMatches = range(centralOffset, localEnd, 16) &&
+        u32(localEnd) === DESCRIPTOR_SIGNATURE &&
+        u32(localEnd + 4) === crc &&
+        u32(localEnd + 8) === compressed &&
+        u32(localEnd + 12) === uncompressed
+      if (!unsignedMatches && !signedMatches) return invalid('data-descriptor')
+      localEnd += unsignedMatches ? 12 : 16
     }
     localRanges.push({start: localOffset, end: localEnd})
     const directory = zipPath.endsWith('/')
