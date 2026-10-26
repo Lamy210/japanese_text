@@ -26,20 +26,27 @@ function write32(buffer: Uint8Array, offset: number, value: number): void {
 
 interface GeneratedEntry { readonly name: string; readonly central: number; readonly local: number }
 
-function zip(paths: readonly string[] = names, opts: { directory?: string; descriptor?: 'signed' | 'unsigned' } = {}) {
+function zip(paths: readonly string[] = names, opts: {
+  directory?: string
+  descriptor?: 'signed' | 'unsigned'
+  data?: Uint8Array
+  crc32?: number
+} = {}) {
   const pathsToWrite = opts.directory ? [opts.directory, ...paths] : [...paths]
   let current = 0
   const locals: Uint8Array[] = []
-  const centralFiles: Array<{name: string; local: number; data: Uint8Array; descriptor: boolean}> = []
+  const centralFiles: Array<{name: string; local: number; data: Uint8Array; descriptor: boolean; crc32: number}> = []
   for (const name of pathsToWrite) {
     const fileName = new TextEncoder().encode(name)
-    const data = name.endsWith('/') ? new Uint8Array() : new Uint8Array([1, 2, 3])
+    const data = name.endsWith('/') ? new Uint8Array() : (opts.data ?? new Uint8Array([1, 2, 3]))
+    const crc32 = name.endsWith('/') ? 0 : (opts.crc32 ?? 0)
     const descriptor = Boolean(opts.descriptor && !name.endsWith('/'))
     const trailerSize = descriptor ? (opts.descriptor === 'signed' ? 16 : 12) : 0
     const local = new Uint8Array(30 + fileName.length + data.length + trailerSize)
     write32(local, 0, 0x04034b50)
     write16(local, 4, 20)
     write16(local, 6, descriptor ? 0x0008 : 0)
+    write32(local, 14, descriptor ? 0 : crc32)
     write16(local, 26, fileName.length)
     write32(local, 18, descriptor ? 0 : data.length)
     write32(local, 22, descriptor ? 0 : data.length)
@@ -51,11 +58,11 @@ function zip(paths: readonly string[] = names, opts: { directory?: string; descr
         write32(local, at, 0x08074b50)
         at += 4
       }
-      write32(local, at, 0)
+      write32(local, at, crc32)
       write32(local, at + 4, data.length)
       write32(local, at + 8, data.length)
     }
-    centralFiles.push({name, local: current, data, descriptor})
+    centralFiles.push({name, local: current, data, descriptor, crc32})
     current += local.length
     locals.push(local)
   }
@@ -69,6 +76,7 @@ function zip(paths: readonly string[] = names, opts: { directory?: string; descr
     write16(header, 4, (3 << 8) | 20)
     write16(header, 6, 20)
     write16(header, 8, file.descriptor ? 0x0008 : 0)
+    write32(header, 16, file.crc32)
     write16(header, 28, fileName.length)
     write32(header, 20, file.data.length)
     write32(header, 24, file.data.length)
@@ -108,6 +116,39 @@ describe('AP-11b Lindera IPADIC ZIP structural gate', () => {
       expect(result.status).toBe('valid')
     }
   )
+
+  test.each(['unsigned', 'signed'] as const)(
+    'accepts %s descriptor when real payload CRC-32 equals optional signature',
+    (descriptor) => {
+      // CRC-32(ac 0a 7a d5) = 0x08074b50. In the unsigned form this
+      // is the CRC field, NOT a 4-byte signature prefix.
+      const archive = zip(names, {
+        descriptor,
+        data: new Uint8Array([0xac, 0x0a, 0x7a, 0xd5]),
+        crc32: 0x08074b50
+      })
+      const result = inspectIpadicZip(archive.bytes)
+      expect(result.status).toBe('valid')
+      if (result.status === 'valid') {
+        expect(result.index.entries.every(entry =>
+          entry.crc32 === 0x08074b50 && entry.compressedSize === 4
+        )).toBe(true)
+      }
+    }
+  )
+
+  test('rejects a corrupted unsigned descriptor with signature-shaped CRC', () => {
+    const archive = zip(names, {
+      descriptor: 'unsigned',
+      data: new Uint8Array([0xac, 0x0a, 0x7a, 0xd5]),
+      crc32: 0x08074b50
+    })
+    const first = archive.entries[0]!
+    const descriptorOffset = first.local + 30 + first.name.length + 4
+    write32(archive.bytes, descriptorOffset + 4, 12345)
+    expect(inspectIpadicZip(archive.bytes))
+      .toEqual({status: 'invalid', reason: 'data-descriptor'})
+  })
 
   test('rejects bit 3 without a physical data descriptor (regression)', () => {
     const archive = zip()
