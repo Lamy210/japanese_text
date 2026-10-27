@@ -1,0 +1,110 @@
+/* Experimental, memory-only one-person brainstorming dialog. */
+.brainstorm-dialog {
+  width: min(760px, 100%);
+  max-height: min(90vh, 920px);
+}
+
+.brainstorm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.brainstorm-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+.brainstorm-section h3 {
+  font-size: 14px;
+  color: var(--fg);
+}
+
+.brainstorm-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.brainstorm-section textarea {
+  width: 100%;
+  min-height: 76px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  line-height: 1.55;
+}
+
+.brainstorm-theme {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.brainstorm-phase,
+.brainstorm-muted {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.brainstorm-prompt {
+  padding: 12px 14px;
+  background: var(--accent-subtle);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.brainstorm-thought-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+}
+
+.brainstorm-thought-list > li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.brainstorm-thought-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.brainstorm-kind {
+  flex-shrink: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+  background: var(--bg-subtle);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+
+.brainstorm-footer-actions {
+  justify-content: space-between;
+}
+
+@media (max-width: 600px) {
+  .brainstorm-dialog {
+    max-height: 96dvh;
+  }
+
+  .brainstorm-thought-list > li {
+    flex-wrap: wrap;
+  }
+}
