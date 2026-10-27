@@ -15,6 +15,7 @@ const PHASES: readonly BrainstormPhase[] = [
 
 export type BrainstormCommandV1 =
   | { readonly type: 'add-node'; readonly expectedRevision: number; readonly node: ThoughtNodeV1 }
+  | { readonly type: 'answer-question'; readonly expectedRevision: number; readonly question: ThoughtNodeV1; readonly answer: ThoughtNodeV1; readonly edge: ThoughtEdgeV1 }
   | { readonly type: 'edit-node'; readonly expectedRevision: number; readonly nodeId: string; readonly text: string; readonly updatedAt: string }
   | { readonly type: 'review-node'; readonly expectedRevision: number; readonly nodeId: string; readonly status: ThoughtStatus; readonly updatedAt: string }
   | { readonly type: 'remove-node'; readonly expectedRevision: number; readonly nodeId: string }
@@ -42,6 +43,9 @@ function validCommand(value: unknown): value is BrainstormCommandV1 {
   switch (value.type) {
     case 'add-node':
       return exactKeys(value, ['type', 'expectedRevision', 'node']) && isRecord(value.node)
+    case 'answer-question':
+      return exactKeys(value, ['type', 'expectedRevision', 'question', 'answer', 'edge']) &&
+        isRecord(value.question) && isRecord(value.answer) && isRecord(value.edge)
     case 'add-edge':
       return exactKeys(value, ['type', 'expectedRevision', 'edge']) && isRecord(value.edge)
     case 'edit-node':
@@ -90,6 +94,20 @@ export function applyBrainstormCommand(
   switch (command.type) {
     case 'add-node':
       nodes = [...nodes, command.node]
+      break
+    case 'answer-question':
+      // The graph transition is all-or-nothing: question, answer and
+      // their link must be committed under one snapshot revision.
+      if (command.question.kind !== 'question' ||
+          command.question.origin !== 'rule-derived' ||
+          command.answer.origin !== 'user-stated' ||
+          command.edge.relation !== 'answers' ||
+          command.edge.fromNodeId !== command.answer.id ||
+          command.edge.toNodeId !== command.question.id) {
+        return { status: 'rejected', reason: 'invalid-command' }
+      }
+      nodes = [...nodes, command.question, command.answer]
+      edges = [...edges, command.edge]
       break
     case 'edit-node': {
       const old = nodes.find(n => n.id === command.nodeId)
