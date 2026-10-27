@@ -3,6 +3,7 @@ import type { ExplicitCommunicationAct } from '../core/communication/explicit-ac
 import {
   canNavigateToCommunicationAct,
   describeCommunicationAct,
+  describeCommunicationSlot,
   isCommunicationReviewCurrent,
   reviewCurrentCommunication,
   type CommunicationReviewInput,
@@ -43,6 +44,12 @@ export function CommunicationReviewDialog(props: CommunicationReviewDialogProps)
     const r = result()
     return r?.status === 'ready' ? r.snapshot : null
   }
+  const slotsForAct = (act: ExplicitCommunicationAct) =>
+    snapshot()?.slots.filter(slot =>
+      slot.actStartUtf16 === act.startUtf16 &&
+      slot.actEndUtf16 === act.endUtf16
+    ) ?? []
+
   const isStale = () => {
     const s = snapshot()
     return s !== null && !isCommunicationReviewCurrent(s, currentDocument())
@@ -155,6 +162,23 @@ export function CommunicationReviewDialog(props: CommunicationReviewDialogProps)
                         <div><dt>期待される回答</dt><dd>{details.expectedAnswer}</dd></div>
                         <div><dt>完了判定</dt><dd>{details.completion}</dd></div>
                       </dl>
+                      <Show when={slotsForAct(act).length > 0}>
+                        <div class="communication-review-slot-list">
+                          <strong>明示的な項目の候補</strong>
+                          <For each={slotsForAct(act)}>
+                            {slot => {
+                              const detail = describeCommunicationSlot(slot)
+                              return (
+                                <div class="communication-review-slot">
+                                  <span class="communication-review-slot-label">{detail.label}</span>
+                                  <span class="communication-review-slot-evidence">{slot.evidence}</span>
+                                  <small>{detail.caution}</small>
+                                </div>
+                              )
+                            }}
+                          </For>
+                        </div>
+                      </Show>
                       <div class="communication-review-actions">
                         <button type="button" class="btn btn-small"
                           onClick={() => navigate(act)}

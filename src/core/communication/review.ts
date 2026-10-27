@@ -6,6 +6,7 @@
  * an old evidence span after a document/workspace switch or source edit.
  */
 import type { DocumentType } from '../types'
+import { extractExplicitCommunicationSlots, type ExplicitCommunicationSlot, type ExplicitSlotKind } from './explicit-slots'
 import {
   detectExplicitCommunicationActs,
   type ExplicitCommunicationAct,
@@ -28,6 +29,7 @@ export interface CommunicationReviewSnapshot {
   readonly sourceText: string
   readonly documentType: DocumentType
   readonly acts: readonly ExplicitCommunicationAct[]
+  readonly slots: readonly ExplicitCommunicationSlot[]
 }
 
 export type CommunicationReviewResult =
@@ -41,6 +43,29 @@ const INTENT_LABELS: Readonly<Record<ExplicitIntent, string>> = {
   action_request: '作業・対応の依頼',
   confirmation_question: 'Yes/No確認の質問',
   information_question: '情報を求める質問'
+}
+
+const SLOT_LABELS: Readonly<Record<ExplicitSlotKind, string>> = {
+  'deadline-candidate': '期限の候補',
+  'purpose-candidate': '目的の候補',
+  'reason-candidate': '理由の候補',
+  'ambiguous-motivation': '理由・目的の曖昧な候補'
+}
+
+export function describeCommunicationSlot(slot: ExplicitCommunicationSlot): {
+  readonly label: string
+  readonly caution: string
+} {
+  return Object.freeze({
+    label: SLOT_LABELS[slot.kind],
+    caution: slot.kind === 'deadline-candidate'
+      ? (slot.needsDateContext
+        ? '相対日付または年の省略があります。基準日と期限の適用先を確認してください。'
+        : '日付表現の候補です。日付の有効性と期限の適用先は未検証です。')
+      : slot.kind === 'ambiguous-motivation'
+        ? '「〜のため」は理由・目的の両方に使われます。文脈の確認が必要です。'
+        : '明示表現の候補です。主張の真偽や対応する行為との関係は未検証です。'
+  })
 }
 
 const ANSWER_LABELS: Readonly<Record<ExpectedAnswer, string>> = {
@@ -82,6 +107,8 @@ export function reviewCurrentCommunication(
   }
   const result = detectExplicitCommunicationActs(input.text, input.documentType)
   if (result.status === 'skipped') return result
+  const slotResult = extractExplicitCommunicationSlots(input.text, result.acts)
+  if (slotResult.status === 'skipped') return slotResult
   return {
     status: 'ready',
     snapshot: Object.freeze({
@@ -90,7 +117,8 @@ export function reviewCurrentCommunication(
       revision: input.revision,
       sourceText: input.text,
       documentType: input.documentType,
-      acts: result.acts
+      acts: result.acts,
+      slots: slotResult.slots
     })
   }
 }

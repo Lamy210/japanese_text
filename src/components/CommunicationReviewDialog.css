@@ -105,3 +105,40 @@
     gap: 0;
   }
 }
+
+
+.communication-review-slot-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  background: var(--bg-subtle);
+  border-radius: 8px;
+}
+
+.communication-review-slot-list > strong {
+  font-size: 12px;
+}
+
+.communication-review-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.communication-review-slot-label {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.communication-review-slot-evidence {
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+.communication-review-slot small {
+  color: var(--fg-muted);
+  font-size: 11px;
+}
