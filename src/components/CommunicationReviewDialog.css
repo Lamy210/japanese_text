@@ -1,0 +1,107 @@
+.communication-review-dialog {
+  width: min(780px, 100%);
+  max-height: min(90dvh, 900px);
+}
+
+.communication-review-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.communication-review-meta {
+  color: var(--fg-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.communication-review-muted {
+  padding: 12px;
+  color: var(--fg-muted);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+.communication-review-stale {
+  padding: 10px 12px;
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.communication-review-list {
+  list-style-position: inside;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  gap: 12px;
+}
+
+.communication-review-item {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+.communication-review-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.communication-review-heading strong {
+  font-size: 14px;
+}
+
+.communication-review-evidence {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.communication-review-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.communication-review-fields > div {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.communication-review-fields dt {
+  width: 115px;
+  flex-shrink: 0;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.communication-review-fields dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.communication-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+@media (max-width: 600px) {
+  .communication-review-dialog { max-height: 96dvh; }
+  .communication-review-fields > div {
+    flex-direction: column;
+    gap: 0;
+  }
+}
