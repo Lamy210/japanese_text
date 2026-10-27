@@ -21,7 +21,7 @@ export function BrainstormDialog(props: BrainstormDialogProps) {
   let dialogRef: HTMLDivElement | undefined
   let closeButton: HTMLButtonElement | undefined
 
-  const refresh = (): void => setRevision(v => v + 1)
+  const refresh = (): void => { setRevision(v => v + 1) }
   const snapshot = createMemo(() => {
     revision()
     return controller.snapshot()
