@@ -78,7 +78,7 @@ export function extractExplicitCommunicationSlots(
         // Decorative pictographs immediately before a Japanese clause are
         // not part of a reason/purpose phrase; preserve exact UTF-16 offsets.
         const decorative = group === 1
-          ? /^(?:\\p{Extended_Pictographic}\\uFE0F?\\s*)+/u.exec(rawPhrase)?.[0] ?? ''
+          ? /^(?:\p{Extended_Pictographic}\uFE0F?\s*)+/u.exec(rawPhrase)?.[0] ?? ''
           : ''
         const phrase = rawPhrase.slice(decorative.length)
         if (!phrase) continue
