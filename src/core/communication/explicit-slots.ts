@@ -73,9 +73,16 @@ export function extractExplicitCommunicationSlots(
     if (!validAct(act, source)) return { status: 'skipped', reason: 'invalid-input' }
     for (const {kind, re, group} of PATTERNS) {
       for (const match of act.evidence.matchAll(re)) {
-        const phrase = match[group]
-        if (phrase === undefined || phrase.length === 0) continue
-        const matchStart = match.index + match[0].length - phrase.length
+        const rawPhrase = match[group]
+        if (rawPhrase === undefined || rawPhrase.length === 0) continue
+        // Decorative pictographs immediately before a Japanese clause are
+        // not part of a reason/purpose phrase; preserve exact UTF-16 offsets.
+        const decorative = group === 1
+          ? /^(?:\\p{Extended_Pictographic}\\uFE0F?\\s*)+/u.exec(rawPhrase)?.[0] ?? ''
+          : ''
+        const phrase = rawPhrase.slice(decorative.length)
+        if (!phrase) continue
+        const matchStart = match.index + match[0].length - rawPhrase.length + decorative.length
         const startUtf16 = act.startUtf16 + matchStart
         const endUtf16 = startUtf16 + phrase.length
         if (source.slice(startUtf16, endUtf16) !== phrase) {
