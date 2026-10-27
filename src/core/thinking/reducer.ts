@@ -94,11 +94,18 @@ export function applyBrainstormCommand(
     case 'edit-node': {
       const old = nodes.find(n => n.id === command.nodeId)
       if (old === undefined) return { status: 'rejected', reason: 'not-found' }
-      if (old.text === command.text && old.updatedAt === command.updatedAt) {
+      if (old.text === command.text) {
+        // Updating a timestamp alone is not a content edit.
         return { status: 'unchanged', snapshot: current }
       }
+      if (!Number.isFinite(Date.parse(command.updatedAt)) ||
+          Date.parse(command.updatedAt) <= Date.parse(old.updatedAt)) {
+        return { status: 'rejected', reason: 'invalid-transition' }
+      }
+      // A revised claim must not retain its old approval or evidence links.
       nodes = nodes.map(n => n.id === command.nodeId
-        ? { ...n, text: command.text, updatedAt: command.updatedAt } : n)
+        ? { ...n, text: command.text, status: 'draft' as const,
+            sourceSpans: [], updatedAt: command.updatedAt } : n)
       break
     }
     case 'review-node': {
@@ -111,8 +118,12 @@ export function applyBrainstormCommand(
       if (command.status === 'accepted' && old.status !== 'reviewed') {
         return { status: 'rejected', reason: 'invalid-transition' }
       }
-      if (old.status === command.status && old.updatedAt === command.updatedAt) {
+      if (old.status === command.status) {
         return { status: 'unchanged', snapshot: current }
+      }
+      if (!Number.isFinite(Date.parse(command.updatedAt)) ||
+          Date.parse(command.updatedAt) <= Date.parse(old.updatedAt)) {
+        return { status: 'rejected', reason: 'invalid-transition' }
       }
       nodes = nodes.map(n => n.id === command.nodeId
         ? { ...n, status: command.status, updatedAt: command.updatedAt } : n)
