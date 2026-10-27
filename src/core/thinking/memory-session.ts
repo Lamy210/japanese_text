@@ -145,6 +145,22 @@ export class BrainstormMemorySession {
     return true
   }
 
+  /**
+   * Manual JSON restore only. The imported workspace must match the active
+   * workspace exactly; changing the bound workspace always discards notes.
+   * Failed validation preserves the current in-memory graph and prompt history.
+   * Asked/skipped prompt history is not part of Graph V1 and is reset on import.
+   */
+  importSnapshot(input: unknown): 'imported' | 'invalid-snapshot' | 'wrong-workspace' {
+    const parsed = parseBrainstormSnapshot(input)
+    if (parsed.status !== 'valid') return 'invalid-snapshot'
+    if (this.workspaceId === null ||
+        parsed.snapshot.session.workspaceId !== this.workspaceId) return 'wrong-workspace'
+    this.current = parsed.snapshot
+    this.consumedQuestions = []
+    return 'imported'
+  }
+
   /** Opt-in export only; never called from autosave. */
   exportSnapshot(): string | null {
     return this.current === null ? null : JSON.stringify(this.current, null, 2)
