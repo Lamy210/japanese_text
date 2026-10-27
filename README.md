@@ -35,6 +35,7 @@ GitHub Pages: <https://lamy210.github.io/japanese_text/>
 - Web Worker による解析
 - local-first storage: Workspace別のPrivate Session / Local Library、複数文書、Snapshot / History / Restore
 - Workspace内本文検索（最大50件、ローカル処理、未保存本文も検索対象）
+- **一人ブレスト（初期版）**: 7段階の固定質問、アイデア記録、次の質問、JSON手動出力。LLM不要・タブ内メモリのみ（自動保存なし）
 - Light / Dark / System theme
 
 ## Tech stack
@@ -55,6 +56,12 @@ Backend、サーバー側Database、認証、LLM API は使用しません。Loc
 左側の Documents で文書作成・選択・名前変更・削除ができます。**Search bodies** を押して本文検索モードに切り替え、キーワードを入力して Enter または Search を押してください。結果を選ぶと対象文書を開き、一致範囲が変更されていなければその位置へ移動します。検索対象は現在のWorkspaceの本文のみで、履歴の本文や他のWorkspaceは検索しません。
 
 検索は明示実行の都度ブラウザ内で行い、検索語・検索結果を保存・送信しません。Private Sessionでは本文と履歴をメモリにのみ保持し、Local Libraryを明示的に有効化したWorkspaceだけがIndexedDBに保存されます。現在編集中の未保存本文も検索対象です。
+
+## 一人ブレスト（実験的な初期版）
+
+ヘッダーの **Brainstorm** から開けます。テーマを入力し、問題発見から実行計画までの7段階で質問を切り替えながら考えを記録できます。質問はテンプレートベースであり、生成AIによる文章生成・事実確認は行いません。記録内容はエディタ本文へ自動挿入されません。
+
+**重要：** この機能はLocal Libraryのワークスペースでも**ブラウザのタブ内メモリだけ**に保存されます。ダイアログを閉じてもタブ内では保持しますが、ページ再読み込み・タブ終了・ワークスペース切替で破棄されます。必要な情報は閉じる前に **JSONを書き出す** で手動保存してください。現段階ではJSONインポートや自動復元には対応していません。
 
 ## RuleProfiles
 

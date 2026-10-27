@@ -2,8 +2,9 @@
  * App — 3領域レイアウト (§9.1 Desktop) + レスポンシブ (§10)
  */
 
-import { onMount, onCleanup, createEffect, Show } from 'solid-js'
+import { onMount, onCleanup, createEffect, createSignal, Show } from 'solid-js'
 import { Header } from '../components/Header'
+import { BrainstormDialog } from '../components/BrainstormDialog'
 import { DocumentSidebar } from '../components/DocumentSidebar'
 import { HistoryPanel } from '../components/HistoryPanel'
 import {
@@ -23,6 +24,7 @@ import { workspaceController } from '../state/workspace-runtime'
 
 export function App() {
   let handleResize: (() => void) | undefined
+  const [brainstormOpen, setBrainstormOpen] = createSignal(false)
 
   onMount(() => {
     if (typeof window !== 'undefined') {
@@ -70,7 +72,7 @@ export function App() {
 
   return (
     <div class="app-shell">
-      <Header />
+      <Header onBrainstormOpen={() => setBrainstormOpen(true)} />
       <main class="app-main">
         <Show when={appState.documentSidebarOpen()}>
           <DocumentSidebar />
@@ -83,6 +85,7 @@ export function App() {
       <StatusBar />
       <SettingsDialog />
       <WorkspaceManageDialog />
+      <BrainstormDialog open={brainstormOpen()} onClose={() => setBrainstormOpen(false)} />
       <Show when={appState.historyOpen()}>
         <HistoryPanel />
       </Show>

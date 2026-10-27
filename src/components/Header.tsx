@@ -25,7 +25,7 @@ function viewportWidth(): number {
   return typeof window === 'undefined' ? 1280 : window.innerWidth
 }
 
-export function Header() {
+export function Header(props: { readonly onBrainstormOpen?: () => void } = {}) {
   let fileInput: HTMLInputElement | undefined
 
   const onOpenClick = (): void => {
@@ -76,6 +76,16 @@ export function Header() {
           aria-expanded={appState.documentSidebarOpen()}
         >
           Documents
+        </button>
+        <button
+          id="brainstorm-toggle"
+          type="button"
+          class="btn"
+          onClick={() => props.onBrainstormOpen?.()}
+          disabled={props.onBrainstormOpen === undefined}
+          title="一人ブレスト（メモリ内・保存なし）"
+        >
+          Brainstorm
         </button>
         <input
           ref={fileInput}
