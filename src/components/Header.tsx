@@ -25,7 +25,7 @@ function viewportWidth(): number {
   return typeof window === 'undefined' ? 1280 : window.innerWidth
 }
 
-export function Header(props: { readonly onBrainstormOpen?: () => void } = {}) {
+export function Header(props: { readonly onBrainstormOpen?: () => void; readonly onCommunicationReviewOpen?: () => void } = {}) {
   let fileInput: HTMLInputElement | undefined
 
   const onOpenClick = (): void => {
@@ -86,6 +86,16 @@ export function Header(props: { readonly onBrainstormOpen?: () => void } = {}) {
           title="一人ブレスト（メモリ内・保存なし）"
         >
           Brainstorm
+        </button>
+        <button
+          id="communication-review-toggle"
+          type="button"
+          class="btn"
+          onClick={() => props.onCommunicationReviewOpen?.()}
+          disabled={props.onCommunicationReviewOpen === undefined}
+          title="質問・依頼の明示的な分類（読み取り専用）"
+        >
+          質問分析
         </button>
         <input
           ref={fileInput}
