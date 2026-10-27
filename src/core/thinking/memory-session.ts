@@ -88,11 +88,27 @@ export class BrainstormMemorySession {
       sourceSpans: [], createdAt: timestamp, updatedAt: timestamp
     }
     const answeredQuestion = this.question()
-    const added = this.run({
-      type: 'add-node', expectedRevision: this.current.session.historyRevision, node
+    if (answeredQuestion === null) {
+      return this.run({
+        type: 'add-node', expectedRevision: this.current.session.historyRevision, node
+      })
+    }
+    const questionNode: ThoughtNodeV1 = {
+      id: `question-${id}`, kind: 'question',
+      text: answeredQuestion.question, origin: 'rule-derived', status: 'draft',
+      sourceSpans: [], createdAt: timestamp, updatedAt: timestamp
+    }
+    const committed = this.run({
+      type: 'answer-question', expectedRevision: this.current.session.historyRevision,
+      question: questionNode, answer: node,
+      edge: {
+        id: `answer-${id}`,
+        fromNodeId: node.id, toNodeId: questionNode.id,
+        relation: 'answers', origin: 'user-stated'
+      }
     })
-    if (added && answeredQuestion !== null) this.consume(answeredQuestion.id)
-    return added
+    if (committed) this.consume(answeredQuestion.id)
+    return committed
   }
 
   removeThought(id: string): boolean {
