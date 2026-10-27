@@ -20,6 +20,7 @@ export function BrainstormDialog(props: BrainstormDialogProps) {
   const [revision, setRevision] = createSignal(0)
   let dialogRef: HTMLDivElement | undefined
   let closeButton: HTMLButtonElement | undefined
+  let importInput: HTMLInputElement | undefined
 
   const refresh = (): void => { setRevision(v => v + 1) }
   const snapshot = createMemo(() => {
@@ -125,6 +126,45 @@ export function BrainstormDialog(props: BrainstormDialogProps) {
     refresh()
   }
 
+  const importFile = async (event: Event): Promise<void> => {
+    const input = event.currentTarget as HTMLInputElement
+    const file = input.files?.[0]
+    input.value = ''
+    if (file === undefined) return
+    const beforeWorkspaceId = appState.activeWorkspaceId()
+    if (beforeWorkspaceId === undefined) return
+    // Reject before reading to avoid parsing arbitrarily large untrusted files.
+    if (file.size > 16 * 1024 * 1024) {
+      appState.pushToast('warning', '読み込み可能なJSONファイルは最大16MiBです。')
+      return
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(await file.text()) as unknown
+    } catch {
+      appState.pushToast('warning', 'JSONファイルを読み取れませんでした。')
+      return
+    }
+    // A workspace switch while reading must never import into the new scope.
+    if (appState.activeWorkspaceId() !== beforeWorkspaceId) {
+      appState.pushToast('warning', 'ワークスペースが変更されたため読み込みを中止しました。')
+      return
+    }
+    if (controller.snapshot() !== null &&
+        !window.confirm('現在の一人ブレストを読み込んだ内容で置き換えますか？')) return
+    const result = controller.importSnapshot(parsed)
+    if (result !== 'imported') {
+      appState.pushToast('warning', result === 'wrong-workspace'
+        ? 'このJSONは別のワークスペース用です。読み込みできません。'
+        : '不正なデータ形式または未対応バージョンのJSONです。')
+      return
+    }
+    setTheme('')
+    setThought('')
+    refresh()
+    appState.pushToast('success', '一人ブレストのJSONを復元しました（このタブ内のみ）。')
+  }
+
   const download = (): void => {
     const json = controller.exportSnapshot()
     const active = controller.snapshot()
@@ -161,10 +201,25 @@ export function BrainstormDialog(props: BrainstormDialogProps) {
             <p class="settings-note">
               LLM不要・ブラウザ内のみで動作します。内容は自動保存されません。
               画面を閉じてもこのタブ内では保持しますが、再読み込み・タブを閉じる・ワークスペース切替で消えます。
-              必要に応じてJSONを出力してください。
+              必要に応じてJSONを書き出し、同じワークスペースで再度読み込んでください。
             </p>
             <Show when={appState.activeWorkspaceId() !== undefined}
               fallback={<p role="status">ワークスペースの読み込み後に使用できます。</p>}>
+              <div class="button-row">
+                <input
+                  ref={importInput}
+                  type="file"
+                  accept=".json,application/json"
+                  style={{ display: 'none' }}
+                  onChange={event => { void importFile(event) }}
+                  aria-hidden="true"
+                  tabindex={-1}
+                />
+                <button type="button" class="btn"
+                  onClick={() => importInput?.click()}>
+                  JSONから復元
+                </button>
+              </div>
               <Show when={snapshot() !== null} fallback={
                 <form class="brainstorm-section" onSubmit={e => { e.preventDefault(); start() }}>
                   <label class="brainstorm-label" for="brainstorm-theme">考えたいテーマ</label>
