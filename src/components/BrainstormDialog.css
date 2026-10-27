@@ -86,6 +86,16 @@
   overflow-wrap: anywhere;
 }
 
+.brainstorm-related-question {
+  font-size: 12px;
+  color: var(--fg-muted);
+  background: var(--bg-subtle);
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
 .brainstorm-kind {
   flex-shrink: 0;
   color: var(--fg-muted);
