@@ -116,7 +116,11 @@ export function suggestBrainstormQuestions(
   const consumed = new Set(consumedIds)
   const suggestions: BrainstormSuggestionV1[] = []
   for (const template of TEMPLATES[snapshot.session.phase]) {
-    const id = [snapshot.session.phase, template.id, focusId ?? 'session'].join(':')
+    // Editing a thought changes its follow-up context: previous questions
+    // must not suppress prompts for the revised claim.
+    const id = focus === undefined
+      ? [snapshot.session.phase, template.id, 'session'].join(':')
+      : [snapshot.session.phase, template.id, focus.id, focus.updatedAt].join(':')
     if (consumed.has(id)) continue
     suggestions.push(Object.freeze({
       id,
