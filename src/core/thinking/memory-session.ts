@@ -87,9 +87,12 @@ export class BrainstormMemorySession {
       text: normalized, origin: 'user-stated', status: 'draft',
       sourceSpans: [], createdAt: timestamp, updatedAt: timestamp
     }
-    return this.run({
+    const answeredQuestion = this.question()
+    const added = this.run({
       type: 'add-node', expectedRevision: this.current.session.historyRevision, node
     })
+    if (added && answeredQuestion !== null) this.consume(answeredQuestion.id)
+    return added
   }
 
   removeThought(id: string): boolean {
@@ -113,12 +116,16 @@ export class BrainstormMemorySession {
     return result.status === 'ready' ? (result.suggestions[0] ?? null) : null
   }
 
+  private consume(id: string): void {
+    // Bounded ephemeral history: never turn long sessions into invalid options.
+    if (this.consumedQuestions.length >= 1024) this.consumedQuestions.shift()
+    this.consumedQuestions.push(id)
+  }
+
   skipQuestion(): boolean {
     const question = this.question()
     if (question === null) return false
-    // Bounded ephemeral history: never turn long sessions into invalid options.
-    if (this.consumedQuestions.length >= 1024) this.consumedQuestions.shift()
-    this.consumedQuestions.push(question.id)
+    this.consume(question.id)
     return true
   }
 
