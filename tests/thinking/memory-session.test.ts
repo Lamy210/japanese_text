@@ -125,6 +125,66 @@ describe('memory-only brainstorm session controller', () => {
     }
   })
 
+  test('restores a valid export only to the same workspace', () => {
+    const first = new BrainstormMemorySession()
+    first.bindWorkspace('workspace1')
+    first.start('安全な復元', 'session1')
+    expect(first.addThought('thought1', '検証項目', NOW)).toBe(true)
+    const file = JSON.parse(first.exportSnapshot()!) as unknown
+    const restored = new BrainstormMemorySession()
+    restored.bindWorkspace('workspace1')
+    expect(restored.importSnapshot(file)).toBe('imported')
+    expect(restored.snapshot()).toEqual(first.snapshot())
+    expect(restored.snapshot()?.edges[0]?.relation).toBe('answers')
+    expect(restored.addThought('thought2', '復元後の追加', NOW)).toBe(true)
+    expect(restored.snapshot()?.session.historyRevision).toBe(2)
+  })
+
+  test('rejects imports from other workspaces even when the current workspace is empty', () => {
+    const source = new BrainstormMemorySession()
+    source.bindWorkspace('workspace1')
+    source.start('他のワークスペースの秘密', 'session1')
+    const destination = new BrainstormMemorySession()
+    destination.bindWorkspace('workspace2')
+    expect(destination.importSnapshot(JSON.parse(source.exportSnapshot()!))).toBe('wrong-workspace')
+    expect(destination.snapshot()).toBeNull()
+    expect(destination.bindWorkspace('workspace1')).toBe(true)
+    expect(destination.importSnapshot(JSON.parse(source.exportSnapshot()!))).toBe('imported')
+  })
+
+  test('corrupt and unknown-version imports preserve the current graph and prompt history', () => {
+    const session = new BrainstormMemorySession()
+    session.bindWorkspace('workspace1')
+    session.start('既存のアイデア', 'session1')
+    const firstQuestion = session.question()!
+    expect(session.skipQuestion()).toBe(true)
+    const before = session.snapshot()
+    const next = session.question()?.id
+
+    expect(session.importSnapshot(null)).toBe('invalid-snapshot')
+    expect(session.importSnapshot({schemaVersion:2})).toBe('invalid-snapshot')
+    expect(session.importSnapshot({...before, edges:[{id:'bad'}]})).toBe('invalid-snapshot')
+    expect(session.snapshot()).toEqual(before)
+    expect(session.question()?.id).toBe(next)
+    expect(session.question()?.id).not.toBe(firstQuestion.id)
+  })
+
+  test('import isolation: mutating caller JSON does not mutate a restored snapshot', () => {
+    const source = new BrainstormMemorySession()
+    source.bindWorkspace('workspace1')
+    source.start('独立したコピー','session1')
+    source.addThought('thought1','記録した内容',NOW)
+    const raw = JSON.parse(source.exportSnapshot()!) as {
+      nodes: {text:string}[]
+    }
+    const destination = new BrainstormMemorySession()
+    destination.bindWorkspace('workspace1')
+    expect(destination.importSnapshot(raw)).toBe('imported')
+    raw.nodes[1]!.text = 'あとから改ざん'
+    expect(destination.snapshot()?.nodes.find(n=>n.id==='thought1')?.text).toBe('記録した内容')
+    expect(Object.isFrozen(destination.snapshot()?.nodes[0])).toBe(true)
+  })
+
   test('workspace switch and clearing drop notes and consumed history', () => {
     const session = new BrainstormMemorySession()
     session.bindWorkspace('workspace1')
