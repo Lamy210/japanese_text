@@ -31,6 +31,15 @@ export function BrainstormDialog(props: BrainstormDialogProps) {
     return controller.question()
   })
 
+  const answeredQuestion = (nodeId: string): string | null => {
+    const graph = snapshot()
+    if (graph === null) return null
+    const link = graph.edges.find(edge =>
+      edge.relation === 'answers' && edge.fromNodeId === nodeId
+    )
+    return graph.nodes.find(node => node.id === link?.toNodeId)?.text ?? null
+  }
+
   createEffect(() => {
     const workspaceId = appState.activeWorkspaceId() ?? null
     if (controller.bindWorkspace(workspaceId)) {
@@ -205,14 +214,19 @@ export function BrainstormDialog(props: BrainstormDialogProps) {
                     disabled={!thought().trim()}>記録する</button>
                 </section>
                 <section class="brainstorm-section" aria-label="記録した考え">
-                  <h3>記録した考え（{snapshot()?.nodes.length ?? 0}件）</h3>
+                  <h3>記録した質問・回答・考え（{snapshot()?.nodes.length ?? 0}件）</h3>
                   <Show when={(snapshot()?.nodes.length ?? 0) > 0}
                     fallback={<p class="brainstorm-muted">まだ記録がありません。</p>}>
                     <ul class="brainstorm-thought-list">
                       <For each={snapshot()?.nodes ?? []}>
                         {node => <li>
                           <span class="brainstorm-kind">{node.kind}</span>
-                          <span class="brainstorm-thought-text">{node.text}</span>
+                          <div class="brainstorm-thought-text">
+                            <Show when={answeredQuestion(node.id)}>
+                              {prompt => <p class="brainstorm-related-question">回答先：{prompt()}</p>}
+                            </Show>
+                            <p>{node.text}</p>
+                          </div>
                           <button type="button" class="btn btn-small" onClick={() => remove(node.id)}
                             aria-label={`「${node.text.slice(0,40)}」を削除`}>削除</button>
                         </li>}

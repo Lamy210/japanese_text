@@ -26,8 +26,12 @@ describe('memory-only brainstorm session controller', () => {
     expect(question).not.toBeNull()
     expect(session.addThought('note1', '困っている利用者がいる', NOW)).toBe(true)
     expect(session.snapshot()?.nodes).toMatchObject([
+      {id:'question-note1',kind:'question',origin:'rule-derived',status:'draft'},
       {id:'note1',kind:'problem',origin:'user-stated',status:'draft'}
     ])
+    expect(session.snapshot()?.edges).toMatchObject([{
+      id:'answer-note1', fromNodeId:'note1', toNodeId:'question-note1', relation:'answers'
+    }])
     expect(session.snapshot()?.session.historyRevision).toBe(1)
     // The previous prompt is marked consumed. Note addition must never
     // invoke a network request or implicitly create an accepted decision.
@@ -45,7 +49,8 @@ describe('memory-only brainstorm session controller', () => {
     expect(session.question()?.id).toBe(id)
     expect(session.addThought('note1','仮説', NOW)).toBe(true)
     expect(session.addThought('note1','重複ノード', NOW)).toBe(false)
-    expect(session.snapshot()?.nodes).toHaveLength(1)
+    expect(session.snapshot()?.nodes).toHaveLength(2)
+    expect(session.snapshot()?.edges).toHaveLength(1)
   })
 
   test('phase transitions change the semantic kind of newly recorded thoughts', () => {
@@ -56,7 +61,7 @@ describe('memory-only brainstorm session controller', () => {
     expect(session.movePhase('forward')).toBe(true) // define
     expect(session.movePhase('forward')).toBe(true) // diverge
     expect(session.addThought('idea1','APIで回答漏れを検出',NOW)).toBe(true)
-    expect(session.snapshot()?.nodes[0]?.kind).toBe('idea')
+    expect(session.snapshot()?.nodes.find(n => n.id === 'idea1')?.kind).toBe('idea')
     expect(session.snapshot()?.session.phase).toBe('diverge')
     expect(BRAINSTORM_PHASE_LABELS.diverge).toContain('アイデア')
   })
@@ -78,6 +83,33 @@ describe('memory-only brainstorm session controller', () => {
     expect(session.snapshot()?.session.historyRevision).toBe(0)
   })
 
+  test('records question-answer pair atomically and rejects duplicate answer IDs', () => {
+    const session = new BrainstormMemorySession()
+    session.bindWorkspace('workspace1')
+    session.start('改善案', 'session1')
+    expect(session.addThought('reply1', '答え1', NOW)).toBe(true)
+    const before = session.snapshot()!
+    expect(before.nodes).toHaveLength(2)
+    expect(before.edges).toHaveLength(1)
+    expect(session.addThought('reply1', '答えを上書きしようとする', NOW)).toBe(false)
+    expect(session.snapshot()).toEqual(before)
+    expect(session.snapshot()?.session.historyRevision).toBe(1)
+    expect(session.snapshot()?.edges[0]).toMatchObject({
+      fromNodeId:'reply1', toNodeId:'question-reply1', relation:'answers'
+    })
+  })
+
+  test('records a free note without a fabricated question once prompts are exhausted', () => {
+    const session = new BrainstormMemorySession()
+    session.bindWorkspace('workspace1')
+    session.start('改善案', 'session1')
+    for (let i = 0; i < 3; i++) expect(session.skipQuestion()).toBe(true)
+    expect(session.question()).toBeNull()
+    expect(session.addThought('free1','自由なアイデア', NOW)).toBe(true)
+    expect(session.snapshot()?.nodes).toMatchObject([{id:'free1',kind:'problem'}])
+    expect(session.snapshot()?.edges).toEqual([])
+  })
+
   test('manual export round-trips as a strict V1 snapshot', () => {
     const session = new BrainstormMemorySession()
     session.bindWorkspace('workspace1')
@@ -88,7 +120,8 @@ describe('memory-only brainstorm session controller', () => {
     const parsed = parseBrainstormSnapshot(JSON.parse(json!))
     expect(parsed.status).toBe('valid')
     if (parsed.status === 'valid') {
-      expect(parsed.snapshot.nodes[0]?.text).toBe('質問を抽出したい')
+      expect(parsed.snapshot.nodes.find(n => n.id === 'thought1')?.text).toBe('質問を抽出したい')
+      expect(parsed.snapshot.edges).toHaveLength(1)
     }
   })
 
@@ -99,7 +132,7 @@ describe('memory-only brainstorm session controller', () => {
     session.addThought('thought1','一時的な内容',NOW)
     session.skipQuestion()
     expect(session.bindWorkspace('workspace1')).toBe(false)
-    expect(session.snapshot()?.nodes).toHaveLength(1)
+    expect(session.snapshot()?.nodes).toHaveLength(2)
     expect(session.bindWorkspace('workspace2')).toBe(true)
     expect(session.snapshot()).toBeNull()
     expect(session.exportSnapshot()).toBeNull()

@@ -54,6 +54,65 @@ describe('Thought Graph transactional reducer', () => {
     expect(Object.isFrozen(connected.snapshot.edges[0])).toBe(true)
   })
 
+  test('adds a linked question and answer atomically with a single revision', () => {
+    const question = {...node('q1', 'rule-derived'), kind:'question' as const, text:'誰に必要ですか？'}
+    const answer = node('reply1')
+    const edge = {
+      id:'link1', fromNodeId:'reply1', toNodeId:'q1',
+      relation:'answers' as const, origin:'user-stated' as const
+    }
+    const before = graph()
+    const cmd = {type:'answer-question', expectedRevision:0, question, answer, edge}
+    const result = applyBrainstormCommand(before, cmd)
+    expect(result.status).toBe('applied')
+    if (result.status !== 'applied') return
+    expect(result.snapshot.session.historyRevision).toBe(1)
+    expect(result.snapshot.nodes.map(n => n.id)).toEqual(['idea1', 'q1', 'reply1'])
+    expect(result.snapshot.edges).toEqual([edge])
+    expect(before.nodes).toHaveLength(1)
+    expect(before.edges).toHaveLength(0)
+    expect(applyBrainstormCommand(result.snapshot, cmd))
+      .toEqual({status:'rejected', reason:'revision-conflict'})
+  })
+
+  test('rejects malformed linked answers and duplicate IDs without partial writes', () => {
+    const question = {...node('q1','rule-derived'), kind:'question' as const}
+    const answer = node('reply1')
+    const edge = {
+      id:'link1', fromNodeId:'reply1', toNodeId:'q1',
+      relation:'answers' as const, origin:'user-stated' as const
+    }
+    const before = graph()
+    const unchanged = JSON.stringify(before)
+    for (const cmd of [
+      {type:'answer-question',expectedRevision:0,question,answer,edge:{...edge,toNodeId:'missing'}},
+      {type:'answer-question',expectedRevision:0,question,answer,edge:{...edge,relation:'supports'}},
+      {type:'answer-question',expectedRevision:0,question:{...question,origin:'model-suggested'},answer,edge},
+      {type:'answer-question',expectedRevision:0,question:{...question,id:'idea1'},answer,edge},
+      {type:'answer-question',expectedRevision:0,question,answer:{...answer,id:'idea1'},edge}
+    ]) {
+      const r = applyBrainstormCommand(before,cmd)
+      expect(r.status).toBe('rejected')
+      expect(JSON.stringify(before)).toBe(unchanged)
+    }
+  })
+
+  test('rejects a linked answer near node limits without storing a lonely question', () => {
+    const before: BrainstormSnapshotV1 = {
+      ...graph(),
+      nodes: Array.from({length:999},(_,i)=>node('node'+i))
+    }
+    const question = {...node('q1000','rule-derived'), kind:'question' as const}
+    const answer = node('reply1000')
+    const r = applyBrainstormCommand(before, {
+      type:'answer-question',expectedRevision:0,question,answer,
+      edge:{id:'edge1000',fromNodeId:'reply1000',toNodeId:'q1000',
+        relation:'answers',origin:'user-stated'}
+    })
+    expect(r).toMatchObject({status:'rejected',reason:'invalid-command',detail:'limits'})
+    expect(before.nodes).toHaveLength(999)
+  })
+
   test('rejects stale replays and does not apply a command twice', () => {
     const command = {type:'add-node', expectedRevision:0, node:node('idea2')}
     const once = applyBrainstormCommand(graph(), command)
