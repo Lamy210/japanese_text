@@ -92,6 +92,36 @@ describe('deterministic one-person brainstorming questions', () => {
     expect(exhausted).toEqual({status:'ready',suggestions:[]})
   })
 
+  test('a revised idea can be asked again without repeating questions for unchanged ideas', () => {
+    const previous: BrainstormSnapshotV1 = {
+      ...graph('challenge'), nodes:[node('idea1','idea','最初の案')]
+    }
+    const first = suggestBrainstormQuestions(previous, [], 1)
+    expect(first.status).toBe('ready')
+    if (first.status !== 'ready') return
+    const used = first.suggestions[0]!.id
+    const unchanged = suggestBrainstormQuestions(previous, [used], 1)
+    expect(unchanged.status).toBe('ready')
+    if (unchanged.status === 'ready') {
+      expect(unchanged.suggestions[0]?.id).not.toBe(used)
+    }
+
+    const revised: BrainstormSnapshotV1 = {
+      ...previous, nodes:[{
+        ...previous.nodes[0]!,
+        text:'改訂した案',
+        updatedAt:'2026-10-27T00:01:00Z'
+      }]
+    }
+    const after = suggestBrainstormQuestions(revised, [used], 1)
+    expect(after.status).toBe('ready')
+    if (after.status === 'ready') {
+      expect(after.suggestions[0]?.id).not.toBe(used)
+      expect(after.suggestions[0]?.question).toContain('改訂した案')
+      expect(after.suggestions[0]?.strategy).toBe('premortem')
+    }
+  })
+
   test('bounded focus text never splits a surrogate pair', () => {
     const content = '😀'.repeat(120)
     const g: BrainstormSnapshotV1 = {...graph('evaluate'), nodes:[node('idea1','idea',content)]}
