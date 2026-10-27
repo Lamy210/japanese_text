@@ -38,7 +38,7 @@ export function CommunicationReviewDialog(props: CommunicationReviewDialogProps)
     documentType: appState.docType()
   })
 
-  const analyze = (): void => setResult(reviewCurrentCommunication(currentDocument()))
+  const analyze = (): void => { setResult(reviewCurrentCommunication(currentDocument())) }
   const snapshot = () => {
     const r = result()
     return r?.status === 'ready' ? r.snapshot : null
