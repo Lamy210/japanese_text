@@ -5,6 +5,7 @@
 import { onMount, onCleanup, createEffect, createSignal, Show } from 'solid-js'
 import { Header } from '../components/Header'
 import { BrainstormDialog } from '../components/BrainstormDialog'
+import { CommunicationReviewDialog } from '../components/CommunicationReviewDialog'
 import { DocumentSidebar } from '../components/DocumentSidebar'
 import { HistoryPanel } from '../components/HistoryPanel'
 import {
@@ -25,6 +26,7 @@ import { workspaceController } from '../state/workspace-runtime'
 export function App() {
   let handleResize: (() => void) | undefined
   const [brainstormOpen, setBrainstormOpen] = createSignal(false)
+  const [communicationReviewOpen, setCommunicationReviewOpen] = createSignal(false)
 
   onMount(() => {
     if (typeof window !== 'undefined') {
@@ -72,7 +74,10 @@ export function App() {
 
   return (
     <div class="app-shell">
-      <Header onBrainstormOpen={() => setBrainstormOpen(true)} />
+      <Header
+        onBrainstormOpen={() => setBrainstormOpen(true)}
+        onCommunicationReviewOpen={() => setCommunicationReviewOpen(true)}
+      />
       <main class="app-main">
         <Show when={appState.documentSidebarOpen()}>
           <DocumentSidebar />
@@ -86,6 +91,7 @@ export function App() {
       <SettingsDialog />
       <WorkspaceManageDialog />
       <BrainstormDialog open={brainstormOpen()} onClose={() => setBrainstormOpen(false)} />
+      <CommunicationReviewDialog open={communicationReviewOpen()} onClose={() => setCommunicationReviewOpen(false)} />
       <Show when={appState.historyOpen()}>
         <HistoryPanel />
       </Show>
