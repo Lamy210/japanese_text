@@ -78,3 +78,16 @@ describe('Markdown outline', () => {
     expect(result.html).toContain('<h1>見出し ' + MAX_OUTLINE_HEADINGS + '</h1>')
   })
 })
+
+describe('diagram and code fence fallback', () => {
+  it('labels Mermaid source without running or interpreting diagram directives', () => {
+    const output = html('\x60\x60\x60mermaid\nflowchart TD\nA[<script>] --> B[終了]\n\x60\x60\x60')
+    expect(output).toContain('Mermaid（ソース表示・図の描画は未対応）')
+    expect(output).toContain('&lt;script&gt;')
+    expect(output).not.toMatch(/<(?:script|svg|iframe)/i)
+  })
+  it('shows a safe language label and ignores unsafe fence labels', () => {
+    expect(html('\x60\x60\x60ts\nconst x = 1\n\x60\x60\x60')).toContain('<figcaption>ts</figcaption>')
+    expect(html('\x60\x60\x60<script>\n本文\n\x60\x60\x60')).not.toContain('<script>')
+  })
+})

@@ -6,6 +6,8 @@
  */
 
 import { EditorView } from '@codemirror/view'
+import { isolateHistory } from '@codemirror/commands'
+import { planMarkdownEdit, type MarkdownCommand } from './markdown-commands'
 
 let editorView: EditorView | null = null
 let revealEditor: (() => void) | undefined
@@ -70,4 +72,23 @@ export function applyFixesTransaction(
 /** 現在のドキュメント本文を取得 */
 export function getDocumentText(): string {
   return editorView?.state.doc.toString() ?? ''
+}
+
+/** Apply a single undoable Markdown toolbar transaction. */
+export function applyMarkdownCommand(command: MarkdownCommand): boolean {
+  const view = editorView
+  if (view === null || view.state.selection.ranges.length !== 1) return false
+  const { from, to } = view.state.selection.main
+  const edit = planMarkdownEdit(view.state.doc.toString(), from, to, command)
+  if (edit === null) return false
+  revealEditor?.()
+  view.dispatch({
+    changes: { from: edit.from, to: edit.to, insert: edit.insert },
+    selection: { anchor: edit.anchor, head: edit.head },
+    annotations: isolateHistory.of('full'),
+    scrollIntoView: true,
+    userEvent: 'input.markdown'
+  })
+  view.focus()
+  return true
 }

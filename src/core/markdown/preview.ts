@@ -105,6 +105,15 @@ export function renderMarkdownPreview(source: string): MarkdownPreviewResult {
         case 'CodeBlock':
         case 'FencedCode': {
           const code = children(node).filter(child => child.name === 'CodeText').map(raw).join('\n')
+          const info = children(node).find(child => child.name === 'CodeInfo')
+          const language = info ? raw(info).trim().split(/\s+/)[0]?.toLowerCase() : undefined
+          // Language label is display-only; never becomes an attribute or renderer selection.
+          if (language === 'mermaid') {
+            return '<figure class="md-code-figure"><figcaption>Mermaid（ソース表示・図の描画は未対応）</figcaption><pre><code>' + escapeHtml(code) + '</code></pre></figure>'
+          }
+          if (language && /^[a-z0-9_+#.-]{1,32}$/.test(language)) {
+            return '<figure class="md-code-figure"><figcaption>' + escapeHtml(language) + '</figcaption><pre><code>' + escapeHtml(code) + '</code></pre></figure>'
+          }
           return '<pre><code>' + escapeHtml(code) + '</code></pre>'
         }
         case 'InlineCode': {

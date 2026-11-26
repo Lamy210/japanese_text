@@ -2,17 +2,29 @@
  * EditorPane — CodeMirror 6 マウント + 診断の反映 (§9.1 Main Editor)
  */
 
-import { onMount, onCleanup, createEffect, createSignal, Show } from 'solid-js'
+import { onMount, onCleanup, createEffect, createSignal, For, Show } from 'solid-js'
 import { MarkdownPreview } from './MarkdownPreview'
 import './MarkdownPreview.css'
 import { EditorView, lineNumbers } from '@codemirror/view'
 import { Transaction } from '@codemirror/state'
 import { setDiagnostics } from '@codemirror/lint'
 import { createEditorExtensions, toCodeMirrorDiagnostics, lineNumbersCompartment } from '../editor/cm-extensions'
-import { setEditorView } from '../editor/editor-adapter'
+import { setEditorView, applyMarkdownCommand } from '../editor/editor-adapter'
+import type { MarkdownCommand } from '../editor/markdown-commands'
 import { appState } from '../state/app-state'
 import { lintController } from '../state/lint-controller'
 import { formatDocumentAction, persistDocumentDebounced } from '../state/actions'
+
+const MARKDOWN_TOOLS: ReadonlyArray<{ command: MarkdownCommand; label: string; title: string }> = [
+  { command: 'heading', label: 'H2', title: '見出しを挿入' },
+  { command: 'bold', label: 'B', title: '太字' },
+  { command: 'italic', label: 'I', title: '斜体' },
+  { command: 'inline-code', label: 'Code', title: 'インラインコード' },
+  { command: 'quote', label: '引用', title: '引用' },
+  { command: 'list', label: 'リスト', title: '箇条書き' },
+  { command: 'table', label: '表', title: '表のテンプレート（選択なし）' },
+  { command: 'mermaid', label: '図の記法', title: 'Mermaidのソースを挿入（描画未対応）' }
+]
 
 export function EditorPane() {
   let container: HTMLDivElement | undefined
@@ -101,6 +113,19 @@ export function EditorPane() {
           <button type="button" class="btn btn-small" aria-pressed={mode() === 'edit'} onClick={() => setMarkdownMode('edit')}>編集</button>
           <button type="button" class="btn btn-small" aria-pressed={mode() === 'split'} onClick={() => setMarkdownMode('split')}>分割プレビュー</button>
           <button type="button" class="btn btn-small" aria-pressed={mode() === 'preview'} onClick={() => setMarkdownMode('preview')}>プレビューのみ</button>
+        </div>
+      </Show>
+      <Show when={appState.docType() === 'markdown' && showEditor()}>
+        <div class="markdown-format-toolbar" role="group" aria-label="Markdown編集支援">
+          <For each={MARKDOWN_TOOLS}>{tool => (
+            <button type="button" class="btn btn-small" title={tool.title} aria-label={tool.title}
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => {
+                if (!applyMarkdownCommand(tool.command)) {
+                  appState.pushToast('info', 'この選択範囲では挿入できません。選択範囲を調整してください。')
+                }
+              }}>{tool.label}</button>
+          )}</For>
         </div>
       </Show>
       <div class="markdown-editor-layout" classList={{ 'markdown-split': mode() === 'split', 'markdown-preview-only': mode() === 'preview' }}>

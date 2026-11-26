@@ -123,3 +123,20 @@
 .markdown-outline-level-4 { padding-inline-start: 36px; }
 .markdown-outline-level-5 { padding-inline-start: 48px; }
 .markdown-outline-level-6 { padding-inline-start: 60px; }
+
+.markdown-format-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+.md-code-figure { min-width: 0; }
+.md-code-figure figcaption {
+  color: var(--fg-muted);
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  padding: 3px 8px;
+}
