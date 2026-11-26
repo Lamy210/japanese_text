@@ -154,7 +154,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding-top: 12px;
+  padding-block: 4px 12px;
   color: var(--fg-muted);
   font-size: 12px;
 }

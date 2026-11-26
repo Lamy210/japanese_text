@@ -18,6 +18,7 @@ export function MarkdownPreview(props: { readonly text: string; readonly cursor:
     result: renderMarkdownPreview(props.text)
   }))
   const result = () => snapshot().result
+  const normalizedText = createMemo(() => normalizePreviewSource(props.text))
   const ready = () => {
     const current = result()
     return current.status === 'ready' ? current : undefined
@@ -102,16 +103,6 @@ export function MarkdownPreview(props: { readonly text: string; readonly cursor:
               </Show>
             </nav>
           </Show>
-          {/* Only fixed tags and escaped source from renderMarkdownPreview may enter this sink. */}
-          <article ref={article} class="markdown-preview-body" innerHTML={ready()?.html ?? ''}
-            onDblClick={event => {
-              const target = event.target
-              if (!(target instanceof Element)) return
-              const block = target.closest<HTMLElement>('[data-md-block]')
-              if (!block || !article?.contains(block)) return
-              const index = block.dataset.mdBlock
-              if (index !== undefined && /^\d+$/.test(index)) jumpToSource(Number(index))
-            }} />
           <Show when={(ready()?.sourceBlocks.length ?? 0) > 0}>
             <label class="markdown-source-jump">
               原文へ移動
@@ -122,12 +113,23 @@ export function MarkdownPreview(props: { readonly text: string; readonly cursor:
               }}>
                 <option value="">ブロックを選択</option>
                 <For each={ready()?.sourceBlocks.slice(0, 300) ?? []}>{(block, index) => (
-                  <option value={index()}>{index() + 1}. {normalizePreviewSource(props.text).slice(block.from, Math.min(block.to, block.from + 40)).replace(/\s+/g, ' ')}</option>
+                  <option value={index()}>{index() + 1}. {normalizedText().slice(block.from, Math.min(block.to, block.from + 40)).replace(/\s+/g, ' ')}</option>
                 )}</For>
               </select>
               <Show when={(ready()?.sourceBlocks.length ?? 0) > 300}><span>先頭300ブロック</span></Show>
             </label>
           </Show>
+          {/* Only fixed tags and escaped source from renderMarkdownPreview may enter this sink. */}
+          <article ref={article} class="markdown-preview-body" innerHTML={ready()?.html ?? ''}
+            onDblClick={event => {
+              const target = event.target
+              if (!(target instanceof Element)) return
+              const block = target.closest<HTMLElement>('[data-md-block]')
+              if (!block || !article?.contains(block)) return
+              const index = block.dataset.mdBlock
+              if (index !== undefined && /^\d+$/.test(index)) jumpToSource(Number(index))
+            }} />
+
         </Match>
       </Switch>
     </section>
