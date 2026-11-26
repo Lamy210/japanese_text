@@ -91,3 +91,22 @@ describe('diagram and code fence fallback', () => {
     expect(html('\x60\x60\x60<script>\n本文\n\x60\x60\x60')).not.toContain('<script>')
   })
 })
+
+describe('preview source blocks', () => {
+  it('maps visible top-level blocks to normalized UTF-16 ranges without phantom comment blocks', () => {
+    const source = '# 😀見出し\r\n\r\n<!-- comment -->\r\n\r\n本文\r\n'
+    const normalized = source.replace(/\r\n/g, '\n')
+    const result = renderMarkdownPreview(source)
+    if (result.status !== 'ready') throw new Error(result.status)
+    expect(result.sourceBlocks.map(range => normalized.slice(range.from, range.to))).toEqual(['# 😀見出し', '本文'])
+    expect(result.html).toContain('data-md-block="0"')
+    expect(result.html).toContain('data-md-block="1"')
+    expect(result.html).not.toContain('data-md-block="2"')
+  })
+  it('renders a table with semantic header and body inside a horizontal scroll container', () => {
+    const output = html('| A | B |\n| --- | --- |\n| 1 | 2 |')
+    expect(output).toContain('<div class="md-table-scroll"><table><thead>')
+    expect(output).toContain('<tbody><tr>')
+    expect(output).toContain('</tbody></table></div>')
+  })
+})

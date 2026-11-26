@@ -1,4 +1,5 @@
 import { markdownLanguage } from '@codemirror/lang-markdown'
+import { normalizePreviewSource, type PreviewSourceRange } from './source-map'
 
 type Node = ReturnType<typeof markdownLanguage.parser.parse>['topNode']
 
@@ -13,7 +14,7 @@ export interface MarkdownHeading {
 }
 
 export type MarkdownPreviewResult =
-  | { status: 'ready'; html: string; headings: MarkdownHeading[]; headingCount: number }
+  | { status: 'ready'; html: string; headings: MarkdownHeading[]; headingCount: number; sourceBlocks: PreviewSourceRange[] }
   | { status: 'too-large' | 'failed' }
 
 function escapeHtml(value: string): string {
@@ -30,7 +31,8 @@ function escapeHtml(value: string): string {
 export function renderMarkdownPreview(source: string): MarkdownPreviewResult {
   if (source.length > MAX_PREVIEW_LENGTH) return { status: 'too-large' }
   try {
-    const text = source.replace(/\r\n?/g, '\n')
+    const text = normalizePreviewSource(source)
+    const sourceBlocks: PreviewSourceRange[] = []
     const headings: MarkdownHeading[] = []
     let headingCount = 0
     const raw = (node: Node) => text.slice(node.from, node.to)
@@ -79,7 +81,14 @@ export function renderMarkdownPreview(source: string): MarkdownPreviewResult {
         return '<' + tag + '>' + content().trim() + '</' + tag + '>'
       }
       switch (node.name) {
-        case 'Document': return blockContent()
+        case 'Document': return children(node).map(child => {
+          const html = render(child, depth + 1)
+          if (html === '') return ''
+          const index = sourceBlocks.length
+          sourceBlocks.push({ from: child.from, to: child.to })
+          // Only a generated integer is used in the attribute; source text cannot create markers.
+          return '<div class="md-source-block" data-md-block="' + index + '">' + html + '</div>'
+        }).join('')
         case 'Paragraph': return '<p>' + content() + '</p>'
         case 'StrongEmphasis': return '<strong>' + content() + '</strong>'
         case 'Emphasis': return '<em>' + content() + '</em>'
@@ -97,7 +106,15 @@ export function renderMarkdownPreview(source: string): MarkdownPreviewResult {
         case 'ListItem': return '<li>' + blockContent() + '</li>'
         case 'Task': return '<p>' + content() + '</p>'
         case 'TaskMarker': return /\[[xX]\]/.test(raw(node)) ? '☑' : '☐'
-        case 'Table': return '<table>' + blockContent() + '</table>'
+        case 'Table': {
+          const tableChildren = children(node)
+          const header = tableChildren.find(child => child.name === 'TableHeader')
+          const rows = tableChildren.filter(child => child.name === 'TableRow')
+          return '<div class="md-table-scroll"><table>' +
+            (header ? render(header, depth + 1) : '') +
+            (rows.length ? '<tbody>' + rows.map(child => render(child, depth + 1)).join('') + '</tbody>' : '') +
+            '</table></div>'
+        }
         case 'TableHeader': return '<thead><tr>' + children(node).filter(child => child.name === 'TableCell')
           .map(child => '<th>' + inline(child, depth + 1) + '</th>').join('') + '</tr></thead>'
         case 'TableRow': return '<tr>' + children(node).filter(child => child.name === 'TableCell')
@@ -159,7 +176,7 @@ export function renderMarkdownPreview(source: string): MarkdownPreviewResult {
       }
     }
     const html = render(markdownLanguage.parser.parse(text).topNode, 0)
-    return { status: 'ready', html, headings, headingCount }
+    return { status: 'ready', html, headings, headingCount, sourceBlocks }
   } catch {
     return { status: 'failed' }
   }

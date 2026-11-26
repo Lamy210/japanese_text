@@ -28,6 +28,7 @@ const MARKDOWN_TOOLS: ReadonlyArray<{ command: MarkdownCommand; label: string; t
 
 export function EditorPane() {
   let container: HTMLDivElement | undefined
+  const [editorCursor, setEditorCursor] = createSignal(0)
   const [markdownMode, setMarkdownMode] = createSignal<'edit' | 'split' | 'preview'>('edit')
   const mode = () => appState.docType() === 'markdown' ? markdownMode() : 'edit'
   const showPreview = () => mode() !== 'edit'
@@ -41,6 +42,7 @@ export function EditorPane() {
       extensions: [
         ...createEditorExtensions({
           onDocumentChanged: (update) => {
+            if (update.selectionSet || update.docChanged) setEditorCursor(update.state.selection.main.head)
             if (!update.docChanged) return
             const text = update.state.doc.toString()
             appState.onDocumentEdited(text)
@@ -131,7 +133,7 @@ export function EditorPane() {
       <div class="markdown-editor-layout" classList={{ 'markdown-split': mode() === 'split', 'markdown-preview-only': mode() === 'preview' }}>
         <div class="editor-container" hidden={!showEditor()} ref={container} role="textbox" aria-multiline="true" aria-label="文書編集領域" />
         <Show when={showPreview()}>
-          <MarkdownPreview text={appState.documentText()} />
+          <MarkdownPreview text={appState.documentText()} cursor={editorCursor()} editorVisible={showEditor()} />
         </Show>
       </div>
       <Show when={appState.workerStatus() === 'error'}>

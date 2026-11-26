@@ -140,3 +140,29 @@
   font-size: 12px;
   padding: 3px 8px;
 }
+
+.md-source-block { min-width: 0; }
+.md-table-scroll { max-width: 100%; overflow-x: auto; }
+.md-source-block > * + * { margin-top: .6em; }
+.markdown-preview-tools [aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+.markdown-source-jump {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.markdown-source-jump select {
+  min-width: 0;
+  max-width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+}
