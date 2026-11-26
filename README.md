@@ -16,6 +16,7 @@ GitHub Pages: <https://lamy210.github.io/japanese_text/>
 ## Features
 
 - CodeMirror 6 ベースの日本語/Markdownエディタ
+- Markdownのリアルタイム分割プレビュー（外部画像・リンク・生HTMLの実行を無効化）
 - NGワード検出
 - 用語統一
 - 句読点・空白・括弧・全角/半角などの静的解析
@@ -51,6 +52,12 @@ GitHub Pages: <https://lamy210.github.io/japanese_text/>
 - GitHub Actions / GitHub Pages
 
 Backend、サーバー側Database、認証、LLM API は使用しません。Local Libraryの本文と履歴だけをIndexedDBへ保存します。
+
+## Markdownプレビュー
+
+Markdown文書を開き、エディタ上部の **分割プレビュー** を選ぶと、編集内容を読み取り専用で描画します。狭いエディタ領域では上下分割になります。**編集** で元の表示に戻せます。プレーンテキスト文書ではプレビューを表示しません。CodeMirror・Lint・履歴・保存は従来どおり原文を扱います。
+
+見出し、段落、強調、引用、リスト、表、コード、取り消し線に対応する初期版です。プライバシー保護のため、リンクはラベル表示のみ、画像は代替テキストのみ、生HTMLは実行せず文字として表示します。完全なCommonMark/GFM互換、全HTMLエンティティ、Mermaid、数式、外部画像の読み込み、スクロール同期は対象外です。20万UTF-16コード単位を超える文書ではプレビューのみ停止します。
 
 ## Document Library / 本文検索
 

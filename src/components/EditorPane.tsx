@@ -2,7 +2,9 @@
  * EditorPane — CodeMirror 6 マウント + 診断の反映 (§9.1 Main Editor)
  */
 
-import { onMount, onCleanup, createEffect, Show } from 'solid-js'
+import { onMount, onCleanup, createEffect, createSignal, Show } from 'solid-js'
+import { MarkdownPreview } from './MarkdownPreview'
+import './MarkdownPreview.css'
 import { EditorView, lineNumbers } from '@codemirror/view'
 import { Transaction } from '@codemirror/state'
 import { setDiagnostics } from '@codemirror/lint'
@@ -14,6 +16,8 @@ import { formatDocumentAction, persistDocumentDebounced } from '../state/actions
 
 export function EditorPane() {
   let container: HTMLDivElement | undefined
+  const [previewOpen, setPreviewOpen] = createSignal(false)
+  const showPreview = () => appState.docType() === 'markdown' && previewOpen()
 
   onMount(() => {
     if (container === undefined) return
@@ -84,7 +88,18 @@ export function EditorPane() {
 
   return (
     <section class="editor-pane" aria-label="文書エディタ">
-      <div class="editor-container" ref={container} role="textbox" aria-multiline="true" aria-label="文書編集領域" />
+      <Show when={appState.docType() === 'markdown'}>
+        <div class="markdown-view-toolbar" role="group" aria-label="Markdown表示">
+          <button type="button" class="btn btn-small" aria-pressed={!showPreview()} onClick={() => setPreviewOpen(false)}>編集</button>
+          <button type="button" class="btn btn-small" aria-pressed={showPreview()} onClick={() => setPreviewOpen(true)}>分割プレビュー</button>
+        </div>
+      </Show>
+      <div class="markdown-editor-layout" classList={{ 'markdown-split': showPreview() }}>
+        <div class="editor-container" ref={container} role="textbox" aria-multiline="true" aria-label="文書編集領域" />
+        <Show when={showPreview()}>
+          <MarkdownPreview text={appState.documentText()} />
+        </Show>
+      </div>
       <Show when={appState.workerStatus() === 'error'}>
         <div class="editor-worker-error" role="alert">
           解析Workerが停止しています。Editorは引き続き利用できます。
