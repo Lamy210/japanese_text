@@ -16,8 +16,10 @@ import { formatDocumentAction, persistDocumentDebounced } from '../state/actions
 
 export function EditorPane() {
   let container: HTMLDivElement | undefined
-  const [previewOpen, setPreviewOpen] = createSignal(false)
-  const showPreview = () => appState.docType() === 'markdown' && previewOpen()
+  const [markdownMode, setMarkdownMode] = createSignal<'edit' | 'split' | 'preview'>('edit')
+  const mode = () => appState.docType() === 'markdown' ? markdownMode() : 'edit'
+  const showPreview = () => mode() !== 'edit'
+  const showEditor = () => mode() !== 'preview'
 
   onMount(() => {
     if (container === undefined) return
@@ -57,7 +59,13 @@ export function EditorPane() {
         })
       ]
     })
-    setEditorView(view)
+    setEditorView(view, () => {
+      if (!showEditor()) setMarkdownMode('split')
+    })
+
+    createEffect(() => {
+      if (showEditor()) view.requestMeasure()
+    })
 
     createEffect(() => {
       const diagnostics = appState.diagnostics()
@@ -90,12 +98,13 @@ export function EditorPane() {
     <section class="editor-pane" aria-label="文書エディタ">
       <Show when={appState.docType() === 'markdown'}>
         <div class="markdown-view-toolbar" role="group" aria-label="Markdown表示">
-          <button type="button" class="btn btn-small" aria-pressed={!showPreview()} onClick={() => setPreviewOpen(false)}>編集</button>
-          <button type="button" class="btn btn-small" aria-pressed={showPreview()} onClick={() => setPreviewOpen(true)}>分割プレビュー</button>
+          <button type="button" class="btn btn-small" aria-pressed={mode() === 'edit'} onClick={() => setMarkdownMode('edit')}>編集</button>
+          <button type="button" class="btn btn-small" aria-pressed={mode() === 'split'} onClick={() => setMarkdownMode('split')}>分割プレビュー</button>
+          <button type="button" class="btn btn-small" aria-pressed={mode() === 'preview'} onClick={() => setMarkdownMode('preview')}>プレビューのみ</button>
         </div>
       </Show>
-      <div class="markdown-editor-layout" classList={{ 'markdown-split': showPreview() }}>
-        <div class="editor-container" ref={container} role="textbox" aria-multiline="true" aria-label="文書編集領域" />
+      <div class="markdown-editor-layout" classList={{ 'markdown-split': mode() === 'split', 'markdown-preview-only': mode() === 'preview' }}>
+        <div class="editor-container" hidden={!showEditor()} ref={container} role="textbox" aria-multiline="true" aria-label="文書編集領域" />
         <Show when={showPreview()}>
           <MarkdownPreview text={appState.documentText()} />
         </Show>

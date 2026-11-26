@@ -81,3 +81,45 @@
     border-top: 1px solid var(--border);
   }
 }
+
+.markdown-editor-layout > .editor-container[hidden] { display: none; }
+.markdown-preview-only > .markdown-preview { border-left: 0; width: 100%; }
+.markdown-preview-only .markdown-preview-body { max-width: 80ch; margin-inline: auto; }
+.markdown-view-toolbar { flex-wrap: wrap; }
+.markdown-preview-tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.markdown-preview-tools .markdown-preview-note { margin-bottom: 0; }
+.markdown-outline {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 16px;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--bg-subtle);
+}
+.markdown-outline ul { list-style: none; padding: 0; }
+.markdown-outline li { margin-block: 2px; }
+.markdown-outline button {
+  display: block;
+  width: 100%;
+  text-align: start;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.markdown-outline button:hover { background: var(--accent-subtle); }
+.markdown-outline-level-2 { padding-inline-start: 12px; }
+.markdown-outline-level-3 { padding-inline-start: 24px; }
+.markdown-outline-level-4 { padding-inline-start: 36px; }
+.markdown-outline-level-5 { padding-inline-start: 48px; }
+.markdown-outline-level-6 { padding-inline-start: 60px; }

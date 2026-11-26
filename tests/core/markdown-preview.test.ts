@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_PREVIEW_LENGTH, renderMarkdownPreview } from '../../src/core/markdown/preview'
+import { MAX_OUTLINE_HEADINGS, MAX_PREVIEW_LENGTH, renderMarkdownPreview } from '../../src/core/markdown/preview'
 
 function html(source: string): string {
   const result = renderMarkdownPreview(source)
@@ -48,5 +48,33 @@ describe('Markdown preview', () => {
     expect(html('# 見出し\r\n\r\n本文')).toContain('<h1>見出し</h1>')
     expect(html('')).toBe('')
     expect(renderMarkdownPreview('あ'.repeat(MAX_PREVIEW_LENGTH + 1))).toEqual({ status: 'too-large' })
+  })
+})
+
+describe('Markdown outline', () => {
+  it('returns headings in rendered order, including duplicate titles and Setext headings', () => {
+    const result = renderMarkdownPreview('# 同じ\n\n## 同じ\n\n別の見出し\n---\n\n' + '\x60\x60\x60md\n# コード内\n\x60\x60\x60\n\n### **強調**')
+    if (result.status !== 'ready') throw new Error(result.status)
+    expect(result.headings).toEqual([
+      { level: 1, label: '同じ', index: 0 },
+      { level: 2, label: '同じ', index: 1 },
+      { level: 2, label: '別の見出し', index: 2 },
+      { level: 3, label: '**強調**', index: 3 }
+    ])
+    expect(result.headingCount).toBe(4)
+  })
+
+  it('does not create headings from raw HTML or comments', () => {
+    const result = renderMarkdownPreview('<h1>外部HTML</h1>\n\n<!--\n# コメント\n-->\n\n# 実際の見出し')
+    if (result.status !== 'ready') throw new Error(result.status)
+    expect(result.headings).toEqual([{ level: 1, label: '実際の見出し', index: 0 }])
+  })
+
+  it('caps the outline without dropping document headings', () => {
+    const result = renderMarkdownPreview(Array.from({ length: MAX_OUTLINE_HEADINGS + 1 }, (_, i) => '# 見出し ' + i).join('\n\n'))
+    if (result.status !== 'ready') throw new Error(result.status)
+    expect(result.headings).toHaveLength(MAX_OUTLINE_HEADINGS)
+    expect(result.headingCount).toBe(MAX_OUTLINE_HEADINGS + 1)
+    expect(result.html).toContain('<h1>見出し ' + MAX_OUTLINE_HEADINGS + '</h1>')
   })
 })

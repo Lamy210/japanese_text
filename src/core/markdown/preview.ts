@@ -4,9 +4,16 @@ type Node = ReturnType<typeof markdownLanguage.parser.parse>['topNode']
 
 export const MAX_PREVIEW_LENGTH = 200_000
 const MAX_RENDER_DEPTH = 64
+export const MAX_OUTLINE_HEADINGS = 300
+
+export interface MarkdownHeading {
+  readonly level: number
+  readonly label: string
+  readonly index: number
+}
 
 export type MarkdownPreviewResult =
-  | { status: 'ready'; html: string }
+  | { status: 'ready'; html: string; headings: MarkdownHeading[]; headingCount: number }
   | { status: 'too-large' | 'failed' }
 
 function escapeHtml(value: string): string {
@@ -24,6 +31,8 @@ export function renderMarkdownPreview(source: string): MarkdownPreviewResult {
   if (source.length > MAX_PREVIEW_LENGTH) return { status: 'too-large' }
   try {
     const text = source.replace(/\r\n?/g, '\n')
+    const headings: MarkdownHeading[] = []
+    let headingCount = 0
     const raw = (node: Node) => text.slice(node.from, node.to)
     const children = (node: Node): Node[] => {
       const result: Node[] = []
@@ -54,6 +63,19 @@ export function renderMarkdownPreview(source: string): MarkdownPreviewResult {
       const heading = /^(?:ATX|Setext)Heading([1-6])$/.exec(node.name)
       if (heading) {
         const tag = 'h' + heading[1]
+        const index = headingCount++
+        if (headings.length < MAX_OUTLINE_HEADINGS) {
+          // Strip only heading delimiters; keep inline source notation as a plain-text label.
+          let label = ''
+          let cursor = node.from
+          for (const child of children(node)) {
+            if (child.name !== 'HeaderMark') continue
+            label += text.slice(cursor, child.from)
+            cursor = child.to
+          }
+          label += text.slice(cursor, node.to)
+          headings.push({ level: Number(heading[1]), label: label.trim().replace(/\s+/g, ' ') || '（空の見出し）', index })
+        }
         return '<' + tag + '>' + content().trim() + '</' + tag + '>'
       }
       switch (node.name) {
@@ -127,7 +149,8 @@ export function renderMarkdownPreview(source: string): MarkdownPreviewResult {
         default: return escapeHtml(raw(node))
       }
     }
-    return { status: 'ready', html: render(markdownLanguage.parser.parse(text).topNode, 0) }
+    const html = render(markdownLanguage.parser.parse(text).topNode, 0)
+    return { status: 'ready', html, headings, headingCount }
   } catch {
     return { status: 'failed' }
   }

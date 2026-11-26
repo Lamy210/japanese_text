@@ -8,9 +8,11 @@
 import { EditorView } from '@codemirror/view'
 
 let editorView: EditorView | null = null
+let revealEditor: (() => void) | undefined
 
-export function setEditorView(view: EditorView | null): void {
+export function setEditorView(view: EditorView | null, reveal?: () => void): void {
   editorView = view
+  revealEditor = view === null ? undefined : reveal
 }
 
 export function getEditorView(): EditorView | null {
@@ -21,6 +23,7 @@ export function getEditorView(): EditorView | null {
 export function jumpToPosition(from: number, to: number): void {
   const view = editorView
   if (view === null) return
+  revealEditor?.()
   const docLength = view.state.doc.length
   const safeFrom = Math.max(0, Math.min(from, docLength))
   const safeTo = Math.max(safeFrom, Math.min(to, docLength))
@@ -36,6 +39,7 @@ export function jumpToPosition(from: number, to: number): void {
 export function applyReplacement(from: number, to: number, insert: string, userEvent: string): void {
   const view = editorView
   if (view === null) return
+  revealEditor?.()
   const docLength = view.state.doc.length
   const safeFrom = Math.max(0, Math.min(from, docLength))
   const safeTo = Math.max(safeFrom, Math.min(to, docLength))
@@ -55,6 +59,7 @@ export function applyFixesTransaction(
 ): void {
   const view = editorView
   if (view === null || fixes.length === 0) return
+  revealEditor?.()
   view.dispatch({
     changes: fixes.map((f) => ({ from: f.start, to: f.end, insert: f.replacement })),
     userEvent
